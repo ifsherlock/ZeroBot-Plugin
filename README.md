@@ -95,6 +95,8 @@ zerobot [-h] [-m] [-n nickname] [-t token] [-u url] [-g url] [-p prefix] [-d|w] 
 
 > `webui`默认禁用不编译，打开后会增加程序体积。
 
+> 本 fork 额外加入自用的`聚合解析`插件（`plugin/mediaparser`），面向 llbot/OneBot v11 使用，支持多平台链接解析、图文/视频卡片生成、媒体下载、黑白名单、按群按平台开关和内置轻量 WebUI 配置。该插件功能参考并移植自 `astrbot_plugin_media_parser`，仅作个人自用适配。
+
 <details>
   <summary>插件控制</summary>
 

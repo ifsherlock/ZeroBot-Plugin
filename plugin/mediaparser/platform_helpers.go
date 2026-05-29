@@ -1,0 +1,336 @@
+package mediaparser
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
+	"time"
+)
+
+func fetchText(raw string, headers map[string]string, redirects bool) (string, string, int, error) {
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return "", raw, 0, err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", defaultUA)
+	}
+	c := &http.Client{Timeout: 45 * time.Second}
+	if !redirects {
+		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", raw, 0, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 12<<20))
+	if err != nil {
+		return "", resp.Request.URL.String(), resp.StatusCode, err
+	}
+	return string(body), resp.Request.URL.String(), resp.StatusCode, nil
+}
+
+func redirectURL(raw string, headers map[string]string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return "", err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", defaultUA)
+	}
+	c := &http.Client{Timeout: 25 * time.Second}
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.Request != nil && resp.Request.URL != nil {
+		return resp.Request.URL.String(), nil
+	}
+	return raw, nil
+}
+
+func extractAssignedJSONObject(html, marker string) (map[string]any, error) {
+	idx := strings.Index(html, marker)
+	if idx < 0 {
+		return nil, fmt.Errorf("未找到 %s", marker)
+	}
+	start := strings.Index(html[idx:], "{")
+	if start < 0 {
+		return nil, fmt.Errorf("未找到 JSON 开始位置")
+	}
+	start += idx
+	end := findBalancedJSONEnd(html, start)
+	if end <= start {
+		return nil, fmt.Errorf("未找到完整 JSON")
+	}
+	raw := regexp.MustCompile(`\bundefined\b`).ReplaceAllString(html[start:end], "null")
+	var out map[string]any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func extractScriptJSON(html, scriptID string) string {
+	pattern := `(?is)<script[^>]+id=["']` + regexp.QuoteMeta(scriptID) + `["'][^>]*>(.*?)</script>`
+	m := regexp.MustCompile(pattern).FindStringSubmatch(html)
+	if len(m) < 2 {
+		return ""
+	}
+	return htmlUnescape(strings.TrimSpace(m[1]))
+}
+
+func findBalancedJSONEnd(s string, start int) int {
+	depth := 0
+	inString := false
+	quote := byte(0)
+	escaped := false
+	for i := start; i < len(s); i++ {
+		ch := s[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inString {
+			if ch == '\\' {
+				escaped = true
+			} else if ch == quote {
+				inString = false
+			}
+			continue
+		}
+		if ch == '"' || ch == '\'' {
+			inString = true
+			quote = ch
+			continue
+		}
+		if ch == '{' {
+			depth++
+		} else if ch == '}' {
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return -1
+}
+
+func getMap(v any, keys ...string) map[string]any {
+	cur := v
+	for _, key := range keys {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = m[key]
+	}
+	m, _ := cur.(map[string]any)
+	return m
+}
+
+func getSlice(v any, keys ...string) []any {
+	cur := v
+	for _, key := range keys {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = m[key]
+	}
+	a, _ := cur.([]any)
+	return a
+}
+
+func getString(v any, keys ...string) string {
+	cur := v
+	for _, key := range keys {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return ""
+		}
+		cur = m[key]
+	}
+	switch x := cur.(type) {
+	case string:
+		return x
+	case float64:
+		return fmt.Sprintf("%.0f", x)
+	case json.Number:
+		return x.String()
+	default:
+		return ""
+	}
+}
+
+func getFloat(v any, keys ...string) float64 {
+	cur := v
+	for _, key := range keys {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return 0
+		}
+		cur = m[key]
+	}
+	switch x := cur.(type) {
+	case float64:
+		return x
+	case int64:
+		return float64(x)
+	case string:
+		return parseFloat(x)
+	default:
+		return 0
+	}
+}
+
+func parseFloat(s string) float64 {
+	var f float64
+	_, _ = fmt.Sscanf(s, "%f", &f)
+	return f
+}
+
+func nestedHTTPURLs(v any, maxDepth int) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	var walk func(any, int)
+	walk = func(x any, depth int) {
+		if depth > maxDepth || x == nil {
+			return
+		}
+		switch val := x.(type) {
+		case string:
+			decoded := strings.ReplaceAll(strings.ReplaceAll(val, `\u002F`, "/"), `\/`, "/")
+			for _, raw := range regexp.MustCompile(`https?://[^\s<>"']+`).FindAllString(decoded, -1) {
+				raw = strings.TrimRight(raw, `.,!?)]}>"'，。！？；：）】》」`)
+				if !seen[raw] {
+					seen[raw] = true
+					out = append(out, raw)
+				}
+			}
+		case []any:
+			for _, item := range val {
+				walk(item, depth+1)
+			}
+		case map[string]any:
+			preferred := []string{"urlList", "url_list", "urls", "url", "playAddr", "downloadAddr", "PlayAddrStruct", "imageURL", "imageUrl", "originImage", "downloadImage", "cover"}
+			for _, key := range preferred {
+				if _, ok := val[key]; ok {
+					walk(val[key], depth+1)
+				}
+			}
+			for _, item := range val {
+				walk(item, depth+1)
+			}
+		}
+	}
+	walk(v, 0)
+	return out
+}
+
+func firstNestedHTTPURL(v any, maxDepth int) string {
+	for _, u := range nestedHTTPURLs(v, maxDepth) {
+		if u != "" {
+			return ensureHTTPS(u)
+		}
+	}
+	return ""
+}
+
+func firstNestedHTTPURLByKeys(v any, maxDepth int, keys ...string) string {
+	needles := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if key = strings.ToLower(strings.TrimSpace(key)); key != "" {
+			needles = append(needles, key)
+		}
+	}
+	var walk func(any, int) string
+	walk = func(x any, depth int) string {
+		if x == nil || depth > maxDepth {
+			return ""
+		}
+		switch val := x.(type) {
+		case map[string]any:
+			for key, item := range val {
+				lower := strings.ToLower(key)
+				for _, needle := range needles {
+					if strings.Contains(lower, needle) {
+						if u := firstNestedHTTPURL(item, 4); u != "" {
+							return u
+						}
+					}
+				}
+			}
+			for _, item := range val {
+				if u := walk(item, depth+1); u != "" {
+					return u
+				}
+			}
+		case []any:
+			for _, item := range val {
+				if u := walk(item, depth+1); u != "" {
+					return u
+				}
+			}
+		}
+		return ""
+	}
+	return walk(v, 0)
+}
+
+func buildHeaders(isVideo bool, referer, ua string) map[string]string {
+	if ua == "" {
+		ua = defaultUA
+	}
+	headers := map[string]string{
+		"User-Agent":      ua,
+		"Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+	}
+	if isVideo {
+		headers["Accept"] = "*/*"
+	} else {
+		headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+	}
+	if referer != "" {
+		headers["Referer"] = referer
+	}
+	return headers
+}
+
+func ensureHTTPS(raw string) string {
+	switch {
+	case strings.HasPrefix(raw, "//"):
+		return "https:" + raw
+	case strings.HasPrefix(raw, "http://"):
+		return "https://" + strings.TrimPrefix(raw, "http://")
+	default:
+		return raw
+	}
+}
+
+func cleanURLQuery(raw string, drop ...string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	q := u.Query()
+	for _, key := range drop {
+		q.Del(key)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
