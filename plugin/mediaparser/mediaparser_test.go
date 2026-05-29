@@ -159,6 +159,26 @@ func TestRenderInfoCardPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(gallery)
+
+	twitterGallery, err := renderInfoCard(mediaMeta{
+		URL:       "https://x.com/example/status/1",
+		SourceURL: "twitter-gallery-preview",
+		Platform:  "twitter",
+		Title:     "トーマ@裏垢(@Tomaaibjjo02) 的推文",
+		Author:    "トーマ@裏垢",
+		Avatar:    server.URL + "/avatar.png",
+		Timestamp: "2026-05-28",
+		Desc:      "信じられないレベルで美人な家政婦がきた結果、部屋が綺麗になる前に俺の理性が汚れた🤣🤣",
+		ImageURLs: [][]string{
+			{server.URL + "/cover.png"},
+			{server.URL + "/cover.png"},
+			{server.URL + "/cover.png"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(twitterGallery)
 }
 
 func TestRenderLiveUserCardPreview(t *testing.T) {

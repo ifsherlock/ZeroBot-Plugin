@@ -521,6 +521,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:6px;back
 <label>分辨率 <select id="res"><option value="0">不限</option><option value="360">360p</option><option value="720">720p</option><option value="1080">1080p</option></select></label>
 <label>最大 MB <input id="maxmb" type="number" min="1" style="width:96px"></label>
 <label>缓存分钟 <input id="ttl" type="number" min="1" style="width:96px"></label>
+<label>解析回应 <input id="reactionEmoji" maxlength="8" style="width:72px" placeholder="🍉"></label>
+<label>失败回应 <input id="failReactionEmoji" maxlength="8" style="width:72px" placeholder="❌"></label>
 <button class="danger" onclick="clearCache()">清理缓存</button>
 <button class="primary right" onclick="save()">保存</button>
 </div>
@@ -565,7 +567,7 @@ async function load(){
  render();
 }
 function render(){
- const items=[['auto_parse','自动解析'],['send_info_card','发送卡片'],['send_media','发送媒体'],['download_video','下载视频'],['debug','调试日志'],['avoid_av1','禁用 AV1'],['use_yt_dlp_fallback','yt-dlp 备用']];
+ const items=[['auto_parse','自动解析'],['send_info_card','发送卡片'],['send_media','发送媒体'],['download_video','下载视频'],['parse_reaction','解析回应'],['debug','调试日志'],['avoid_av1','禁用 AV1'],['use_yt_dlp_fallback','yt-dlp 备用']];
  $('globalControls').innerHTML=items.map(x=>'<label class="row">'+x[1]+switchHTML('cfg.'+x[0],!!cfg[x[0]])+'</label>').join('');
  $('platformRows').innerHTML=platforms.map(p=>'<tr><td><b>'+p.label+'</b><div class="muted">'+(p.local||p.name)+'</div></td><td>'+bindSwitch(cfg.platform_enabled,'platform_enabled',p.name)+'</td><td>'+bindSwitch(cfg.platform_info_card,'platform_info_card',p.name)+'</td><td>'+bindSwitch(cfg.platform_send_media,'platform_send_media',p.name)+'</td><td>'+bindSwitch(cfg.platform_download_video,'platform_download_video',p.name)+'</td><td>'+logoCell(p)+'</td></tr>').join('');
  if(!cfg.platform_group_block) cfg.platform_group_block={};
@@ -573,7 +575,7 @@ function render(){
  $('userWhitelist').value=listText(cfg.user_whitelist); $('userBlacklist').value=listText(cfg.user_blacklist);
  $('groupWhitelist').value=listText(cfg.group_whitelist); $('groupBlacklist').value=listText(cfg.group_blacklist);
  $('groupUserWhitelist').value=listText(cfg.group_user_whitelist); $('groupUserBlacklist').value=listText(cfg.group_user_blacklist);
- $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60;
+ $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  updateAccessVisibility();
  renderPlatformGroupBlock();
  if(!groups.length) loadGroups(false); else renderGroupPickers();
@@ -635,7 +637,7 @@ function renderPlatformGroupBlock(){
 }
 function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function save(){
- cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value);
+ cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;
  cfg.user_whitelist=parseList($('userWhitelist').value); cfg.user_blacklist=parseList($('userBlacklist').value);
  cfg.group_whitelist=parseList($('groupWhitelist').value); cfg.group_blacklist=parseList($('groupBlacklist').value);

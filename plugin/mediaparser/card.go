@@ -28,9 +28,10 @@ import (
 )
 
 const (
-	cardWidth   = 1248
-	cardPad     = 44
-	cardContent = cardWidth - cardPad*2
+	cardWidth    = 1248
+	cardPad      = 44
+	cardOuterPad = 44
+	cardContent  = cardWidth - cardPad*2
 )
 
 type cardPalette struct {
@@ -46,47 +47,66 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if len(meta.VideoURLs) == 0 && len(meta.ImageURLs) > 0 {
 		return renderGalleryCard(meta, fontBytes)
 	}
+	return renderVideoCard(meta, fontBytes)
+}
 
-	cover := firstCardCover(meta)
-	coverImg := fetchCardImage(cover, meta.ImageHeads)
+func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	coverImg := fetchCardImage(firstCardCover(meta), meta.ImageHeads)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
-	coverH := cardCoverHeight(coverImg)
-	summaryLines := wrapDisplayText(cardSummaryText(meta), 34, 3)
+
+	title := firstNonEmpty(meta.Title, meta.Desc, "媒体解析")
+	titleLines := wrapDisplayText(title, 32, 2)
+	if len(titleLines) == 0 {
+		titleLines = []string{title}
+	}
+	summaryLines := wrapDisplayText(cardSummaryText(meta), 34, 4)
 	if len(summaryLines) == 0 {
 		summaryLines = []string{"该视频暂无总结"}
 	}
 
-	headerTop := 42.0
-	titleY := 199.0
-	coverY := 275.0
-	summaryY := coverY + float64(coverH) + 62
-	height := int(summaryY) + len(summaryLines)*46 + 44
-	if height < 1040 {
-		height = 1040
+	outerPad := cardOuterPad
+	panelX, panelY := outerPad, outerPad
+	panelW := cardWidth - outerPad*2
+	headerH := 164
+	contentPad := 28
+	headerTop := float64(panelY + 18)
+	contentX := panelX + contentPad
+	contentW := panelW - contentPad*2
+	titleY := float64(panelY + headerH + 64)
+	coverY := titleY + float64(len(titleLines))*58 + 24
+	coverH := cardCoverHeightForWidth(coverImg, contentW)
+	summaryY := coverY + float64(coverH) + 58
+	panelH := int(summaryY) + len(summaryLines)*46 + 46 - panelY
+	if panelH < int(summaryY)+80-panelY {
+		panelH = int(summaryY) + 80 - panelY
 	}
+	height := panelY + panelH + outerPad
 
 	dc := gg.NewContext(cardWidth, height)
-	dc.SetRGB255(255, 255, 255)
+	dc.SetRGB255(190, 226, 248)
 	dc.Clear()
+	drawGalleryPanel(dc, panelX, panelY, panelW, panelH)
+	drawGlassHeader(dc, fontBytes, meta.Platform, panelX, panelY, panelW, headerH)
 
 	displayAuthor := cardDisplayAuthor(meta.Author)
-	drawAvatar(dc, fontBytes, avatarImg, cardPad, int(headerTop), 120, displayAuthor)
-	drawInlineEmoji(dc, fontBytes, 40, color.RGBA{R: 18, G: 132, B: 255, A: 255}, truncate(firstNonEmpty(displayAuthor, "未知用户"), 22), 192, headerTop+38)
-	drawInlineEmoji(dc, fontBytes, 33, color.RGBA{R: 145, G: 145, B: 145, A: 255}, firstNonEmpty(meta.Timestamp, "-"), 192, headerTop+91)
-	drawPlatformLogo(dc, fontBytes, meta.Platform, cardWidth-cardPad, headerTop+62)
+	drawAvatarWithBorder(dc, fontBytes, avatarImg, panelX+42, int(headerTop), 124, displayAuthor)
+	drawShadowText(dc, fontBytes, 40, truncate(firstNonEmpty(displayAuthor, "未知用户"), 22), float64(panelX+198), headerTop+39)
+	if meta.Timestamp != "" {
+		drawShadowText(dc, fontBytes, 30, meta.Timestamp, float64(panelX+198), headerTop+88)
+	}
+	drawPlatformLogo(dc, fontBytes, meta.Platform, float64(panelX+panelW-34), headerTop+50)
 
-	title := firstNonEmpty(meta.Title, meta.Desc, "媒体解析")
 	y := titleY + 20
-	for _, line := range wrapDisplayText(title, 32, 2) {
-		drawInlineEmoji(dc, fontBytes, 40, platformPalette(meta.Platform).Title, line, cardPad, y)
-		y += 50
+	for _, line := range titleLines {
+		drawInlineEmoji(dc, fontBytes, 42, platformPalette(meta.Platform).Title, line, float64(contentX), y)
+		y += 58
 	}
 
-	drawCover(dc, coverImg, cardPad, int(coverY), cardContent, coverH, len(meta.VideoURLs) > 0)
+	drawFloatingCoverCell(dc, coverImg, contentX, int(coverY), contentW, coverH, len(meta.VideoURLs) > 0)
 
 	y = summaryY
 	for _, line := range summaryLines {
-		drawInlineEmoji(dc, fontBytes, 32, color.RGBA{R: 150, G: 150, B: 150, A: 255}, line, cardPad, y)
+		drawTopicLine(dc, fontBytes, 34, line, float64(contentX), y)
 		y += 46
 	}
 
@@ -114,7 +134,7 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		titleLines = []string{title}
 	}
 
-	outerPad := 28
+	outerPad := cardOuterPad
 	panelX, panelY := outerPad, outerPad
 	panelW := cardWidth - outerPad*2
 	headerH := 164
@@ -190,15 +210,19 @@ func firstCardCover(meta mediaMeta) string {
 }
 
 func cardCoverHeight(img image.Image) int {
+	return cardCoverHeightForWidth(img, cardContent)
+}
+
+func cardCoverHeightForWidth(img image.Image, w int) int {
 	if img == nil {
 		return 656
 	}
 	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w <= 0 || h <= 0 {
+	iw, ih := b.Dx(), b.Dy()
+	if iw <= 0 || ih <= 0 {
 		return 656
 	}
-	out := int(float64(cardContent) * float64(h) / float64(w))
+	out := int(float64(w) * float64(ih) / float64(iw))
 	if out < 520 {
 		return 520
 	}
@@ -323,7 +347,18 @@ func drawHeaderGradient(dc *gg.Context, w, h int) {
 }
 
 func drawGalleryPanel(dc *gg.Context, x, y, w, h int) {
-	for i := 14; i >= 1; i-- {
+	platePad := 10
+	px, py := float64(x-platePad), float64(y-platePad)
+	pw, ph := float64(w+platePad*2), float64(h+platePad*2)
+	for i := 18; i >= 1; i-- {
+		dc.SetRGBA255(64, 104, 145, 3+i*2)
+		dc.DrawRoundedRectangle(px, py+float64(i), pw, ph, 30)
+		dc.Fill()
+	}
+	dc.SetRGB255(174, 219, 245)
+	dc.DrawRoundedRectangle(px, py, pw, ph, 30)
+	dc.Fill()
+	for i := 12; i >= 1; i-- {
 		dc.SetRGBA255(70, 110, 150, 4+i*2)
 		dc.DrawRoundedRectangle(float64(x), float64(y+i), float64(w), float64(h), 24)
 		dc.Fill()
@@ -549,6 +584,11 @@ func fetchEmojiImage(r rune, size int) image.Image {
 }
 
 func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) {
+	if platform == "twitter" {
+		if drawTwitterLogoBadge(dc, right, cy) {
+			return
+		}
+	}
 	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
 		return
 	}
@@ -602,16 +642,39 @@ func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, 
 	}
 }
 
+func drawTwitterLogoBadge(dc *gg.Context, right, cy float64) bool {
+	const size = 74.0
+	x, y := right-size, cy-size/2
+	dc.SetRGB255(5, 5, 5)
+	dc.DrawRoundedRectangle(x, y, size, size, 9)
+	dc.Fill()
+	dc.SetRGBA255(255, 255, 255, 210)
+	dc.SetLineWidth(2)
+	dc.DrawRoundedRectangle(x+1, y+1, size-2, size-2, 8)
+	dc.Stroke()
+	dc.SetRGB255(255, 255, 255)
+	dc.SetLineWidth(6)
+	dc.DrawLine(x+22, y+19, x+53, y+55)
+	dc.DrawLine(x+52, y+19, x+21, y+55)
+	dc.Stroke()
+	return true
+}
+
 func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy float64) bool {
 	img := loadPlatformLogo(platform)
 	if img == nil {
 		return false
 	}
-	const (
-		w   = 238.0
-		h   = 88.0
-		pad = 12
-	)
+	const pad = 12
+	bounds := img.Bounds()
+	aspect := 1.0
+	if bounds.Dx() > 0 && bounds.Dy() > 0 {
+		aspect = float64(bounds.Dx()) / float64(bounds.Dy())
+	}
+	w, h := 238.0, 88.0
+	if aspect <= 1.35 {
+		w, h = 88.0, 88.0
+	}
 	x, y := right-w, cy-h/2
 	dc.SetRGB255(255, 255, 255)
 	dc.DrawRoundedRectangle(x, y, w, h, 8)
@@ -835,6 +898,21 @@ func drawCover(dc *gg.Context, img image.Image, x, y, w, h int, showPlay bool) {
 	dc.Fill()
 }
 
+func drawFloatingCoverCell(dc *gg.Context, img image.Image, x, y, w, h int, showPlay bool) {
+	drawFloatingImageCellAnchored(dc, img, x, y, w, h, imaging.Center)
+	if !showPlay {
+		return
+	}
+	cx := float64(x + w/2)
+	cy := float64(y + h/2)
+	dc.SetRGBA255(42, 42, 42, 118)
+	dc.DrawCircle(cx, cy, 70)
+	dc.Fill()
+	dc.SetRGBA255(255, 255, 255, 190)
+	dc.DrawRegularPolygon(3, cx+14, cy, 54, gg.Radians(90))
+	dc.Fill()
+}
+
 func galleryGridHeightForImages(imgs []image.Image, w int) int {
 	if len(imgs) == 0 {
 		return 640
@@ -842,6 +920,9 @@ func galleryGridHeightForImages(imgs []image.Image, w int) int {
 	gap := 10
 	if len(imgs) == 1 {
 		return w
+	}
+	if useThreeImageMosaic(imgs) {
+		return (w - gap) / 2
 	}
 	cols := galleryGridCols(len(imgs))
 	colW := (w - gap*(cols-1)) / cols
@@ -863,6 +944,10 @@ func drawGalleryGrid(dc *gg.Context, imgs []image.Image, x, y, w, h int) {
 		drawFloatingImageCell(dc, imgs[0], x, y, w, h)
 		return
 	}
+	if useThreeImageMosaic(imgs) {
+		drawThreeImageMosaic(dc, imgs, x, y, w)
+		return
+	}
 	cols := galleryGridCols(len(imgs))
 	cellW := (w - gap*(cols-1)) / cols
 	limit := len(imgs)
@@ -874,6 +959,37 @@ func drawGalleryGrid(dc *gg.Context, imgs []image.Image, x, y, w, h int) {
 		col := i % cols
 		drawFloatingImageCell(dc, imgs[i], x+col*(cellW+gap), y+row*(cellW+gap), cellW, cellW)
 	}
+}
+
+func useThreeImageMosaic(imgs []image.Image) bool {
+	if len(imgs) != 3 {
+		return false
+	}
+	landscape := 0
+	for _, img := range imgs {
+		if img == nil {
+			continue
+		}
+		b := img.Bounds()
+		if b.Dx() <= 0 || b.Dy() <= 0 {
+			continue
+		}
+		if float64(b.Dx())/float64(b.Dy()) >= 1.1 {
+			landscape++
+		}
+	}
+	return landscape >= 2
+}
+
+func drawThreeImageMosaic(dc *gg.Context, imgs []image.Image, x, y, w int) {
+	gap := 10
+	totalH := (w - gap) / 2
+	leftW := (w - gap) / 2
+	rightW := w - leftW - gap
+	rightH := (totalH - gap) / 2
+	drawFloatingImageCellAnchored(dc, imgs[0], x, y, leftW, totalH, imaging.Center)
+	drawFloatingImageCellAnchored(dc, imgs[1], x+leftW+gap, y, rightW, rightH, imaging.Center)
+	drawFloatingImageCellAnchored(dc, imgs[2], x+leftW+gap, y+rightH+gap, rightW, rightH, imaging.Center)
 }
 
 func galleryGridCols(n int) int {
@@ -902,6 +1018,10 @@ func drawImageCell(dc *gg.Context, img image.Image, x, y, w, h int, preserve boo
 }
 
 func drawFloatingImageCell(dc *gg.Context, img image.Image, x, y, w, h int) {
+	drawFloatingImageCellAnchored(dc, img, x, y, w, h, imaging.Top)
+}
+
+func drawFloatingImageCellAnchored(dc *gg.Context, img image.Image, x, y, w, h int, anchor imaging.Anchor) {
 	const (
 		radius = 12.0
 		border = 3.0
@@ -928,7 +1048,7 @@ func drawFloatingImageCell(dc *gg.Context, img image.Image, x, y, w, h int) {
 		dc.SetRGB255(238, 238, 238)
 		dc.Fill()
 	} else {
-		dc.DrawImage(imaging.Fill(img, iw, ih, imaging.Top, imaging.Lanczos), ix, iy)
+		dc.DrawImage(imaging.Fill(img, iw, ih, anchor, imaging.Lanczos), ix, iy)
 	}
 	dc.ResetClip()
 }

@@ -106,6 +106,9 @@ type config struct {
 	TimeoutSeconds      int                       `json:"timeout_seconds"`
 	Proxy               string                    `json:"proxy"`
 	Debug               bool                      `json:"debug"`
+	ParseReaction       bool                      `json:"parse_reaction"`
+	ParseReactionEmoji  string                    `json:"parse_reaction_emoji"`
+	FailReactionEmoji   string                    `json:"fail_reaction_emoji"`
 
 	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
 	BilibiliCookie     string `json:"bilibili_cookie"`
@@ -235,6 +238,9 @@ func defaultConfig() config {
 		CacheTTLMinutes:     defaultTTLMinutes,
 		TimeoutSeconds:      defaultTimeoutSec,
 		Debug:               true,
+		ParseReaction:       true,
+		ParseReactionEmoji:  "🍉",
+		FailReactionEmoji:   "❌",
 		AvoidAV1:            true,
 		BilibiliMaxQuality:  "不限制",
 		UseYTDLPFallback:    false,
@@ -368,6 +374,12 @@ func normalizeConfig(cfg *config) {
 	}
 	if cfg.YTDLPPath == "" {
 		cfg.YTDLPPath = "yt-dlp"
+	}
+	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
+		cfg.ParseReactionEmoji = "🍉"
+	}
+	if strings.TrimSpace(cfg.FailReactionEmoji) == "" {
+		cfg.FailReactionEmoji = "❌"
 	}
 	if cfg.BilibiliMaxQuality == "" {
 		cfg.BilibiliMaxQuality = "不限制"
@@ -650,13 +662,22 @@ func handleAutoParse(ctx *zero.Ctx) {
 		return
 	}
 	logrus.Infof("[mediaparser] event user=%d group=%d links=%d raw=%q", ctx.Event.UserID, ctx.Event.GroupID, len(links), truncate(raw, 160))
+	activeLinks := make([]parsedLink, 0, len(links))
 	for _, link := range links {
 		if platformGroupBlocked(cfg, link.Platform, ctx.Event.GroupID) {
 			logDebug(cfg, "skip platform_group_blocked platform=%s group=%d", link.Platform, ctx.Event.GroupID)
 			continue
 		}
+		activeLinks = append(activeLinks, link)
+	}
+	if len(activeLinks) == 0 {
+		return
+	}
+	sendParseReaction(ctx, cfg)
+	for _, link := range activeLinks {
 		if err := processLink(ctx, cfg, link); err != nil {
 			addRuntimeParse(false)
+			sendFailReaction(ctx, cfg)
 			if cfg.Debug {
 				ctx.SendChain(message.Text("解析失败: ", err))
 			}
@@ -673,6 +694,46 @@ func platformGroupBlocked(cfg config, platform string, groupID int64) bool {
 	}
 	blocked := cfg.PlatformGroupBlock[platform]
 	return blocked != nil && blocked[groupID]
+}
+
+func sendParseReaction(ctx *zero.Ctx, cfg config) {
+	if !cfg.ParseReaction || ctx.Event.MessageID == 0 {
+		return
+	}
+	emoji := firstReactionRune(cfg.ParseReactionEmoji)
+	if emoji == 0 {
+		return
+	}
+	if err := ctx.SetMessageEmojiLike(ctx.Event.MessageID, emoji); err != nil {
+		logDebug(cfg, "parse_reaction_failed message_id=%d emoji=%q error=%v", ctx.Event.MessageID, string(emoji), err)
+		return
+	}
+	logDebug(cfg, "parse_reaction_ok message_id=%d emoji=%q", ctx.Event.MessageID, string(emoji))
+}
+
+func sendFailReaction(ctx *zero.Ctx, cfg config) {
+	if !cfg.ParseReaction || ctx.Event.MessageID == 0 {
+		return
+	}
+	emoji := firstReactionRune(cfg.FailReactionEmoji)
+	if emoji == 0 {
+		return
+	}
+	if err := ctx.SetMessageEmojiLike(ctx.Event.MessageID, emoji); err != nil {
+		logDebug(cfg, "fail_reaction_failed message_id=%d emoji=%q error=%v", ctx.Event.MessageID, string(emoji), err)
+		return
+	}
+	logDebug(cfg, "fail_reaction_ok message_id=%d emoji=%q", ctx.Event.MessageID, string(emoji))
+}
+
+func firstReactionRune(s string) rune {
+	for _, r := range strings.TrimSpace(s) {
+		if r == 0xfe0e || r == 0xfe0f {
+			continue
+		}
+		return r
+	}
+	return 0
 }
 
 type parsedLink struct {
