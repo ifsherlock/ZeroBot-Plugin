@@ -965,7 +965,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	if contentH < 120 {
 		contentH = 120
 	}
-	headerH := 86 + len(titleLines)*titleLH + 72
+	headerH := 116 + len(titleLines)*titleLH + 72
 	footerH := 150
 	panelH := panelPad + headerH + contentH + footerH
 	height := panelH + outerPad*2
@@ -976,9 +976,8 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	drawKeylolPanel(dc, outerPad, outerPad, w-outerPad*2, panelH, theme)
 	x := outerPad + panelPad
 	y := outerPad + panelPad
-	drawKeylolBadge(dc, fontBytes, firstNonEmpty(meta.KeylolCategory, "Keylol"), float64(x), float64(y+10))
-	drawKeylolTopRightLogo(dc, fontBytes, float64(w-outerPad-panelPad), float64(y+30))
-	y += 74
+	drawKeylolHeaderLogo(dc, fontBytes, float64(x), float64(y+6))
+	y += 112
 	for _, line := range titleLines {
 		drawInlineEmoji(dc, fontBytes, titleSize, theme.Title, line, float64(x), float64(y))
 		y += titleLH
@@ -1297,8 +1296,19 @@ func drawKeylolBadge(dc *gg.Context, fontBytes []byte, label string, x, y float6
 	drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255}, label, x+17, y+21)
 }
 
+func drawKeylolHeaderLogo(dc *gg.Context, fontBytes []byte, x, y float64) {
+	if img := keylolOfficialLogo(); img != nil {
+		fit := imaging.Fit(img, 154, 50, imaging.Lanczos)
+		dc.DrawImage(fit, int(x), int(y))
+	} else {
+		mustFont(dc, fontBytes, 30)
+		dc.SetRGB255(74, 137, 218)
+		dc.DrawStringAnchored("Keylol", x, y+28, 0, 0.5)
+	}
+}
+
 func drawKeylolTopRightLogo(dc *gg.Context, fontBytes []byte, right, cy float64) {
-	if img := fetchCachedCardImage("keylol-official-logo-v1", "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png", nil); img != nil {
+	if img := keylolOfficialLogo(); img != nil {
 		fit := imaging.Fit(img, 118, 42, imaging.Lanczos)
 		b := fit.Bounds()
 		dc.DrawImage(fit, int(right)-b.Dx(), int(cy)-b.Dy()/2)
@@ -1307,6 +1317,13 @@ func drawKeylolTopRightLogo(dc *gg.Context, fontBytes []byte, right, cy float64)
 	mustFont(dc, fontBytes, 29)
 	dc.SetRGB255(74, 137, 218)
 	dc.DrawStringAnchored("Keylol", right, cy+1, 1, 0.5)
+}
+
+func keylolOfficialLogo() image.Image {
+	if img := loadPlatformLogo("keylol"); img != nil {
+		return img
+	}
+	return fetchCachedCardImage("keylol-official-logo-v1", "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png", nil)
 }
 
 func drawKeylolAuthorLine(dc *gg.Context, fontBytes []byte, author string, x, y int) {

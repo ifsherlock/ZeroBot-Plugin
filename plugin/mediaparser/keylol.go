@@ -401,6 +401,19 @@ func keylolTextBlocks(text string) []keylolBlock {
 		if line == "" {
 			continue
 		}
+		if text, ok := keylolWrappedMarkerText(line, "keylol_link"); ok {
+			flush()
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "link", Text: text})
+			}
+			continue
+		}
+		if rest, ok := keylolAttachLeadingCloseParen(&out, line); ok {
+			line = rest
+			if line == "" {
+				continue
+			}
+		}
 		switch {
 		case strings.HasPrefix(line, "[keylol_steam]"):
 			flush()
@@ -488,6 +501,48 @@ func keylolTextBlocks(text string) []keylolBlock {
 	}
 	flush()
 	return out
+}
+
+func keylolAttachLeadingCloseParen(out *[]keylolBlock, line string) (string, bool) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", false
+	}
+	close := ""
+	switch []rune(line)[0] {
+	case ')':
+		close = ")"
+	case '）':
+		close = "）"
+	default:
+		return line, false
+	}
+	if len(*out) == 0 {
+		return line, false
+	}
+	last := &(*out)[len(*out)-1]
+	if last.Kind != "link" || !(strings.HasPrefix(last.Text, "(") || strings.HasPrefix(last.Text, "（")) || strings.HasSuffix(last.Text, ")") || strings.HasSuffix(last.Text, "）") {
+		return line, false
+	}
+	last.Text += close
+	rest := strings.TrimSpace(strings.TrimPrefix(line, close))
+	return rest, true
+}
+
+func keylolWrappedMarkerText(line, marker string) (string, bool) {
+	re := regexp.MustCompile(`^([\(（])?\[` + regexp.QuoteMeta(marker) + `\](.*?)([\)）])?$`)
+	m := re.FindStringSubmatch(strings.TrimSpace(line))
+	if len(m) == 0 {
+		return "", false
+	}
+	text := strings.TrimSpace(m[2])
+	if m[1] != "" {
+		text = m[1] + text
+	}
+	if m[3] != "" {
+		text += m[3]
+	}
+	return text, true
 }
 
 func keylolReplaceSteamLinks(s, base string) string {
@@ -1112,7 +1167,7 @@ func keylolCleanBlockText(s string) string {
 		}
 		cleaned = append(cleaned, line)
 	}
-	return strings.Join(collapseDuplicateLines(cleaned), "\n")
+	return strings.Join(collapseDuplicateLines(keylolMergeIsolatedPunctuationLines(cleaned)), "\n")
 }
 
 func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
@@ -1201,7 +1256,7 @@ func keylolCleanMessage(messageHTML string) string {
 		}
 		cleaned = append(cleaned, line)
 	}
-	return strings.Join(collapseDuplicateLines(cleaned), "\n")
+	return strings.Join(collapseDuplicateLines(keylolMergeIsolatedPunctuationLines(cleaned)), "\n")
 }
 
 func keylolNoiseLine(line string) bool {
@@ -1233,6 +1288,35 @@ func collapseDuplicateLines(lines []string) []string {
 		}
 		out = append(out, line)
 		last = line
+	}
+	return out
+}
+
+func keylolMergeIsolatedPunctuationLines(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		switch line {
+		case "(", "（", "[", "【":
+			out = append(out, line)
+			continue
+		case ")", "）", "]", "】":
+			if len(out) > 0 {
+				out[len(out)-1] += line
+			} else {
+				out = append(out, line)
+			}
+			continue
+		}
+		if len(out) > 0 {
+			prev := out[len(out)-1]
+			switch prev {
+			case "(", "（", "[", "【":
+				out[len(out)-1] = prev + line
+				continue
+			}
+		}
+		out = append(out, line)
 	}
 	return out
 }
