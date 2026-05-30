@@ -113,11 +113,13 @@ type config struct {
 	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
 	BilibiliCookie     string `json:"bilibili_cookie"`
 	BilibiliMaxQuality string `json:"bilibili_max_quality"`
+	XiaohongshuCookie  string `json:"xiaohongshu_cookie"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
 	UseYTDLPFallback     bool   `json:"use_yt_dlp_fallback"`
 	YTDLPPath            string `json:"yt_dlp_path"`
 	YTDLPCookieFile      string `json:"yt_dlp_cookie_file"`
+	YouTubeCookieFile    string `json:"youtube_cookie_file"`
 	InstagramCookieFile  string `json:"instagram_cookie_file"`
 	YouTubeExtractorArgs string `json:"youtube_extractor_args"`
 }
@@ -386,7 +388,9 @@ func normalizeConfig(cfg *config) {
 		cfg.YouTubeExtractorArgs = "youtube:player_client=default,android;formats=missing_pot"
 	}
 	cfg.YTDLPCookieFile = strings.TrimSpace(cfg.YTDLPCookieFile)
+	cfg.YouTubeCookieFile = strings.TrimSpace(cfg.YouTubeCookieFile)
 	cfg.InstagramCookieFile = strings.TrimSpace(cfg.InstagramCookieFile)
+	cfg.XiaohongshuCookie = strings.TrimSpace(cfg.XiaohongshuCookie)
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"
 	}
@@ -1410,6 +1414,8 @@ func downloadWithYTDLP(cfg config, meta *mediaMeta, raw string) (string, float64
 func appendYTDLPPlatformArgs(args []string, cfg config, platform string) []string {
 	if platform == "instagram" && cfg.InstagramCookieFile != "" {
 		args = append(args, "--cookies", cfg.InstagramCookieFile)
+	} else if platform == "youtube" && cfg.YouTubeCookieFile != "" {
+		args = append(args, "--cookies", cfg.YouTubeCookieFile)
 	} else if cfg.YTDLPCookieFile != "" {
 		args = append(args, "--cookies", cfg.YTDLPCookieFile)
 	}

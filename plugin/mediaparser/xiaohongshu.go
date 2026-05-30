@@ -17,7 +17,7 @@ const (
 func parseXiaohongshu(cfg config, raw string) (mediaMeta, error) {
 	fullURL := raw
 	if strings.Contains(strings.ToLower(raw), "xhslink.com") {
-		headers := xhsPageHeaders(raw)
+		headers := xhsPageHeaders(cfg, raw)
 		reqURL, err := xhsRedirect(raw, headers)
 		if err != nil {
 			return mediaMeta{}, err
@@ -26,11 +26,11 @@ func parseXiaohongshu(cfg config, raw string) (mediaMeta, error) {
 	}
 	fullURL = xhsCleanShareURL(fullURL)
 	fetchURL := firstNonEmpty(xhsPreferPCURL(fullURL), fullURL)
-	headers := xhsPageHeaders(fetchURL)
+	headers := xhsPageHeaders(cfg, fetchURL)
 	html, finalURL, status, err := fetchText(fetchURL, headers, true)
 	if err != nil {
 		if fetchURL != fullURL {
-			headers = xhsPageHeaders(fullURL)
+			headers = xhsPageHeaders(cfg, fullURL)
 			html, finalURL, status, err = fetchText(fullURL, headers, true)
 		}
 		if err != nil {
@@ -327,16 +327,20 @@ func httpRequestNoRedirect(raw string, headers map[string]string) (*http.Respons
 	return c.Do(req)
 }
 
-func xhsPageHeaders(raw string) map[string]string {
+func xhsPageHeaders(cfg config, raw string) map[string]string {
 	ua := xhsAndroidUA
 	if xhsIsPCURL(raw) {
 		ua = xhsPCUA
 	}
-	return map[string]string{
+	headers := map[string]string{
 		"User-Agent":      ua,
 		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 		"Accept-Language": "zh-CN,zh;q=0.9",
 	}
+	if cfg.XiaohongshuCookie != "" {
+		headers["Cookie"] = cfg.XiaohongshuCookie
+	}
+	return headers
 }
 
 func xhsIsPCURL(raw string) bool {

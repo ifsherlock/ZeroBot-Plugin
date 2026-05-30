@@ -185,14 +185,18 @@ window.pageInfo = window.videoInfo ={
 func TestAppendYTDLPPlatformArgs(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.YTDLPCookieFile = "/tmp/all-cookies.txt"
+	cfg.YouTubeCookieFile = "/tmp/yt-cookies.txt"
 	cfg.InstagramCookieFile = "/tmp/ig-cookies.txt"
 
 	ytArgs := appendYTDLPPlatformArgs([]string{"-J"}, cfg, "youtube")
 	if !containsArgPair(ytArgs, "--extractor-args", "youtube:player_client=default,android;formats=missing_pot") {
 		t.Fatalf("youtube extractor args missing: %#v", ytArgs)
 	}
-	if !containsArgPair(ytArgs, "--cookies", "/tmp/all-cookies.txt") {
-		t.Fatalf("global cookie missing: %#v", ytArgs)
+	if !containsArgPair(ytArgs, "--cookies", "/tmp/yt-cookies.txt") {
+		t.Fatalf("youtube cookie missing: %#v", ytArgs)
+	}
+	if containsArgPair(ytArgs, "--cookies", "/tmp/all-cookies.txt") {
+		t.Fatalf("youtube should prefer platform cookie: %#v", ytArgs)
 	}
 
 	igArgs := appendYTDLPPlatformArgs([]string{"-J"}, cfg, "instagram")
@@ -201,6 +205,15 @@ func TestAppendYTDLPPlatformArgs(t *testing.T) {
 	}
 	if containsArgPair(igArgs, "--cookies", "/tmp/all-cookies.txt") {
 		t.Fatalf("instagram should prefer platform cookie: %#v", igArgs)
+	}
+}
+
+func TestXiaohongshuHeadersIncludeCookie(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.XiaohongshuCookie = "a=b; xsec=1"
+	headers := xhsPageHeaders(cfg, "https://www.xiaohongshu.com/explore/abc")
+	if headers["Cookie"] != cfg.XiaohongshuCookie {
+		t.Fatalf("cookie header=%q", headers["Cookie"])
 	}
 }
 

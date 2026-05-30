@@ -704,8 +704,12 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="accessGrid" style="margin-top:12px">
 <label class="field">yt-dlp Cookie 文件 <input id="ytdlpCookieFile" placeholder="/path/to/cookies.txt"></label>
+<label class="field">YouTube Cookie 文件 <input id="youtubeCookieFile" placeholder="/path/to/youtube-cookies.txt"></label>
 <label class="field">Instagram Cookie 文件 <input id="instagramCookieFile" placeholder="/path/to/instagram-cookies.txt"></label>
 <label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
+<label class="field">B站 Cookie <textarea id="bilibiliCookie" placeholder="SESSDATA=...; bili_jct=..."></textarea></label>
+<label class="field">小红书 Cookie <textarea id="xiaohongshuCookie" placeholder="a1=...; web_session=..."></textarea></label>
+<label class="field">B站最高画质 <select id="bilibiliMaxQuality"><option value="不限制">不限制</option><option value="4K">4K</option><option value="1080P60">1080P60</option><option value="1080P+">1080P+</option><option value="1080P">1080P</option><option value="720P">720P</option><option value="480P">480P</option><option value="360P">360P</option></select></label>
 </div>
 </div>
 <div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">第一阶段先展示运行摘要和最近消息，后续可以接 journal 过滤。</span></div><p class="muted lastMsg expanded" id="logSummary">-</p></div>
@@ -770,7 +774,8 @@ function render(){
  $('groupWhitelist').value=listText(cfg.group_whitelist); $('groupBlacklist').value=listText(cfg.group_blacklist);
  $('groupUserWhitelist').value=listText(cfg.group_user_whitelist); $('groupUserBlacklist').value=listText(cfg.group_user_blacklist);
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
- $('ytdlpCookieFile').value=cfg.yt_dlp_cookie_file||''; $('instagramCookieFile').value=cfg.instagram_cookie_file||''; $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
+ $('ytdlpCookieFile').value=cfg.yt_dlp_cookie_file||''; $('youtubeCookieFile').value=cfg.youtube_cookie_file||''; $('instagramCookieFile').value=cfg.instagram_cookie_file||''; $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
+ $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('bilibiliMaxQuality').value=cfg.bilibili_max_quality||'不限制';
  renderSystemSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
@@ -860,7 +865,8 @@ function renderPlatformGroupBlock(){
 function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function save(){
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
- cfg.yt_dlp_cookie_file=String($('ytdlpCookieFile').value||'').trim(); cfg.instagram_cookie_file=String($('instagramCookieFile').value||'').trim(); cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
+ cfg.yt_dlp_cookie_file=String($('ytdlpCookieFile').value||'').trim(); cfg.youtube_cookie_file=String($('youtubeCookieFile').value||'').trim(); cfg.instagram_cookie_file=String($('instagramCookieFile').value||'').trim(); cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
+ cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.bilibili_max_quality=$('bilibiliMaxQuality').value||'不限制';
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;
  cfg.user_whitelist=parseList($('userWhitelist').value); cfg.user_blacklist=parseList($('userBlacklist').value);
  cfg.group_whitelist=parseList($('groupWhitelist').value); cfg.group_blacklist=parseList($('groupBlacklist').value);
