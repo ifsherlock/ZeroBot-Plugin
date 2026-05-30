@@ -44,10 +44,17 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if shouldRenderLongImageCard(meta) {
+		return renderLongImageCard(meta, fontBytes)
+	}
 	if shouldRenderAsGalleryCard(meta) {
 		return renderGalleryCard(meta, fontBytes)
 	}
 	return renderVideoCard(meta, fontBytes)
+}
+
+func shouldRenderLongImageCard(meta mediaMeta) bool {
+	return len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 1 && len(meta.ImageURLs[0]) > 0 && strings.TrimSpace(meta.Desc) != ""
 }
 
 func shouldRenderAsGalleryCard(meta mediaMeta) bool {
@@ -58,6 +65,61 @@ func shouldRenderAsGalleryCard(meta mediaMeta) bool {
 		return true
 	}
 	return isCombinedMediaPlatform(meta.Platform) && hasMixedMediaItems(meta)
+}
+
+func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
+	img := fetchCardImage(meta.ImageURLs[0][0], meta.ImageHeads)
+
+	titleLines := []string{}
+	bodyLines := wrapDisplayText(meta.Desc, 66, 18)
+
+	outerPad := cardOuterPad
+	panelX, panelY := outerPad, outerPad
+	panelW := cardWidth - outerPad*2
+	headerH := 164
+	contentPad := 28
+	headerTop := float64(panelY + 18)
+	contentX := panelX + contentPad
+	contentW := panelW - contentPad*2
+	bodyY := float64(panelY + headerH + 62)
+	imageY := bodyY + float64(len(titleLines))*58 + float64(len(bodyLines))*46 + 40
+	if len(titleLines) > 0 {
+		imageY += 20
+	}
+	imageH := longImageCardHeight(img, contentW)
+	panelH := int(imageY) + imageH + 54 - panelY
+	height := panelY + panelH + outerPad
+
+	dc := gg.NewContext(cardWidth, height)
+	dc.SetRGB255(190, 226, 248)
+	dc.Clear()
+	drawGalleryPanel(dc, panelX, panelY, panelW, panelH)
+	drawGlassHeader(dc, fontBytes, meta.Platform, panelX, panelY, panelW, headerH)
+
+	displayAuthor := cardDisplayAuthor(meta.Author)
+	drawAvatarWithBorder(dc, fontBytes, avatarImg, panelX+42, int(headerTop), 124, displayAuthor)
+	drawShadowText(dc, fontBytes, 40, truncate(firstNonEmpty(displayAuthor, "鏈煡鐢ㄦ埛"), 22), float64(panelX+198), headerTop+39)
+	if meta.Timestamp != "" {
+		drawShadowText(dc, fontBytes, 30, meta.Timestamp, float64(panelX+198), headerTop+88)
+	}
+	drawPlatformLogo(dc, fontBytes, meta.Platform, float64(panelX+panelW-34), headerTop+50)
+
+	y := bodyY
+	for _, line := range titleLines {
+		drawInlineEmoji(dc, fontBytes, 42, platformPalette(meta.Platform).Title, line, float64(contentX), y)
+		y += 58
+	}
+	if len(titleLines) > 0 {
+		y += 20
+	}
+	for _, line := range bodyLines {
+		drawTopicLine(dc, fontBytes, 34, line, float64(contentX), y)
+		y += 46
+	}
+
+	drawFloatingImageCellContain(dc, img, contentX, int(imageY), contentW, imageH)
+	return saveCardPNG(dc, meta)
 }
 
 func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
@@ -1201,6 +1263,53 @@ func drawFloatingImageCellAnchored(dc *gg.Context, img image.Image, x, y, w, h i
 		dc.DrawImage(imaging.Fill(img, iw, ih, anchor, imaging.Lanczos), ix, iy)
 	}
 	dc.ResetClip()
+}
+
+func drawFloatingImageCellContain(dc *gg.Context, img image.Image, x, y, w, h int) {
+	const (
+		radius = 12.0
+		border = 3.0
+	)
+	fx, fy := float64(x), float64(y)
+	fw, fh := float64(w), float64(h)
+	for i := 8; i >= 1; i-- {
+		alpha := 8 + i*4
+		dc.SetRGBA255(0, 0, 0, alpha)
+		dc.DrawRoundedRectangle(fx, fy+float64(i), fw, fh, radius)
+		dc.Fill()
+	}
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawRoundedRectangle(fx, fy, fw, fh, radius)
+	dc.Fill()
+
+	ix := x + int(border)
+	iy := y + int(border)
+	iw := w - int(border)*2
+	ih := h - int(border)*2
+	dc.DrawRoundedRectangle(float64(ix), float64(iy), float64(iw), float64(ih), radius-border)
+	dc.ClipPreserve()
+	dc.SetRGB255(255, 255, 255)
+	dc.Fill()
+	if img != nil {
+		fit := imaging.Fit(img, iw, ih, imaging.Lanczos)
+		b := fit.Bounds()
+		dc.DrawImage(fit, ix+(iw-b.Dx())/2, iy+(ih-b.Dy())/2)
+	}
+	dc.ResetClip()
+}
+
+func longImageCardHeight(img image.Image, w int) int {
+	if img == nil {
+		return w
+	}
+	h := scaledImageHeight(img, w)
+	if h < 420 {
+		return 420
+	}
+	if h > 2100 {
+		return 2100
+	}
+	return h
 }
 
 func scaledImageHeight(img image.Image, w int) int {
