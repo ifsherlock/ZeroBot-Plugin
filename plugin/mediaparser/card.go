@@ -326,16 +326,18 @@ type keylolRenderBlock struct {
 
 func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	const (
-		w         = 1320
-		outerPad  = 32
-		panelPad  = 50
-		contentW  = w - outerPad*2 - panelPad*2
-		titleSize = 38.0
-		bodySize  = 27.0
-		titleLH   = 56
-		bodyLH    = 42
-		imageGap  = 28
-		blockGap  = 22
+		w           = 1320
+		outerPad    = 32
+		panelPad    = 50
+		contentW    = w - outerPad*2 - panelPad*2
+		titleSize   = 38.0
+		bodySize    = 27.0
+		toolbarSize = 17.0
+		titleLH     = 56
+		bodyLH      = 42
+		toolbarLH   = 27
+		imageGap    = 28
+		blockGap    = 22
 	)
 	theme := keylolCardThemeNow()
 	blocks := keylolBlocksForRender(meta)
@@ -404,6 +406,11 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			})
 		case "asf_link":
 			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "asf_link", title: block.Title, height: 38})
+		case "toolbar":
+			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, toolbarSize, block.Text, float64(contentW))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "toolbar", text: block.Text, lines: lines, height: len(lines) * toolbarLH})
+			}
 		case "text":
 			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, bodySize, block.Text, float64(contentW))
 			if len(lines) > 0 {
@@ -509,6 +516,11 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		case "asf_link":
 			drawKeylolASFLink(dc, fontBytes, block.title, x, y)
 			y += block.height
+		case "toolbar":
+			for _, line := range block.lines {
+				drawInlineEmoji(dc, bodyFontBytes, toolbarSize, theme.Muted, line, float64(x), float64(y))
+				y += toolbarLH
+			}
 		}
 		y += blockGap
 	}

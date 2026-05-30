@@ -318,6 +318,12 @@ func keylolTextBlocks(text string) []keylolBlock {
 			if regexp.MustCompile(`^\d+$`).MatchString(id) {
 				out = append(out, keylolBlock{Kind: "asf_link", Title: id})
 			}
+		case strings.HasPrefix(line, "[keylol_toolbar]"):
+			flush()
+			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_toolbar]"))
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "toolbar", Text: text})
+			}
 		case strings.HasPrefix(line, "[keylol_collapse]"):
 			flush()
 			out = append(out, keylolBlock{Kind: "collapse", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_collapse]"))})
@@ -328,6 +334,11 @@ func keylolTextBlocks(text string) []keylolBlock {
 			flush()
 			out = append(out, keylolBlock{Kind: "heading2", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_h3]"))})
 		default:
+			if keylolLooksLikeSteamToolbar(line) {
+				flush()
+				out = append(out, keylolBlock{Kind: "toolbar", Text: keylolCleanSteamToolbar(line)})
+				continue
+			}
 			buf = append(buf, line)
 		}
 	}
@@ -490,7 +501,7 @@ func keylolReplaceTextLinks(s, base string) string {
 		text := keylolCleanBlockText(m[2])
 		href := absolutize(base, html.UnescapeString(htmlUnescape(m[1])))
 		if appID := keylolASFAppID(match + " " + href + " " + text); appID != "" {
-			return " 复制\nASF代码\n[keylol_asf]" + appID + "\n"
+			return "\n[keylol_toolbar]复制ASF代码\n[keylol_asf]" + appID + "\n"
 		}
 		if text == "" || strings.EqualFold(text, "链接") || strings.EqualFold(text, "link") {
 			text = href
@@ -515,6 +526,26 @@ func keylolASFAppID(raw string) string {
 		}
 	}
 	return ""
+}
+
+func keylolLooksLikeSteamToolbar(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	return strings.Contains(line, "Steam商店") ||
+		strings.Contains(line, "Steam评测区") ||
+		strings.Contains(line, "其乐相关帖") ||
+		strings.Contains(line, "Steam客户端中查看") ||
+		strings.Contains(line, "复制ASF代码")
+}
+
+func keylolCleanSteamToolbar(line string) string {
+	line = strings.TrimSpace(line)
+	line = strings.TrimRight(line, "|｜ ")
+	line = regexp.MustCompile(`\s*([|｜])\s*`).ReplaceAllString(line, " $1 ")
+	line = regexp.MustCompile(`\s+`).ReplaceAllString(line, " ")
+	return strings.TrimSpace(line)
 }
 
 func keylolImageURLFromTag(tag string) string {
@@ -586,7 +617,7 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	seenSteam := map[string]bool{}
 	for _, block := range blocks {
-		if block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
+		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
 			if block.Text == "" {
 				continue

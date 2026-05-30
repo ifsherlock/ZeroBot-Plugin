@@ -232,13 +232,16 @@ func TestKeylolBuildBlocksDedupesSteamCards(t *testing.T) {
 func TestKeylolBuildBlocksFormatsASFLinks(t *testing.T) {
 	html := `<p>Steam商店 Steam评测区 | 其乐相关帖 SteamDB AStats SCE Barter | Steam客户端中查看 入库或安装 | <a href="javascript:;" data-clipboard-text="!addlicense asf a/1785650">复制ASF代码</a></p>`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
-	if len(blocks) != 2 {
+	if len(blocks) != 3 {
 		t.Fatalf("blocks=%#v", blocks)
 	}
-	if blocks[0].Kind != "text" || !strings.Contains(blocks[0].Text, "复制\nASF代码") {
-		t.Fatalf("asf label should be split onto two lines: %#v", blocks)
+	if blocks[0].Kind != "toolbar" || strings.Contains(blocks[0].Text, "复制ASF代码") {
+		t.Fatalf("steam toolbar should be separated from asf label: %#v", blocks)
 	}
-	if blocks[1].Kind != "asf_link" || blocks[1].Title != "1785650" {
+	if blocks[1].Kind != "toolbar" || blocks[1].Text != "复制ASF代码" || strings.Contains(blocks[1].Text, "\n") {
+		t.Fatalf("asf label should stay as one small toolbar line: %#v", blocks)
+	}
+	if blocks[2].Kind != "asf_link" || blocks[2].Title != "1785650" {
 		t.Fatalf("bad asf link block: %#v", blocks)
 	}
 }
