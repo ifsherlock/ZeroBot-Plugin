@@ -351,12 +351,15 @@ func TestLongImageCardMode(t *testing.T) {
 		Desc:      "这是一段公告正文，后面只有一张长图。",
 		ImageURLs: [][]string{{"https://example.com/notice.jpg"}},
 	}
-	if !shouldRenderLongImageCard(meta) {
+	if !shouldRenderLongImageCard(meta, testGradientImage(900, 1400, color.RGBA{R: 1, G: 2, B: 3, A: 255}, color.RGBA{R: 4, G: 5, B: 6, A: 255})) {
 		t.Fatal("single image with text should use long image card")
 	}
 	img := testGradientImage(900, 1800, color.RGBA{R: 1, G: 2, B: 3, A: 255}, color.RGBA{R: 4, G: 5, B: 6, A: 255})
 	if h := longImageCardHeight(img, 600); h != 1200 {
 		t.Fatalf("unexpected long image height=%d", h)
+	}
+	if shouldRenderLongImageCard(meta, testGradientImage(900, 2600, color.RGBA{R: 1, G: 2, B: 3, A: 255}, color.RGBA{R: 4, G: 5, B: 6, A: 255})) {
+		t.Fatal("extreme tall image should fall back to gallery card")
 	}
 }
 

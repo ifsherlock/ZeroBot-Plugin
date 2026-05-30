@@ -44,17 +44,13 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if shouldRenderLongImageCard(meta) {
+	if shouldConsiderLongImageCard(meta) {
 		return renderLongImageCard(meta, fontBytes)
 	}
 	if shouldRenderAsGalleryCard(meta) {
 		return renderGalleryCard(meta, fontBytes)
 	}
 	return renderVideoCard(meta, fontBytes)
-}
-
-func shouldRenderLongImageCard(meta mediaMeta) bool {
-	return len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 1 && len(meta.ImageURLs[0]) > 0 && strings.TrimSpace(meta.Desc) != ""
 }
 
 func shouldRenderAsGalleryCard(meta mediaMeta) bool {
@@ -67,9 +63,16 @@ func shouldRenderAsGalleryCard(meta mediaMeta) bool {
 	return isCombinedMediaPlatform(meta.Platform) && hasMixedMediaItems(meta)
 }
 
+func shouldConsiderLongImageCard(meta mediaMeta) bool {
+	return len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 1 && len(meta.ImageURLs[0]) > 0 && strings.TrimSpace(meta.Desc) != ""
+}
+
 func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
 	img := fetchCardImage(meta.ImageURLs[0][0], meta.ImageHeads)
+	if !shouldRenderLongImageCard(meta, img) {
+		return renderGalleryCard(meta, fontBytes)
+	}
 
 	titleLines := []string{}
 	bodyLines := wrapDisplayText(meta.Desc, 66, 18)
@@ -120,6 +123,24 @@ func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
 
 	drawFloatingImageCellContain(dc, img, contentX, int(imageY), contentW, imageH)
 	return saveCardPNG(dc, meta)
+}
+
+func shouldRenderLongImageCard(meta mediaMeta, img image.Image) bool {
+	if len(meta.VideoURLs) != 0 || len(meta.ImageURLs) != 1 || len(meta.ImageURLs[0]) == 0 || strings.TrimSpace(meta.Desc) == "" {
+		return false
+	}
+	return !isExtremeTallImage(img)
+}
+
+func isExtremeTallImage(img image.Image) bool {
+	if img == nil {
+		return false
+	}
+	b := img.Bounds()
+	if b.Dx() <= 0 || b.Dy() <= 0 {
+		return false
+	}
+	return float64(b.Dy())/float64(b.Dx()) > 2.4
 }
 
 func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
