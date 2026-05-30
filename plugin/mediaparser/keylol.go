@@ -1228,12 +1228,84 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 func keylolMergePromoBlockPass(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	for i := 0; i < len(blocks); i++ {
+		if table, skip, ok := keylolMergeCurrencyTableBlocks(blocks, i); ok {
+			out = append(out, table)
+			i += skip
+			continue
+		}
 		if merged, skip, ok := keylolMergePromoBlocks(blocks, i); ok {
 			out = append(out, merged)
 			i += skip
 			continue
 		}
 		out = append(out, blocks[i])
+	}
+	return out
+}
+
+func keylolMergeCurrencyTableBlocks(blocks []keylolBlock, i int) (keylolBlock, int, bool) {
+	if i >= len(blocks) || blocks[i].Kind != "hidden_label" {
+		return keylolBlock{}, 0, false
+	}
+	type col struct {
+		code string
+		flag string
+	}
+	cols := []col{}
+	j := i + 1
+	for j < len(blocks) {
+		if blocks[j].Kind != "text" {
+			break
+		}
+		code := strings.TrimSpace(blocks[j].Text)
+		if !keylolCurrencyCode(code) {
+			break
+		}
+		flag := ""
+		if j+1 < len(blocks) && (blocks[j+1].Kind == "inline_image" || blocks[j+1].Kind == "image") {
+			flag = blocks[j+1].URL
+			j += 2
+		} else {
+			j++
+		}
+		cols = append(cols, col{code: code, flag: flag})
+	}
+	if len(cols) < 3 || j >= len(blocks) || blocks[j].Kind != "text" {
+		return keylolBlock{}, 0, false
+	}
+	values := keylolCurrencyValues(blocks[j].Text)
+	if len(values) < len(cols)*2 {
+		return keylolBlock{}, 0, false
+	}
+	lines := make([]string, 0, len(cols))
+	for idx, c := range cols {
+		lines = append(lines, strings.Join([]string{
+			c.code,
+			c.flag,
+			values[idx*2],
+			values[idx*2+1],
+		}, "\t"))
+	}
+	return keylolBlock{Kind: "currency_table", Text: blocks[i].Text, Desc: strings.Join(lines, "\n")}, j - i, true
+}
+
+func keylolCurrencyCode(s string) bool {
+	switch strings.TrimSpace(s) {
+	case "GBP", "USD", "EUR", "CAD", "AUD", "RUB", "JPY", "CNY", "HKD", "TWD", "KRW", "BRL", "MXN", "SGD":
+		return true
+	default:
+		return false
+	}
+}
+
+func keylolCurrencyValues(s string) []string {
+	out := []string{}
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		out = append(out, line)
 	}
 	return out
 }

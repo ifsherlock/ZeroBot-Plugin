@@ -879,6 +879,11 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			if len(lines) > 0 {
 				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "hidden_label", text: block.Text, lines: lines, height: maxInt(44, len(lines)*28+16)})
 			}
+		case "currency_table":
+			rows := keylolCurrencyTableRows(block.Desc)
+			if len(rows) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "currency_table", text: block.Text, desc: block.Desc, lines: rows, height: keylolCurrencyTableHeight(len(rows))})
+			}
 		case "color_red", "color_green", "link":
 			size := 28.0
 			lineH := 40
@@ -1048,6 +1053,9 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			y += block.height
 		case "hidden_label":
 			drawKeylolHiddenLabel(dc, bodyFontBytes, block.lines, x, y, contentW, block.height)
+			y += block.height
+		case "currency_table":
+			drawKeylolCurrencyTable(dc, fontBytes, block.lines, x, y, contentW, block.height, theme)
 			y += block.height
 		case "color_red":
 			for _, line := range block.lines {
@@ -1427,6 +1435,77 @@ func drawKeylolHiddenLabel(dc *gg.Context, fontBytes []byte, lines []string, x, 
 		drawInlineEmoji(dc, fontBytes, 22, color.RGBA{R: 120, G: 188, B: 242, A: 255}, "👁 "+line, float64(x+22), float64(yy))
 		yy += 28
 	}
+}
+
+func keylolCurrencyTableRows(desc string) []string {
+	rows := []string{}
+	for _, line := range strings.Split(desc, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 4 || strings.TrimSpace(parts[0]) == "" {
+			continue
+		}
+		rows = append(rows, line)
+	}
+	return rows
+}
+
+func keylolCurrencyTableHeight(cols int) int {
+	if cols <= 0 {
+		return 0
+	}
+	return 214
+}
+
+func drawKeylolCurrencyTable(dc *gg.Context, fontBytes []byte, rows []string, x, y, w, h int, theme keylolCardTheme) {
+	if len(rows) == 0 {
+		return
+	}
+	tableW := w
+	cellW := tableW / len(rows)
+	if cellW < 122 {
+		cellW = 122
+		tableW = cellW * len(rows)
+	}
+	tableH := h - 10
+	headerH := 76
+	dc.SetRGB255(48, 48, 50)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(tableW), float64(tableH), 8)
+	dc.Fill()
+	dc.SetRGBA255(255, 255, 255, 110)
+	dc.SetLineWidth(1)
+	for i := 1; i < len(rows); i++ {
+		xx := float64(x + i*cellW)
+		dc.DrawLine(xx, float64(y), xx, float64(y+tableH))
+		dc.Stroke()
+	}
+	dc.DrawLine(float64(x), float64(y+headerH), float64(x+tableW), float64(y+headerH))
+	dc.Stroke()
+	for i, row := range rows {
+		parts := strings.Split(row, "\t")
+		if len(parts) < 4 {
+			continue
+		}
+		code := strings.TrimSpace(parts[0])
+		flagURL := strings.TrimSpace(parts[1])
+		price := strings.TrimSpace(parts[2])
+		cny := strings.TrimSpace(parts[3])
+		left := x + i*cellW
+		cx := float64(left + cellW/2)
+		drawInlineEmoji(dc, fontBytes, 29, color.RGBA{R: 255, G: 255, B: 255, A: 255}, code, float64(left+22), float64(y+47))
+		if flag := keylolPrepareImage(fetchCardImage(flagURL, nil)); flag != nil && !isBlankCardImage(flag) {
+			dc.DrawImage(imaging.Fit(flag, 38, 26, imaging.Lanczos), left+74, y+24)
+		}
+		drawInlineEmoji(dc, fontBytes, 31, color.RGBA{R: 255, G: 255, B: 255, A: 255}, price, cx-38, float64(y+headerH+54))
+		drawInlineEmoji(dc, fontBytes, 28, color.RGBA{R: 255, G: 255, B: 255, A: 255}, cny, cx-64, float64(y+headerH+100))
+	}
+	setRGB(dc, theme.Line)
+	dc.SetLineWidth(1.5)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(tableW), float64(tableH), 8)
+	dc.Stroke()
 }
 
 func drawKeylolCodeBlock(dc *gg.Context, fontBytes []byte, lines []string, x, y, w, h int, theme keylolCardTheme) {
