@@ -1002,6 +1002,106 @@ func TestRenderKeylolLivePreview(t *testing.T) {
 	t.Log(out)
 }
 
+func TestRenderKeylolLivePreviewBatch(t *testing.T) {
+	listPath := os.Getenv("MEDIAPARSER_KEYLOL_LIVE_PREVIEW_LIST")
+	if listPath == "" {
+		t.Skip("set MEDIAPARSER_KEYLOL_LIVE_PREVIEW_LIST to a json link list")
+	}
+	outDir := firstNonEmpty(os.Getenv("MEDIAPARSER_KEYLOL_PREVIEW_DIR"), filepath.Join("..", "..", "build", "mediaparser-keylol-live-preview"))
+	data, err := os.ReadFile(listPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var boards []struct {
+		FID     string `json:"fid"`
+		Text    string `json:"text"`
+		Threads []struct {
+			TID   string `json:"tid"`
+			Title string `json:"title"`
+			URL   string `json:"url"`
+		} `json:"threads"`
+	}
+	if err := json.Unmarshal(data, &boards); err != nil {
+		t.Fatal(err)
+	}
+
+	oldCacheDir := cacheDir
+	cacheDir = outDir
+	defer func() { cacheDir = oldCacheDir }()
+
+	oldTheme, hadTheme := os.LookupEnv("MEDIAPARSER_KEYLOL_THEME")
+	defer func() {
+		if hadTheme {
+			_ = os.Setenv("MEDIAPARSER_KEYLOL_THEME", oldTheme)
+		} else {
+			_ = os.Unsetenv("MEDIAPARSER_KEYLOL_THEME")
+		}
+	}()
+
+	cfg := defaultConfig()
+	cfg.KeylolCookie = os.Getenv("MEDIAPARSER_KEYLOL_COOKIE")
+	themes := []string{"light", "dark"}
+	written := 0
+	failures := []string{}
+	index := 1
+	for _, board := range boards {
+		for _, thread := range board.Threads {
+			if thread.URL == "" {
+				continue
+			}
+			for _, theme := range themes {
+				_ = os.Setenv("MEDIAPARSER_KEYLOL_THEME", theme)
+				meta, err := parseKeylol(cfg, thread.URL)
+				if err != nil {
+					failures = append(failures, fmt.Sprintf("%s %s: %v", board.Text, thread.URL, err))
+					continue
+				}
+				out, err := renderInfoCard(meta)
+				if err != nil {
+					failures = append(failures, fmt.Sprintf("%s %s: %v", board.Text, thread.URL, err))
+					continue
+				}
+				name := fmt.Sprintf("%03d_%s_%s_%s.png", index, sanitizePreviewName(board.Text), firstNonEmpty(thread.TID, keylolThreadID(thread.URL)), theme)
+				target := filepath.Join(outDir, name)
+				_ = os.Remove(target)
+				if err := os.Rename(out, target); err != nil {
+					t.Fatal(err)
+				}
+				t.Log(target)
+				written++
+			}
+			index++
+		}
+	}
+	if len(failures) > 0 {
+		failurePath := filepath.Join(outDir, "failures.txt")
+		_ = os.WriteFile(failurePath, []byte(strings.Join(failures, "\n")), 0644)
+		t.Logf("keylol preview failures: %d, see %s", len(failures), failurePath)
+	}
+	if written == 0 {
+		t.Fatalf("no keylol previews rendered")
+	}
+}
+
+func sanitizePreviewName(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "board"
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+			return r
+		case r >= '\u4e00' && r <= '\u9fff':
+			return r
+		case r == '-' || r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, s)
+}
+
 func TestRenderKeylolSpoilerPreview(t *testing.T) {
 	if os.Getenv("MEDIAPARSER_KEYLOL_SPOILER_PREVIEW") == "" {
 		t.Skip("set MEDIAPARSER_KEYLOL_SPOILER_PREVIEW=1 to render keylol spoiler preview")
