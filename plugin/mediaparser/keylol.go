@@ -847,7 +847,7 @@ func keylolReplaceCountdown(s string) string {
 		if text == "" {
 			return ""
 		}
-		return "\n截止时间：" + text + "\n"
+		return "\n\u622a\u6b62\u65f6\u95f4\uff1a" + text + "\n"
 	})
 }
 
@@ -1183,14 +1183,20 @@ func keylolCleanBlockText(s string) string {
 		}
 		cleaned = append(cleaned, line)
 	}
-	cleaned = keylolMergeShortPromoLines(cleaned)
+	cleaned = keylolMergeShortPromoLinesSafe(cleaned)
 	return strings.Join(collapseDuplicateLines(keylolMergeIsolatedPunctuationLines(cleaned)), "\n")
 }
 
 func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	seenSteam := map[string]bool{}
-	for _, block := range blocks {
+	for i := 0; i < len(blocks); i++ {
+		block := blocks[i]
+		if merged, skip, ok := keylolMergePromoBlocks(blocks, i); ok {
+			out = append(out, merged)
+			i += skip
+			continue
+		}
 		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "spoiler" || block.Kind == "hidden_label" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link" || block.Kind == "code" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
 			if block.Text == "" {
@@ -1216,7 +1222,48 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 		}
 		out = append(out, block)
 	}
+	return keylolMergePromoBlockPass(out)
+}
+
+func keylolMergePromoBlockPass(blocks []keylolBlock) []keylolBlock {
+	out := make([]keylolBlock, 0, len(blocks))
+	for i := 0; i < len(blocks); i++ {
+		if merged, skip, ok := keylolMergePromoBlocks(blocks, i); ok {
+			out = append(out, merged)
+			i += skip
+			continue
+		}
+		out = append(out, blocks[i])
+	}
 	return out
+}
+
+func keylolMergePromoBlocks(blocks []keylolBlock, i int) (keylolBlock, int, bool) {
+	if i+1 < len(blocks) &&
+		blocks[i].Kind == "text" &&
+		strings.HasSuffix(strings.TrimSpace(blocks[i].Text), "\u652f\u4ed8") &&
+		keylolLooksLikePromoPriceAndReceiveSafe(blocks[i+1].Text) {
+		text := strings.TrimSpace(blocks[i].Text)
+		text = strings.TrimSpace(strings.TrimSuffix(text, "\u652f\u4ed8"))
+		if text != "" {
+			text += "\n"
+		}
+		text += strings.TrimSpace("\u652f\u4ed8 " + blocks[i+1].Text)
+		return keylolBlock{Kind: "text", Text: text}, 1, true
+	}
+	if i+2 < len(blocks) &&
+		blocks[i].Kind == "text" &&
+		strings.TrimSpace(blocks[i].Text) == "\u652f\u4ed8" &&
+		keylolLooksLikePromoPriceSafe(blocks[i+1].Text) &&
+		keylolLooksLikePromoReceiveSafe(blocks[i+2].Text) {
+		return keylolBlock{Kind: "text", Text: strings.TrimSpace("\u652f\u4ed8 " + blocks[i+1].Text + " " + blocks[i+2].Text)}, 2, true
+	}
+	if i+1 < len(blocks) &&
+		keylolLooksLikePromoPriceSafe(blocks[i].Text) &&
+		keylolLooksLikePromoReceiveSafe(blocks[i+1].Text) {
+		return keylolBlock{Kind: "text", Text: strings.TrimSpace(blocks[i].Text + " " + blocks[i+1].Text)}, 1, true
+	}
+	return keylolBlock{}, 0, false
 }
 
 func keylolImageGroupsFromBlocks(blocks []keylolBlock) [][]string {
@@ -1273,7 +1320,7 @@ func keylolCleanMessage(messageHTML string) string {
 		}
 		cleaned = append(cleaned, line)
 	}
-	cleaned = keylolMergeShortPromoLines(cleaned)
+	cleaned = keylolMergeShortPromoLinesSafe(cleaned)
 	return strings.Join(collapseDuplicateLines(keylolMergeIsolatedPunctuationLines(cleaned)), "\n")
 }
 
@@ -1373,6 +1420,65 @@ func keylolLooksLikePromoPrice(line string) bool {
 func keylolLooksLikePromoReceive(line string) bool {
 	line = strings.TrimSpace(strings.TrimSuffix(line, ":"))
 	return strings.Contains(line, "可获得") || strings.Contains(line, "获得")
+}
+
+func keylolMergeShortPromoLinesSafe(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if line == "\u652f\u4ed8" && i+2 < len(lines) && keylolLooksLikePromoPriceSafe(lines[i+1]) && keylolLooksLikePromoReceiveSafe(lines[i+2]) {
+			out = append(out, strings.TrimSpace("\u652f\u4ed8 "+lines[i+1]+" "+lines[i+2]))
+			i += 2
+			continue
+		}
+		if keylolLooksLikePromoPriceSafe(line) && i+1 < len(lines) && keylolLooksLikePromoReceiveSafe(lines[i+1]) {
+			out = append(out, strings.TrimSpace(line+" "+lines[i+1]))
+			i++
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+func keylolLooksLikePromoPriceSafe(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	if idx := strings.IndexAny(line, "(\uff08"); idx >= 0 {
+		line = strings.TrimSpace(line[:idx])
+	}
+	line = strings.TrimSpace(strings.TrimLeft(line, "$\u00a5\uffe5"))
+	line = strings.ReplaceAll(line, ",", "")
+	if line == "" {
+		return false
+	}
+	_, err := strconv.ParseFloat(line, 64)
+	return err == nil
+}
+
+func keylolLooksLikePromoReceiveSafe(line string) bool {
+	line = strings.TrimSpace(strings.TrimSuffix(line, ":"))
+	line = strings.TrimSpace(strings.TrimSuffix(line, "\uff1a"))
+	return strings.Contains(line, "\u53ef\u83b7\u5f97") || strings.Contains(line, "\u83b7\u5f97")
+}
+
+func keylolLooksLikePromoPriceAndReceiveSafe(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" || !keylolLooksLikePromoReceiveSafe(line) {
+		return false
+	}
+	pricePart := line
+	if idx := strings.Index(pricePart, "\u53ef\u83b7\u5f97"); idx >= 0 {
+		pricePart = pricePart[:idx]
+	} else if idx := strings.Index(pricePart, "\u83b7\u5f97"); idx >= 0 {
+		pricePart = pricePart[:idx]
+	}
+	return keylolLooksLikePromoPriceSafe(pricePart)
 }
 
 func keylolTime(raw string) string {
