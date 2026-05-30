@@ -80,6 +80,7 @@ func shouldConsiderLongImageCard(meta mediaMeta) bool {
 }
 
 func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
 	img := fetchCardImage(meta.ImageURLs[0][0], meta.ImageHeads)
 	if !shouldRenderLongImageCard(meta, img) {
@@ -87,7 +88,6 @@ func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 
 	titleLines := []string{}
-	bodyLines := wrapDisplayText(meta.Desc, 66, 18)
 
 	outerPad := cardOuterPad
 	panelX, panelY := outerPad, outerPad
@@ -97,8 +97,12 @@ func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	headerTop := float64(panelY + 18)
 	contentX := panelX + contentPad
 	contentW := panelW - contentPad*2
+	bodyLines := wrapTextByPixels(gg.NewContext(cardWidth, 100), bodyFontBytes, 30, meta.Desc, float64(contentW))
+	if len(bodyLines) > 18 {
+		bodyLines = bodyLines[:18]
+	}
 	bodyY := float64(panelY + headerH + 62)
-	imageY := bodyY + float64(len(titleLines))*58 + float64(len(bodyLines))*46 + 40
+	imageY := bodyY + float64(len(titleLines))*58 + float64(len(bodyLines))*48 + 52
 	if len(titleLines) > 0 {
 		imageY += 20
 	}
@@ -129,8 +133,8 @@ func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		y += 20
 	}
 	for _, line := range bodyLines {
-		drawTopicLine(dc, fontBytes, 34, line, float64(contentX), y)
-		y += 46
+		drawTopicLine(dc, bodyFontBytes, 30, line, float64(contentX), y)
+		y += 48
 	}
 
 	drawFloatingImageCellContain(dc, img, contentX, int(imageY), contentW, imageH)
@@ -156,6 +160,7 @@ func isExtremeTallImage(img image.Image) bool {
 }
 
 func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
 	coverImg := fetchCardImage(firstCardCover(meta), meta.ImageHeads)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
 
@@ -164,7 +169,7 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	if len(titleLines) == 0 {
 		titleLines = []string{title}
 	}
-	summaryLines := wrapDisplayText(cardSummaryText(meta), 34, 4)
+	summaryLines := []string{}
 	if len(summaryLines) == 0 {
 		summaryLines = []string{"该视频暂无总结"}
 	}
@@ -177,11 +182,18 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	headerTop := float64(panelY + 18)
 	contentX := panelX + contentPad
 	contentW := panelW - contentPad*2
+	summaryLines = wrapTextByPixels(gg.NewContext(cardWidth, 100), bodyFontBytes, 30, cardSummaryText(meta), float64(contentW))
+	if len(summaryLines) > 5 {
+		summaryLines = summaryLines[:5]
+	}
+	if len(summaryLines) == 0 {
+		summaryLines = []string{"该视频暂无总结"}
+	}
 	titleY := float64(panelY + headerH + 64)
 	coverY := titleY + float64(len(titleLines))*58 + 24
 	coverH := cardCoverHeightForWidth(coverImg, contentW)
-	summaryY := coverY + float64(coverH) + 58
-	panelH := int(summaryY) + len(summaryLines)*46 + 46 - panelY
+	summaryY := coverY + float64(coverH) + 68
+	panelH := int(summaryY) + len(summaryLines)*48 + 64 - panelY
 	if panelH < int(summaryY)+80-panelY {
 		panelH = int(summaryY) + 80 - panelY
 	}
@@ -211,14 +223,15 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 
 	y = summaryY
 	for _, line := range summaryLines {
-		drawTopicLine(dc, fontBytes, 34, line, float64(contentX), y)
-		y += 46
+		drawTopicLine(dc, bodyFontBytes, 30, line, float64(contentX), y)
+		y += 48
 	}
 
 	return saveCardPNG(dc, meta)
 }
 
 func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
 	imageURLs := make([]string, 0, len(meta.ImageURLs))
 	for _, group := range meta.ImageURLs {
@@ -230,11 +243,11 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			break
 		}
 	}
-	images := fetchCardImages(imageURLs, meta.ImageHeads)
+	images := compactCardImages(fetchCardImages(imageURLs, meta.ImageHeads))
 
 	title := firstNonEmpty(meta.Title, "媒体解析")
 	titleLines := wrapDisplayText(title, 56, 2)
-	descLines := wrapDisplayText(meta.Desc, 68, 14)
+	descLines := []string{}
 	if len(titleLines) == 0 {
 		titleLines = []string{title}
 	}
@@ -247,11 +260,18 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	headerTop := float64(panelY + 18)
 	galleryX := panelX + contentPad
 	galleryW := panelW - contentPad*2
+	descLines = wrapTextByPixels(gg.NewContext(cardWidth, 100), bodyFontBytes, 30, meta.Desc, float64(galleryW))
+	if len(descLines) > 14 {
+		descLines = descLines[:14]
+	}
 	titleY := float64(panelY + headerH + 64)
-	gridY := titleY + float64(len(titleLines))*58 + 24
+	gridY := titleY + float64(len(titleLines))*58 + 34
 	gridH := galleryGridHeightForImages(images, galleryW)
-	descY := gridY + float64(gridH) + 58
-	panelH := int(descY) + len(descLines)*46 + 46 - panelY
+	descY := gridY
+	if gridH > 0 {
+		descY = gridY + float64(gridH) + 70
+	}
+	panelH := int(descY) + len(descLines)*48 + 70 - panelY
 	if panelH < int(descY)+80-panelY {
 		panelH = int(descY) + 80 - panelY
 	}
@@ -281,8 +301,8 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 
 	y = descY
 	for _, line := range descLines {
-		drawTopicLine(dc, fontBytes, 34, line, float64(galleryX), y)
-		y += 46
+		drawTopicLine(dc, bodyFontBytes, 30, line, float64(galleryX), y)
+		y += 48
 	}
 
 	return saveCardPNG(dc, meta)
@@ -885,13 +905,63 @@ func fetchCardImages(urls []string, headers map[string]string) []image.Image {
 		}(i, raw)
 	}
 	wg.Wait()
-	compact := make([]image.Image, 0, len(out))
-	for _, img := range out {
-		if img != nil {
+	return compactCardImages(out)
+}
+
+func compactCardImages(imgs []image.Image) []image.Image {
+	compact := make([]image.Image, 0, len(imgs))
+	for _, img := range imgs {
+		if img != nil && !isBlankCardImage(img) {
 			compact = append(compact, img)
 		}
 	}
 	return compact
+}
+
+func isBlankCardImage(img image.Image) bool {
+	if img == nil {
+		return true
+	}
+	b := img.Bounds()
+	if b.Dx() <= 0 || b.Dy() <= 0 {
+		return true
+	}
+	stepX := maxInt(b.Dx()/8, 1)
+	stepY := maxInt(b.Dy()/8, 1)
+	samples := 0
+	var minR, minG, minB uint8 = 255, 255, 255
+	var maxR, maxG, maxB uint8
+	for y := b.Min.Y; y < b.Max.Y; y += stepY {
+		for x := b.Min.X; x < b.Max.X; x += stepX {
+			r, g, bb, _ := img.At(x, y).RGBA()
+			rr, gg, bbb := uint8(r>>8), uint8(g>>8), uint8(bb>>8)
+			if rr < minR {
+				minR = rr
+			}
+			if gg < minG {
+				minG = gg
+			}
+			if bbb < minB {
+				minB = bbb
+			}
+			if rr > maxR {
+				maxR = rr
+			}
+			if gg > maxG {
+				maxG = gg
+			}
+			if bbb > maxB {
+				maxB = bbb
+			}
+			samples++
+		}
+	}
+	if samples == 0 {
+		return true
+	}
+	spread := int(maxR-minR) + int(maxG-minG) + int(maxB-minB)
+	avg := (int(minR) + int(maxR) + int(minG) + int(maxG) + int(minB) + int(maxB)) / 6
+	return spread < 18 && avg >= 185 && avg <= 235
 }
 
 func normalizeCardImageURL(raw string) string {
@@ -1318,7 +1388,7 @@ func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy floa
 	if img == nil {
 		return false
 	}
-	const pad = 12
+	const pad = 8
 	bounds := img.Bounds()
 	aspect := 1.0
 	if bounds.Dx() > 0 && bounds.Dy() > 0 {
@@ -1326,7 +1396,7 @@ func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy floa
 	}
 	w, h := 238.0, 88.0
 	if aspect <= 1.35 {
-		w, h = 88.0, 88.0
+		w, h = 112.0, 112.0
 	}
 	x, y := right-w, cy-h/2
 	fit := imaging.Fit(img, int(w)-pad*2, int(h)-pad*2, imaging.Lanczos)
@@ -1634,7 +1704,7 @@ func shouldDrawPlayOverlay(meta mediaMeta) bool {
 
 func galleryGridHeightForImages(imgs []image.Image, w int) int {
 	if len(imgs) == 0 {
-		return 640
+		return 0
 	}
 	gap := 10
 	if len(imgs) == 1 {
@@ -1655,7 +1725,6 @@ func galleryGridHeightForImages(imgs []image.Image, w int) int {
 
 func drawGalleryGrid(dc *gg.Context, imgs []image.Image, x, y, w, h int) {
 	if len(imgs) == 0 {
-		drawFloatingImageCell(dc, nil, x, y, w, h)
 		return
 	}
 	gap := 10

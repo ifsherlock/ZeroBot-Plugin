@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -533,6 +534,19 @@ func TestLongImageCardMode(t *testing.T) {
 	}
 	if shouldRenderLongImageCard(meta, testGradientImage(900, 2600, color.RGBA{R: 1, G: 2, B: 3, A: 255}, color.RGBA{R: 4, G: 5, B: 6, A: 255})) {
 		t.Fatal("extreme tall image should fall back to gallery card")
+	}
+}
+
+func TestCompactCardImagesDropsFailedFetches(t *testing.T) {
+	img := testGradientImage(32, 32, color.RGBA{R: 1, G: 2, B: 3, A: 255}, color.RGBA{R: 4, G: 5, B: 6, A: 255})
+	blank := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	draw.Draw(blank, blank.Bounds(), &image.Uniform{C: color.RGBA{R: 216, G: 216, B: 216, A: 255}}, image.Point{}, draw.Src)
+	got := compactCardImages([]image.Image{img, nil, blank, img})
+	if len(got) != 2 || got[0] == nil || got[1] == nil {
+		t.Fatalf("bad compacted images: %#v", got)
+	}
+	if h := galleryGridHeightForImages(nil, 900); h != 0 {
+		t.Fatalf("empty gallery should have no placeholder height, got %d", h)
 	}
 }
 
