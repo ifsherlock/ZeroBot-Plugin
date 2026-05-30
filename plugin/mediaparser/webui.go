@@ -529,7 +529,7 @@ func savePlatformLogo(platform string, src image.Image) (string, error) {
 	}
 	fit := fitLogoImage(src, 214, 64)
 	b := fit.Bounds()
-	imaging.Paste(canvas, fit, image.Pt((238-b.Dx())/2, (88-b.Dy())/2))
+	canvas = imaging.Paste(canvas, fit, image.Pt((238-b.Dx())/2, (88-b.Dy())/2))
 	path := filepath.Join(dir, platform+".png")
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
