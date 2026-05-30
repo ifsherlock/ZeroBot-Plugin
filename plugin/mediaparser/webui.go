@@ -598,6 +598,7 @@ const webIndexHTML = `<!doctype html>
 body:before{content:"";position:fixed;inset:0 0 auto 0;height:220px;background:linear-gradient(135deg,#dbeafe,#f8fafc 58%,#e0f2fe);z-index:-1}
 header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:rgba(255,255,255,.78);backdrop-filter:blur(16px);border-bottom:1px solid rgba(148,163,184,.28);position:sticky;top:0;z-index:20}
 h1{font-size:18px;margin:0;font-weight:760}.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 64px)}.sidebar{padding:20px 14px;border-right:1px solid rgba(148,163,184,.25);background:rgba(255,255,255,.45)}.brand{font-weight:800;font-size:20px;margin:0 0 18px}.nav{display:flex;flex-direction:column;gap:6px}.nav a{color:#334155;text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover,.nav a.active{background:#fff;color:var(--blue);box-shadow:0 1px 0 rgba(15,23,42,.04)}
+.pluginHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.crumb{font-size:13px;color:var(--muted);margin-bottom:6px}.subnav{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.subnav button{height:32px;border-radius:999px}.subnav button.active{background:var(--blue);border-color:var(--blue);color:#fff}.plugin-section{display:none!important}.plugin-section.active{display:block!important}
 .wrap{max-width:1240px;width:100%;padding:22px 24px 40px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.hero h2{font-size:28px;line-height:1.1;margin:0}.hero p{margin:8px 0 0;color:var(--muted)}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.panel{background:rgba(255,255,255,.94);border:1px solid rgba(203,213,225,.9);border-radius:10px;padding:16px;box-shadow:var(--shadow)}.sectionTitle{display:flex;gap:10px;align-items:center;margin-bottom:12px}.sectionTitle b{font-size:16px}.span4{grid-column:span 4}.span2{grid-column:span 2}
 .metric{display:flex;flex-direction:column;gap:6px;min-height:94px}.metric span:first-child{font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric b{font-size:26px}.muted{color:var(--muted)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}
@@ -610,7 +611,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
 .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.msg{min-height:20px;color:var(--muted)}.statusDot{display:inline-flex;align-items:center;gap:6px}.statusDot:before{content:"";width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px #dcfce7}
-@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
+@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
 </style>
 </head>
 <body>
@@ -622,7 +623,6 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <a class="active" href="#overview" data-page-link="overview" onclick="showPage('overview')">总览</a>
 <a href="#system" data-page-link="system" onclick="showPage('system')">全局设置</a>
 <a href="#plugins" data-page-link="plugins" onclick="showPage('plugins')">插件中心</a>
-<a href="#mediaparser" data-page-link="mediaparser" onclick="showPage('mediaparser')">聚合解析</a>
 <a href="#logs" data-page-link="logs" onclick="showPage('logs')">日志诊断</a>
 <a href="#maintenance" data-page-link="maintenance" onclick="showPage('maintenance')">数据维护</a>
 </nav>
@@ -651,15 +651,25 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button disabled>待接入</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button disabled>待接入</button></td></tr></tbody></table>
 </div>
-<div class="panel span2 page" data-page="mediaparser" id="global"><div class="sectionTitle"><b>聚合解析总开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
-<div class="panel span2 page" data-page="mediaparser"><div class="sectionTitle"><b>解析状态</b></div><p class="muted">解析成功 <b id="okn2">-</b> 次，失败 <b id="failn2">-</b> 次。</p></div>
-<div class="span4 page" data-page="mediaparser" id="platforms">
+<div class="panel span4 page" data-page="mediaparser" id="mediaparserHead">
+<div class="pluginHead"><div><div class="crumb">插件中心 / 聚合解析</div><div class="sectionTitle"><b>聚合解析</b><span class="muted">短视频、图文、动态、商品链接解析配置。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="subnav" id="mediaparserTabs">
+<button class="active" data-plugin-tab="basic" onclick="showPluginSection('basic')">基础开关</button>
+<button data-plugin-tab="platforms" onclick="showPluginSection('platforms')">平台设置</button>
+<button data-plugin-tab="access" onclick="showPluginSection('access')">黑白名单</button>
+<button data-plugin-tab="group-platform" onclick="showPluginSection('group-platform')">群平台开关</button>
+<button data-plugin-tab="runtime" onclick="showPluginSection('runtime')">下载与 Cookie</button>
+</div>
+</div>
+<div class="panel span2 page plugin-section active" data-page="mediaparser" data-plugin-section="basic" id="global"><div class="sectionTitle"><b>聚合解析总开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
+<div class="panel span2 page plugin-section active" data-page="mediaparser" data-plugin-section="basic"><div class="sectionTitle"><b>解析状态</b></div><p class="muted">解析成功 <b id="okn2">-</b> 次，失败 <b id="failn2">-</b> 次。</p></div>
+<div class="span4 page plugin-section" data-page="mediaparser" data-plugin-section="platforms" id="platforms">
 <div class="sectionTitle"><b>平台开关与 Logo</b><span class="muted">每个平台可独立控制解析、卡片、媒体和下载。</span></div>
 <table><thead><tr><th>平台</th><th>解析</th><th>卡片</th><th>媒体</th><th>下载</th><th>Logo</th></tr></thead><tbody id="platformRows"></tbody></table>
 </div>
-<div class="panel span4 page" data-page="mediaparser" id="access">
+<div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="access" id="access">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">先判断私聊/群号是否允许，再判断群聊发言人；三套名单互不影响。</span></div>
 <div class="row" style="margin-top:12px">
 <label>私聊模式 <select id="pmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
@@ -682,7 +692,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupBox accessField" data-mode="gmode" data-kind="blacklist"><div class="row"><b>勾选到群黑名单</b><input id="groupBlackSearch" placeholder="搜索群名或群号" oninput="renderGroupPickers()"></div><div class="groupList" id="groupBlackPicker"></div></div>
 </div>
 </div>
-<div class="panel span4 page" data-page="mediaparser" id="group-platform">
+<div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="group-platform" id="group-platform">
 <div class="sectionTitle"><b>群平台开关</b><span class="muted">先选群，再选择这个群里要屏蔽哪些平台；不影响其他群。</span></div>
 <div class="row" style="margin-top:12px">
 <label>群 <select id="platformBlockGroupSelect" onchange="renderPlatformGroupBlock()"></select></label>
@@ -691,7 +701,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
-<div class="panel span4 page" data-page="mediaparser" id="runtime">
+<div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="runtime" id="runtime">
 <div class="row">
 <b>下载与调试</b>
 <label>分辨率 <select id="res"><option value="0">不限</option><option value="360">360p</option><option value="720">720p</option><option value="1080">1080p</option></select></label>
@@ -718,12 +728,22 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </main>
 </div>
 <script>
-let cfg=null, sys=null, platforms=[], logos={}, groups=[], dirty=false;
+let cfg=null, sys=null, platforms=[], logos={}, groups=[], dirty=false, currentPluginSection='basic';
 const $=id=>document.getElementById(id);
 function showPage(name){
- document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===name));
- document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===name));
- if(location.hash!=='#'+name) history.replaceState(null,'','#'+name);
+ const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
+ document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
+ const sidePage=page==='mediaparser'?'plugins':page;
+ document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
+ if(page==='mediaparser') showPluginSection(section,false);
+ const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
+ if(location.hash!==nextHash) history.replaceState(null,'',nextHash);
+}
+function showPluginSection(name,updateHash=true){
+ currentPluginSection=name||'basic';
+ document.querySelectorAll('[data-plugin-section]').forEach(el=>el.classList.toggle('active', el.dataset.pluginSection===currentPluginSection));
+ document.querySelectorAll('[data-plugin-tab]').forEach(el=>el.classList.toggle('active', el.dataset.pluginTab===currentPluginSection));
+ if(updateHash && location.hash!=='#mediaparser:'+currentPluginSection) history.replaceState(null,'','#mediaparser:'+currentPluginSection);
 }
 function markDirty(){dirty=true; $('saveMsg').textContent='有未保存修改'}
 function checked(v){return v?' checked':''}
