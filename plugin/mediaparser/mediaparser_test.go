@@ -135,6 +135,23 @@ func TestKeylolThreadID(t *testing.T) {
 	}
 }
 
+func TestKeylolTimeUnescapesHTMLSpace(t *testing.T) {
+	if got := keylolTime("2&nbsp;小时前"); got != "2 小时前" {
+		t.Fatalf("keylolTime html space=%q", got)
+	}
+}
+
+func TestKeylolFooterTemplate(t *testing.T) {
+	stateMu.Lock()
+	currentConf = defaultConfig()
+	currentConf.KeylolFooter = "来源 {title} / {author} / {time}"
+	stateMu.Unlock()
+	got := keylolFooterLine(mediaMeta{Title: "标题", Author: "作者"})
+	if !strings.Contains(got, "来源 标题 / 作者 / ") || strings.Contains(got, "{time}") {
+		t.Fatalf("footer=%q", got)
+	}
+}
+
 func TestParseKeylolFirstPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("module") != "viewthread" || r.URL.Query().Get("tid") != "1039281" {

@@ -819,6 +819,12 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">Keylol Cookie <textarea id="keylolCookie" placeholder="key=value; key2=value2"></textarea></label>
 </div>
 </div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>Keylol 卡片</b><span class="muted">底部文案支持 {time}、{title}、{author} 占位符。</span></div>
+<div class="settingsFields single">
+<label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
+</div>
+</div>
 </div>
 </div>
 <div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">显示当前进程捕获到的程序日志，敏感 Cookie 会做基础脱敏。</span><button class="right" onclick="loadLogs()">刷新日志</button></div><div class="logList" id="logSummary">-</div></div>
@@ -921,6 +927,7 @@ function render(){
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
+ $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderSystemSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
@@ -1012,6 +1019,7 @@ async function save(){
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
  cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
+ cfg.keylol_footer=String($('keylolFooter').value||'').trim();
  cfg.send_info_card=!!cfg.auto_parse; cfg.send_media=!!cfg.download_video; platforms.forEach(p=>{cfg.platform_info_card[p.name]=!!cfg.platform_enabled[p.name]; cfg.platform_send_media[p.name]=!!cfg.platform_download_video[p.name]});
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;
  cfg.user_whitelist=parseList($('userWhitelist').value); cfg.user_blacklist=parseList($('userBlacklist').value);

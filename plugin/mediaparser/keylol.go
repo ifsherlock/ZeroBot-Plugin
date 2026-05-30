@@ -382,7 +382,9 @@ func collapseDuplicateLines(lines []string) []string {
 }
 
 func keylolTime(raw string) string {
-	raw = strings.TrimSpace(raw)
+	raw = strings.TrimSpace(html.UnescapeString(htmlUnescape(raw)))
+	raw = strings.ReplaceAll(raw, "\u00a0", " ")
+	raw = strings.Join(strings.Fields(raw), " ")
 	if raw == "" {
 		return ""
 	}

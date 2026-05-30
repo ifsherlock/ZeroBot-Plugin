@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -309,7 +310,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	for _, block := range blocks {
 		switch block.Kind {
 		case "image":
-			img := fetchCardImage(block.URL, meta.ImageHeads)
+			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
 			iw, ih := keylolImageDrawSize(img, contentW)
 			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "image", url: block.URL, img: img, width: iw, height: ih})
 		case "text":
@@ -385,8 +386,23 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 	mustFont(dc, fontBytes, 20)
 	dc.SetRGB255(176, 184, 194)
-	dc.DrawStringAnchored("Keylol 帖子截图 · 浏览器渲染 · "+time.Now().Format("2006-01-02 15:04"), float64(w)/2, float64(height-outerPad-24), 0.5, 0.5)
+	dc.DrawStringAnchored(keylolFooterLine(meta), float64(w)/2, float64(height-outerPad-24), 0.5, 0.5)
 	return saveCardPNG(dc, meta)
+}
+
+func keylolFooterLine(meta mediaMeta) string {
+	cfg := snapshotConfig()
+	tpl := strings.TrimSpace(cfg.KeylolFooter)
+	if tpl == "" {
+		tpl = "Keylol 帖子截图 · 浏览器渲染 · {time}"
+	}
+	now := time.Now().Format("2006-01-02 15:04")
+	replacer := strings.NewReplacer(
+		"{time}", now,
+		"{title}", strings.TrimSpace(meta.Title),
+		"{author}", strings.TrimSpace(meta.Author),
+	)
+	return strings.TrimSpace(replacer.Replace(tpl))
 }
 
 func keylolBlocksForRender(meta mediaMeta) []keylolBlock {
@@ -446,23 +462,66 @@ func drawKeylolBadge(dc *gg.Context, fontBytes []byte, x, y float64) {
 }
 
 func drawKeylolFullImage(dc *gg.Context, img image.Image, x, y, w, h int) {
-	for i := 8; i >= 1; i-- {
-		dc.SetRGBA255(0, 0, 0, 5+i*3)
-		dc.DrawRoundedRectangle(float64(x), float64(y+i), float64(w), float64(h), 10)
-		dc.Fill()
-	}
 	dc.SetRGB255(255, 255, 255)
-	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 10)
+	dc.DrawRectangle(float64(x), float64(y), float64(w), float64(h))
 	dc.Fill()
-	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 10)
-	dc.ClipPreserve()
 	if img == nil {
 		dc.SetRGB255(238, 241, 245)
+		dc.DrawRectangle(float64(x), float64(y), float64(w), float64(h))
 		dc.Fill()
 	} else {
 		dc.DrawImage(imaging.Resize(img, w, h, imaging.Lanczos), x, y)
 	}
-	dc.ResetClip()
+	dc.SetRGB255(220, 225, 232)
+	dc.SetLineWidth(1)
+	dc.DrawRectangle(float64(x), float64(y), float64(w), float64(h))
+	dc.Stroke()
+}
+
+func keylolPrepareImage(img image.Image) image.Image {
+	if img == nil {
+		return nil
+	}
+	b := img.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(out, out.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+	draw.Draw(out, out.Bounds(), img, b.Min, draw.Over)
+	for y := out.Bounds().Min.Y; y < out.Bounds().Max.Y; y++ {
+		for x := out.Bounds().Min.X; x < out.Bounds().Max.X; x++ {
+			r, g, b, a := out.At(x, y).RGBA()
+			if a == 0 {
+				out.Set(x, y, color.White)
+				continue
+			}
+			rr, gg, bb := uint8(r>>8), uint8(g>>8), uint8(b>>8)
+			maxc := maxUint8(rr, gg, bb)
+			minc := minUint8(rr, gg, bb)
+			if minc >= 224 && maxc-minc <= 24 {
+				out.Set(x, y, color.White)
+			}
+		}
+	}
+	return out
+}
+
+func maxUint8(a, b, c uint8) uint8 {
+	if b > a {
+		a = b
+	}
+	if c > a {
+		a = c
+	}
+	return a
+}
+
+func minUint8(a, b, c uint8) uint8 {
+	if b < a {
+		a = b
+	}
+	if c < a {
+		a = c
+	}
+	return a
 }
 
 func wrapTextByPixels(dc *gg.Context, fontBytes []byte, size float64, s string, maxW float64) []string {

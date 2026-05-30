@@ -118,6 +118,7 @@ type config struct {
 	YouTubeCookie      string `json:"youtube_cookie"`
 	InstagramCookie    string `json:"instagram_cookie"`
 	KeylolCookie       string `json:"keylol_cookie"`
+	KeylolFooter       string `json:"keylol_footer"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
 	UseYTDLPFallback     bool   `json:"use_yt_dlp_fallback"`
@@ -266,6 +267,7 @@ func defaultConfig() config {
 		UseYTDLPFallback:     false,
 		YTDLPPath:            "yt-dlp",
 		YouTubeExtractorArgs: "youtube:player_client=default,android;formats=missing_pot",
+		KeylolFooter:         "Keylol 帖子截图 · 浏览器渲染 · {time}",
 	}
 }
 
@@ -410,6 +412,10 @@ func normalizeConfig(cfg *config) {
 	cfg.YouTubeCookie = strings.TrimSpace(cfg.YouTubeCookie)
 	cfg.InstagramCookie = strings.TrimSpace(cfg.InstagramCookie)
 	cfg.KeylolCookie = strings.TrimSpace(cfg.KeylolCookie)
+	cfg.KeylolFooter = strings.TrimSpace(cfg.KeylolFooter)
+	if cfg.KeylolFooter == "" {
+		cfg.KeylolFooter = "Keylol 帖子截图 · 浏览器渲染 · {time}"
+	}
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"
 	}
