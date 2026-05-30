@@ -908,6 +908,9 @@ func shouldForwardCombinedMedia(meta *mediaMeta) bool {
 	if meta == nil || !isCombinedMediaPlatform(meta.Platform) {
 		return false
 	}
+	if meta.Platform == "instagram" && len(meta.VideoURLs) > 0 {
+		return true
+	}
 	return hasMixedMediaItems(*meta)
 }
 

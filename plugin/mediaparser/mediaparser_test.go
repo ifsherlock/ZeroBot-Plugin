@@ -292,6 +292,30 @@ func TestInstagramBuildMetaUsesOwnerAvatarAndCarousel(t *testing.T) {
 	}
 }
 
+func TestInstagramSingleVideoUsesCoverOnlyForCard(t *testing.T) {
+	raw := `{
+	  "caption": {"text": "video caption"},
+	  "user": {"username": "demo", "profile_pic_url": "https://img/avatar.jpg"},
+	  "video_versions": [
+	    {"url": "https://video/high.mp4", "width": 1080, "height": 1920}
+	  ],
+	  "image_versions2": {"candidates": [
+	    {"url": "https://img/cover.jpg", "width": 720, "height": 1280}
+	  ]}
+	}`
+	var item map[string]any
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		t.Fatal(err)
+	}
+	meta := buildInstagramMeta("https://www.instagram.com/reel/DYumcWHt8Rc/", "DYumcWHt8Rc", item)
+	if len(meta.VideoURLs) != 1 || len(meta.ImageURLs) != 0 || meta.Cover != "https://img/cover.jpg" {
+		t.Fatalf("single video should not send cover separately: videos=%#v images=%#v cover=%q", meta.VideoURLs, meta.ImageURLs, meta.Cover)
+	}
+	if !shouldForwardCombinedMedia(&meta) {
+		t.Fatal("instagram single video should use forward message with caption")
+	}
+}
+
 func TestCardWrapKeepsEnglishWords(t *testing.T) {
 	lines := wrapCardText("Representing Holland at the upcoming football world tournament? @virgilvandijk is taking it all in ⚽", 34)
 	for _, line := range lines {

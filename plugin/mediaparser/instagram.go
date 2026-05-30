@@ -152,23 +152,25 @@ func instagramTakenAt(item map[string]any) string {
 func addInstagramMedia(meta *mediaMeta, item map[string]any) {
 	carousel := getSlice(item, "carousel_media")
 	if len(carousel) == 0 {
-		addInstagramOneMedia(meta, item)
+		addInstagramOneMedia(meta, item, false)
 		return
 	}
 	for _, raw := range carousel {
 		if m, _ := raw.(map[string]any); m != nil {
-			addInstagramOneMedia(meta, m)
+			addInstagramOneMedia(meta, m, true)
 		}
 	}
 }
 
-func addInstagramOneMedia(meta *mediaMeta, item map[string]any) {
+func addInstagramOneMedia(meta *mediaMeta, item map[string]any, includeVideoCover bool) {
 	if video := instagramBestVideo(item); video != "" {
 		idx := len(meta.VideoURLs)
 		meta.VideoURLs = append(meta.VideoURLs, []string{ensureHTTPS(video)})
 		meta.MediaItems = append(meta.MediaItems, mediaItem{Kind: "video", Index: idx})
 		if img := instagramBestImage(item); img != "" {
-			meta.ImageURLs = append(meta.ImageURLs, []string{ensureHTTPS(img)})
+			if includeVideoCover {
+				meta.ImageURLs = append(meta.ImageURLs, []string{ensureHTTPS(img)})
+			}
 			if meta.Cover == "" {
 				meta.Cover = ensureHTTPS(img)
 			}
