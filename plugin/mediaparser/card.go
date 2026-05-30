@@ -603,6 +603,14 @@ func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, 
 			return
 		}
 	}
+	if platform == "youtube" {
+		drawYouTubeTransparentLogo(dc, fontBytes, right, cy)
+		return
+	}
+	if platform == "instagram" {
+		drawInstagramTransparentLogo(dc, fontBytes, right, cy)
+		return
+	}
 	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
 		return
 	}
@@ -674,6 +682,45 @@ func drawTwitterLogoBadge(dc *gg.Context, right, cy float64) bool {
 	return true
 }
 
+func drawYouTubeTransparentLogo(dc *gg.Context, fontBytes []byte, right, cy float64) {
+	iconW, iconH := 82.0, 58.0
+	x := right - 230
+	y := cy - iconH/2
+	dc.SetRGB255(255, 0, 0)
+	dc.DrawRoundedRectangle(x, y, iconW, iconH, 14)
+	dc.Fill()
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawRegularPolygon(3, x+47, cy, 19, gg.Radians(90))
+	dc.Fill()
+	mustFont(dc, fontBytes, 38)
+	dc.SetRGBA255(255, 255, 255, 90)
+	dc.DrawStringAnchored("YouTube", right+2, cy+3, 1, 0.5)
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawStringAnchored("YouTube", right, cy+1, 1, 0.5)
+}
+
+func drawInstagramTransparentLogo(dc *gg.Context, fontBytes []byte, right, cy float64) {
+	x := right - 236
+	y := cy - 36
+	w, h := 66.0, 66.0
+	dc.SetLineWidth(7)
+	dc.SetRGB255(245, 96, 64)
+	dc.DrawRoundedRectangle(x, y, w, h, 18)
+	dc.Stroke()
+	dc.SetLineWidth(6)
+	dc.SetRGB255(193, 53, 132)
+	dc.DrawCircle(x+w/2, y+h/2, 15)
+	dc.Stroke()
+	dc.SetRGB255(253, 200, 74)
+	dc.DrawCircle(x+w-17, y+17, 5)
+	dc.Fill()
+	mustFont(dc, fontBytes, 38)
+	dc.SetRGBA255(255, 255, 255, 85)
+	dc.DrawStringAnchored("Instagram", right+2, cy+3, 1, 0.5)
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawStringAnchored("Instagram", right, cy+1, 1, 0.5)
+}
+
 func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy float64) bool {
 	img := loadPlatformLogo(platform)
 	if img == nil {
@@ -690,11 +737,13 @@ func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy floa
 		w, h = 88.0, 88.0
 	}
 	x, y := right-w, cy-h/2
-	dc.SetRGB255(255, 255, 255)
-	dc.DrawRoundedRectangle(x, y, w, h, 8)
-	dc.Fill()
 	fit := imaging.Fit(img, int(w)-pad*2, int(h)-pad*2, imaging.Lanczos)
 	b := fit.Bounds()
+	if platform != "youtube" && platform != "instagram" {
+		dc.SetRGB255(255, 255, 255)
+		dc.DrawRoundedRectangle(x, y, w, h, 8)
+		dc.Fill()
+	}
 	dc.DrawImage(fit, int(x)+(int(w)-b.Dx())/2, int(y)+(int(h)-b.Dy())/2)
 	return true
 }

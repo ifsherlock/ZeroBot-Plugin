@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -1352,7 +1353,11 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 		Title       string  `json:"title"`
 		Description string  `json:"description"`
 		Uploader    string  `json:"uploader"`
+		UploaderID  string  `json:"uploader_id"`
+		UploaderURL string  `json:"uploader_url"`
 		Channel     string  `json:"channel"`
+		ChannelID   string  `json:"channel_id"`
+		ChannelURL  string  `json:"channel_url"`
 		Thumbnail   string  `json:"thumbnail"`
 		WebpageURL  string  `json:"webpage_url"`
 		Duration    float64 `json:"duration"`
@@ -1366,6 +1371,7 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 		Platform:   link.Platform,
 		Title:      info.Title,
 		Author:     firstNonEmpty(info.Uploader, info.Channel),
+		Avatar:     resolveYTDLPAvatar(cfg, link.Platform, info.WebpageURL, info.ChannelURL, info.UploaderURL, info.UploaderID, info.ChannelID),
 		Desc:       info.Description,
 		Cover:      info.Thumbnail,
 		VideoURLs:  [][]string{{"ytdlp:" + link.URL}},
@@ -1373,6 +1379,94 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 		ImageHeads: map[string]string{"User-Agent": defaultUA},
 		ForceLocal: true,
 	}, nil
+}
+
+func resolveYTDLPAvatar(cfg config, platform, webpageURL, channelURL, uploaderURL, uploaderID, channelID string) string {
+	switch platform {
+	case "youtube":
+		return resolveYouTubeAvatar(firstNonEmpty(channelURL, uploaderURL, youtubeChannelURL(uploaderID), youtubeChannelURL(channelID)))
+	case "instagram":
+		return resolveInstagramAvatar(cfg, firstNonEmpty(webpageURL, uploaderURL), uploaderID)
+	default:
+		return ""
+	}
+}
+
+func youtubeChannelURL(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	if strings.HasPrefix(id, "@") {
+		return "https://www.youtube.com/" + id
+	}
+	if strings.HasPrefix(id, "UC") {
+		return "https://www.youtube.com/channel/" + id
+	}
+	return "https://www.youtube.com/@" + id
+}
+
+func resolveYouTubeAvatar(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	headers := map[string]string{
+		"User-Agent":      defaultUA,
+		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+	}
+	body, _, _, err := fetchText(raw, headers, true)
+	if err != nil {
+		return ""
+	}
+	return firstNonEmpty(
+		firstRegexGroup(body, `"avatar"\s*:\s*\{[^{}]*"thumbnails"\s*:\s*\[\s*\{[^{}]*"url"\s*:\s*"([^"]+)`),
+		firstRegexGroup(body, `(https://yt3\.ggpht\.com/[^"\\]+)`),
+	)
+}
+
+func resolveInstagramAvatar(cfg config, raw, username string) string {
+	candidates := []string{strings.TrimSpace(raw)}
+	if username = strings.Trim(strings.TrimSpace(username), "@"); username != "" {
+		candidates = append(candidates, "https://www.instagram.com/"+username+"/")
+	}
+	headers := map[string]string{
+		"User-Agent":      defaultUA,
+		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+	}
+	if cfg.InstagramCookie != "" {
+		headers["Cookie"] = cfg.InstagramCookie
+	}
+	for _, u := range candidates {
+		if u == "" {
+			continue
+		}
+		body, _, _, err := fetchText(u, headers, true)
+		if err != nil {
+			continue
+		}
+		if avatar := firstNonEmpty(
+			firstRegexGroup(body, `"profile_pic_url_hd"\s*:\s*"([^"]+)`),
+			firstRegexGroup(body, `"profile_pic_url"\s*:\s*"([^"]+)`),
+			firstRegexGroup(body, `"profilePicUrl"\s*:\s*"([^"]+)`),
+		); avatar != "" {
+			return avatar
+		}
+	}
+	return ""
+}
+
+func firstRegexGroup(s, pattern string) string {
+	re := regexp.MustCompile(pattern)
+	m := re.FindStringSubmatch(s)
+	if len(m) < 2 {
+		return ""
+	}
+	out := strings.ReplaceAll(m[1], `\u0026`, "&")
+	out = strings.ReplaceAll(out, `\/`, `/`)
+	return html.UnescapeString(out)
 }
 
 func downloadWithYTDLP(cfg config, meta *mediaMeta, raw string) (string, float64, error) {
