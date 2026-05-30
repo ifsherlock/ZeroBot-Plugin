@@ -468,6 +468,20 @@ func cardDisplayAuthor(author string) string {
 var emojiImageCache sync.Map
 var platformLogoCache sync.Map
 
+func renderDefaultPlatformLogoImage(platform string) (image.Image, error) {
+	fontBytes, err := file.GetLazyData(text.GlowSansFontFile, control.Md5File, true)
+	if err != nil {
+		return nil, err
+	}
+	dc := gg.NewContext(238, 88)
+	dc.SetRGB255(255, 255, 255)
+	dc.Clear()
+	if !drawWhiteLogoBadge(dc, fontBytes, platform, 238, 44) {
+		drawPlatformLogo(dc, fontBytes, platform, 214, 44)
+	}
+	return dc.Image(), nil
+}
+
 func drawInlineEmoji(dc *gg.Context, fontBytes []byte, size float64, c color.Color, s string, x, y float64) float64 {
 	s = strings.TrimSpace(s)
 	if s == "" {

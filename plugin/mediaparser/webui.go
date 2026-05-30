@@ -201,12 +201,18 @@ func serveLogoImageAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path, ok := validPlatformLogoPath(platform)
-	if !ok {
-		http.NotFound(w, r)
+	w.Header().Set("Cache-Control", "no-cache")
+	if ok {
+		http.ServeFile(w, r, path)
 		return
 	}
-	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeFile(w, r, path)
+	img, err := renderDefaultPlatformLogoImage(platform)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	_ = png.Encode(w, img)
 }
 
 func readLogoImage(r *http.Request) (image.Image, error) {
@@ -297,9 +303,14 @@ func snapshotLogos() map[string]any {
 		path := filepath.Join(engine.DataFolder(), "logos", p.Name+".png")
 		st, err := os.Stat(path)
 		exists := err == nil && decodeLogoFile(path) != nil
-		item := map[string]any{"path": path, "exists": exists}
+		item := map[string]any{
+			"path":    path,
+			"exists":  exists,
+			"builtin": true,
+			"url":     "/api/mediaparser/logos/image?platform=" + url.QueryEscape(p.Name),
+		}
 		if exists {
-			item["url"] = "/api/mediaparser/logos/image?platform=" + url.QueryEscape(p.Name) + "&t=" + strconv.FormatInt(st.ModTime().Unix(), 10)
+			item["url"] = item["url"].(string) + "&t=" + strconv.FormatInt(st.ModTime().Unix(), 10)
 		}
 		out[p.Name] = item
 	}
@@ -422,11 +433,11 @@ func platformLocalName(name string) string {
 	case "xianyu":
 		return "闲鱼"
 	case "acfun":
-		return "AcFun"
+		return "A站"
 	case "youtube":
-		return "YouTube"
+		return "油管"
 	case "instagram":
-		return "Instagram"
+		return "照片墙"
 	case "toutiao":
 		return "今日头条"
 	case "xiaoheihe":
@@ -565,7 +576,7 @@ function markDirty(){dirty=true; $('saveMsg').textContent='有未保存修改'}
 function checked(v){return v?' checked':''}
 function switchHTML(expr,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+expr+'=this.checked;markDirty()"><span class="slider"></span></label>'}
 function bindSwitch(map,key,name){return switchHTML("cfg."+key+"['"+name+"']", !!map[name])}
-function logoCell(p){const info=logos[p.name]||{};const has=!!info.exists;const preview=has?'<img class="logoPreview" src="'+escapeHTML(info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name)))+'" alt="'+escapeHTML(p.label)+' Logo">':'<div class="logoEmpty">无预览</div>';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(has?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(has?'已缓存本地 Logo':'未设置 Logo，使用内置样式')+'</div></div></div>'}
+function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
 function setTextareaMap(id,map){$(id).value=listText(map)}
