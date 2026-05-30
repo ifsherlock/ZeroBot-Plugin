@@ -215,6 +215,23 @@ func TestKeylolBuildBlocksKeepsSteamCard(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksUsesSplitAttachmentURL(t *testing.T) {
+	attachments := map[string]any{
+		"2432618": map[string]any{
+			"url":        "https://blob.keylol.com/forum/",
+			"attachment": "202605/30/174513jq3aqzo838ku8ldk.png",
+			"isimage":    "1",
+		},
+	}
+	blocks := keylolBuildBlocks("羊毛裙返利链接<br>领红包 更省钱：https://u.jd.com/RrRshM8", attachments, "https://keylol.com/t1039270-1-1")
+	if len(blocks) != 2 || blocks[0].Kind != "text" || blocks[1].Kind != "image" {
+		t.Fatalf("bad blocks: %#v", blocks)
+	}
+	if got := blocks[1].URL; got != "https://blob.keylol.com/forum/202605/30/174513jq3aqzo838ku8ldk.png" {
+		t.Fatalf("attachment url=%q", got)
+	}
+}
+
 func TestKeylolFetchSteamAppFallbackFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("appids") != "2680010" || r.URL.Query().Get("cc") != "cn" || r.URL.Query().Get("l") != "zh" {

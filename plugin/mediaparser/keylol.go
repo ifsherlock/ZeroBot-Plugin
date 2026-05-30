@@ -149,6 +149,9 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 	for _, raw := range nestedHTTPURLs(attachments, 6) {
 		add(raw)
 	}
+	for _, raw := range keylolAttachmentImageURLs(attachments) {
+		add(raw)
+	}
 	return dedupeMediaGroups(out)
 }
 
@@ -217,7 +220,38 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 			blocks = append(blocks, keylolBlock{Kind: "image", URL: raw})
 		}
 	}
+	for _, raw := range keylolAttachmentImageURLs(attachments) {
+		raw = absolutize(base, ensureHTTPS(raw))
+		if keylolContentImageOK(raw) && !seenImages[raw] {
+			seenImages[raw] = true
+			blocks = append(blocks, keylolBlock{Kind: "image", URL: raw})
+		}
+	}
 	return keylolCompactBlocks(blocks)
+}
+
+func keylolAttachmentImageURLs(attachments map[string]any) []string {
+	if len(attachments) == 0 {
+		return nil
+	}
+	out := []string{}
+	for _, raw := range attachments {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if isImage := strings.TrimSpace(getString(m, "isimage")); isImage != "" && isImage != "1" {
+			continue
+		}
+		base := strings.TrimSpace(getString(m, "url"))
+		path := strings.TrimSpace(getString(m, "attachment"))
+		if base == "" || path == "" {
+			continue
+		}
+		u := strings.TrimRight(base, "/") + "/" + strings.TrimLeft(path, "/")
+		out = append(out, ensureHTTPS(u))
+	}
+	return out
 }
 
 func keylolReplaceCollapseBlocks(s string) string {
