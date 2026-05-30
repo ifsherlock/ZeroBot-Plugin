@@ -161,6 +161,7 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 	messageHTML = keylolMarkShowhideContent(messageHTML)
 	messageHTML = keylolReplaceSmileyImages(messageHTML)
 	messageHTML = keylolReplaceSpoilers(messageHTML)
+	messageHTML = keylolReplaceCodeBlocks(messageHTML)
 	messageHTML = keylolReplaceStyledText(messageHTML)
 	messageHTML = keylolReplaceMediaTags(messageHTML, base)
 	messageHTML = keylolReplaceSteamLinks(messageHTML, base)
@@ -373,6 +374,13 @@ func keylolTextBlocks(text string) []keylolBlock {
 			if text != "" {
 				out = append(out, keylolBlock{Kind: "link", Text: text})
 			}
+		case strings.HasPrefix(line, "[keylol_code]"):
+			flush()
+			text, _ := url.QueryUnescape(strings.TrimSpace(strings.TrimPrefix(line, "[keylol_code]")))
+			text = strings.TrimSpace(text)
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "code", Text: text})
+			}
 		case strings.HasPrefix(line, "[keylol_video]"):
 			flush()
 			u := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_video]"))
@@ -421,8 +429,12 @@ func keylolReplaceSteamLinks(s, base string) string {
 }
 
 func keylolSteamToolbarLinkText(text string) bool {
+	return keylolToolbarLinkText(text)
+}
+
+func keylolToolbarLinkText(text string) bool {
 	switch strings.TrimSpace(text) {
-	case "Steam商店", "Steam评测区", "Steam客户端中查看", "入库或安装":
+	case "Steam商店", "Steam评测区", "其乐相关帖", "SteamDB", "AStats", "SCE", "Barter", "Steam客户端中查看", "入库或安装":
 		return true
 	}
 	return false
@@ -667,6 +679,38 @@ func keylolReplaceSpoilers(s string) string {
 	})
 }
 
+func keylolReplaceCodeBlocks(s string) string {
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`(?is)<div\b[^>]*class=["'][^"']*\bblockcode\b[^"']*["'][^>]*>.*?<ol\b[^>]*>(.*?)</ol>.*?</div>`),
+		regexp.MustCompile(`(?is)<pre\b[^>]*>(.*?)</pre>`),
+		regexp.MustCompile(`(?is)<code\b[^>]*>(.*?)</code>`),
+	} {
+		s = re.ReplaceAllStringFunc(s, func(match string) string {
+			m := re.FindStringSubmatch(match)
+			if len(m) < 2 {
+				return match
+			}
+			text := keylolCleanBlockText(m[1])
+			if text == "" {
+				return ""
+			}
+			return "\n[keylol_code]" + url.QueryEscape(text) + "\n"
+		})
+	}
+	re := regexp.MustCompile(`(?is)\[code\](.*?)\[/code\]`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 2 {
+			return match
+		}
+		text := keylolCleanBlockText(m[1])
+		if text == "" {
+			return ""
+		}
+		return "\n[keylol_code]" + url.QueryEscape(text) + "\n"
+	})
+}
+
 func keylolReplaceStyledText(s string) string {
 	re := regexp.MustCompile(`(?is)<(?:span|font)\b([^>]*)>(.*?)</(?:span|font)>`)
 	for i := 0; i < 3; i++ {
@@ -738,6 +782,12 @@ func keylolReplaceTextLinks(s, base string) string {
 		}
 		if strings.HasPrefix(text, "[keylol_red]") || strings.HasPrefix(text, "[keylol_green]") {
 			return "\n" + text + "\n"
+		}
+		if keylolToolbarLinkText(text) {
+			return " " + text + " "
+		}
+		if strings.Contains(href, "://") || strings.Contains(text, "://") {
+			return "\n[keylol_link]" + keylolOneLine(text) + "\n"
 		}
 		return " " + text + " "
 	})
@@ -875,7 +925,7 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	seenSteam := map[string]bool{}
 	for _, block := range blocks {
-		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "spoiler" || block.Kind == "hidden_label" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
+		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "spoiler" || block.Kind == "hidden_label" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link" || block.Kind == "code" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
 			if block.Text == "" {
 				continue

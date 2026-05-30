@@ -286,10 +286,27 @@ func TestKeylolBuildBlocksKeepsColorAndLinkBlocks(t *testing.T) {
 		kinds = append(kinds, block.Kind+":"+block.Text)
 	}
 	got := strings.Join(kinds, "|")
-	for _, want := range []string{"color_red:论坛信息", "color_green:Steam购买", "text:2026年6月发售游戏汇总"} {
+	for _, want := range []string{"color_red:论坛信息", "color_green:Steam购买", "link:2026年6月发售游戏汇总"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %s in %#v", want, blocks)
 		}
+	}
+}
+
+func TestKeylolBuildBlocksKeepsCodeBlocks(t *testing.T) {
+	html := `正文<br>[code]!addlicense ASF a/123,a/456[/code]<br><pre>https://keylol.com/t1-1-1</pre>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039283-1-1")
+	count := 0
+	for _, block := range blocks {
+		if block.Kind == "code" {
+			count++
+			if !strings.Contains(block.Text, "addlicense") && !strings.Contains(block.Text, "https://keylol.com") {
+				t.Fatalf("bad code text: %#v", block)
+			}
+		}
+	}
+	if count != 2 {
+		t.Fatalf("code blocks=%d %#v", count, blocks)
 	}
 }
 
@@ -414,6 +431,13 @@ func TestKeylolASFForwardItems(t *testing.T) {
 	}
 	if items[1].AppID != "1785650" || items[1].Title != "TopSpin 2K25" || items[1].Code != "!addlicense asf a/1785650" {
 		t.Fatalf("bad second item: %#v", items[1])
+	}
+}
+
+func TestKeylolASFBatchCode(t *testing.T) {
+	items := []keylolASFForwardItem{{AppID: "2878980"}, {AppID: "1785650"}, {AppID: "2878980"}}
+	if got := keylolASFBatchCode(items); got != "!addlicense ASF a/2878980,a/1785650" {
+		t.Fatalf("batch=%q", got)
 	}
 }
 
@@ -984,7 +1008,7 @@ func TestRenderKeylolSpoilerPreview(t *testing.T) {
 	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-spoiler-preview")
 	defer func() { cacheDir = oldCacheDir }()
 
-	blocks := keylolBuildBlocks(`经典镜头结尾，留下 Will Return 的提示，<br><span class="bbcode_spoiler"><span class="bbcode_spoiler_content">追击环肆女郎</span></span><br>后续图片应继续正常排版。`, nil, "https://keylol.com/t1039233-1-1")
+	blocks := keylolBuildBlocks(`经典镜头结尾，留下 Will Return 的提示，<br><span class="bbcode_spoiler"><span class="bbcode_spoiler_content">追击环肆女郎</span></span><br>后续图片应继续正常排版。<br><a href="https://keylol.com/t1039189-1-1">相关帖子链接</a><br>[code]示例配置内容 = true[/code]`, nil, "https://keylol.com/t1039233-1-1")
 	out, err := renderInfoCard(mediaMeta{
 		URL:          "https://keylol.com/t1039233-1-1",
 		SourceURL:    "keylol-spoiler-preview",

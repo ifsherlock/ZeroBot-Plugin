@@ -409,6 +409,11 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			if len(lines) > 0 {
 				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: block.Kind, text: block.Text, lines: lines, height: len(lines) * lineH})
 			}
+		case "code":
+			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, 22, block.Text, float64(contentW-52))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "code", text: block.Text, lines: lines, height: maxInt(58, len(lines)*32+30)})
+			}
 		case "steam_card":
 			img := keylolPrepareImage(fetchCardImage(block.Cover, nil))
 			if isBlankCardImage(img) {
@@ -574,6 +579,9 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				drawKeylolLinkLine(dc, bodyFontBytes, 24, line, x, y)
 				y += 34
 			}
+		case "code":
+			drawKeylolCodeBlock(dc, bodyFontBytes, block.lines, x, y, contentW, block.height, theme)
+			y += block.height
 		case "steam_card":
 			drawKeylolSteamCard(dc, fontBytes, block, x, y, contentW, block.height)
 			y += block.height
@@ -646,6 +654,9 @@ func keylolBlockGap(prev, cur keylolRenderBlock, base, imageGap int) int {
 	}
 	if prev.kind == "spoiler" {
 		gap = maxInt(gap, 42)
+	}
+	if prev.kind == "code" || cur.kind == "code" {
+		gap = maxInt(gap, 34)
 	}
 	return gap
 }
@@ -864,6 +875,30 @@ func drawKeylolHiddenLabel(dc *gg.Context, fontBytes []byte, lines []string, x, 
 	for _, line := range lines {
 		drawInlineEmoji(dc, fontBytes, 22, color.RGBA{R: 120, G: 188, B: 242, A: 255}, "👁 "+line, float64(x+22), float64(yy))
 		yy += 28
+	}
+}
+
+func drawKeylolCodeBlock(dc *gg.Context, fontBytes []byte, lines []string, x, y, w, h int, theme keylolCardTheme) {
+	dark := keylolThemeDark(theme)
+	bg := color.RGBA{R: 10, G: 18, B: 30, A: 255}
+	border := color.RGBA{R: 64, G: 84, B: 112, A: 180}
+	fg := color.RGBA{R: 201, G: 213, B: 226, A: 255}
+	if !dark {
+		bg = color.RGBA{R: 243, G: 246, B: 250, A: 255}
+		border = color.RGBA{R: 205, G: 215, B: 228, A: 255}
+		fg = color.RGBA{R: 70, G: 79, B: 94, A: 255}
+	}
+	dc.SetColor(bg)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 10)
+	dc.Fill()
+	dc.SetColor(border)
+	dc.SetLineWidth(1)
+	dc.DrawRoundedRectangle(float64(x)+0.5, float64(y)+0.5, float64(w)-1, float64(h)-1, 10)
+	dc.Stroke()
+	yy := y + 30
+	for _, line := range lines {
+		drawInlineEmoji(dc, fontBytes, 22, fg, line, float64(x+24), float64(yy))
+		yy += 32
 	}
 }
 

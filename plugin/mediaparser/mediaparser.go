@@ -983,6 +983,11 @@ func sendKeylolASFForward(ctx *zero.Ctx, meta mediaMeta) {
 	nodes := message.Message{}
 	botName := "视频解析bot"
 	botID := ctx.Event.SelfID
+	if batch := keylolASFBatchCode(items); batch != "" {
+		nodes = append(nodes, message.CustomNode(botName, botID, message.Message{message.Text(
+			fmt.Sprintf("懒人一键喜+%d\n%s", len(items), batch),
+		)}))
+	}
 	for _, item := range items {
 		item = enrichKeylolASFForwardItem(item)
 		msg := message.Message{message.Text(
@@ -1002,6 +1007,23 @@ func sendKeylolASFForward(ctx *zero.Ctx, meta mediaMeta) {
 		resID = ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes).Get("message_id").Int()
 	}
 	logrus.Infof("[mediaparser] sent_keylol_asf_forward title=%q nodes=%d message_id=%d", meta.Title, len(nodes), resID)
+}
+
+func keylolASFBatchCode(items []keylolASFForwardItem) string {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, item := range items {
+		id := strings.TrimSpace(item.AppID)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, "a/"+id)
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	return "!addlicense ASF " + strings.Join(ids, ",")
 }
 
 func enrichKeylolASFForwardItem(item keylolASFForwardItem) keylolASFForwardItem {
