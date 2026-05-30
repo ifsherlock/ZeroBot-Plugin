@@ -401,7 +401,7 @@ func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
 	}
 	q := api.Query()
 	q.Set("appids", appID)
-	q.Set("l", "schinese")
+	q.Set("l", "zh")
 	q.Set("cc", "cn")
 	api.RawQuery = q.Encode()
 	body, _, status, err := fetchText(api.String(), map[string]string{"Accept": "application/json"}, true)
@@ -425,8 +425,8 @@ func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
 		Kind:  "steam_card",
 		URL:   rawURL,
 		Title: getString(detail, "name"),
-		Desc:  getString(detail, "short_description"),
-		Cover: getString(detail, "header_image"),
+		Desc:  truncate(keylolCleanBlockText(firstNonEmpty(getString(detail, "short_description"), getString(detail, "about_the_game"))), 200),
+		Cover: firstNonEmpty(getString(detail, "header_image"), getString(detail, "capsule_image")),
 	}, nil
 }
 

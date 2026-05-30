@@ -173,6 +173,14 @@ func TestKeylolBuildBlocksKeepsForumWidgets(t *testing.T) {
 	}
 }
 
+func TestKeylolInlineImageKeepsTextOrder(t *testing.T) {
+	html := `<img width="72" height="39" src="https://blob.keylol.com/forum/new.png">《Bunny Guys》【现已可领取】`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
+	if len(blocks) != 2 || blocks[0].Kind != "inline_image" || blocks[1].Kind != "text" || !strings.Contains(blocks[1].Text, "Bunny Guys") {
+		t.Fatalf("bad inline image/text blocks: %#v", blocks)
+	}
+}
+
 func TestKeylolSteamAppID(t *testing.T) {
 	cases := map[string]string{
 		`https://store.steampowered.com/app/2680010/The_Evil_Within_2/`: "2680010",
@@ -203,6 +211,38 @@ func TestKeylolBuildBlocksKeepsSteamCard(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("missing steam card: %#v", blocks)
+	}
+}
+
+func TestKeylolFetchSteamAppFallbackFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("appids") != "2680010" || r.URL.Query().Get("cc") != "cn" || r.URL.Query().Get("l") != "zh" {
+			t.Fatalf("bad steam query: %s", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{
+			"2680010": {
+				"success": true,
+				"data": {
+					"name": "The Evil Within 2",
+					"short_description": "",
+					"about_the_game": "<p>生存恐怖续作，寻找你的女儿。</p>",
+					"header_image": "",
+					"capsule_image": "https://cdn.example.com/capsule.jpg"
+				}
+			}
+		}`))
+	}))
+	defer srv.Close()
+	oldAPI := steamAPIBase
+	steamAPIBase = srv.URL
+	defer func() { steamAPIBase = oldAPI }()
+
+	info, err := keylolFetchSteamApp("https://store.steampowered.com/app/2680010/The_Evil_Within_2/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Title != "The Evil Within 2" || info.Desc != "生存恐怖续作，寻找你的女儿。" || info.Cover != "https://cdn.example.com/capsule.jpg" {
+		t.Fatalf("bad steam info: %#v", info)
 	}
 }
 

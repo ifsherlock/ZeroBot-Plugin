@@ -57,6 +57,14 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	return renderVideoCard(meta, fontBytes)
 }
 
+func keylolBodyFontBytes(fallback []byte) []byte {
+	fontBytes, err := file.GetLazyData(text.FontFile, control.Md5File, true)
+	if err != nil || len(fontBytes) == 0 {
+		return fallback
+	}
+	return fontBytes
+}
+
 func shouldRenderAsGalleryCard(meta mediaMeta) bool {
 	if len(meta.ImageURLs) == 0 {
 		return false
@@ -289,6 +297,7 @@ type keylolRenderBlock struct {
 	cover  string
 	img    image.Image
 	width  int
+	imgH   int
 	height int
 	lines  []string
 }
@@ -307,10 +316,12 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		blockGap  = 22
 	)
 	blocks := keylolBlocksForRender(meta)
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
 	dcMeasure := gg.NewContext(w, 100)
-	mustFont(dcMeasure, fontBytes, bodySize)
+	mustFont(dcMeasure, bodyFontBytes, bodySize)
 	renderBlocks := make([]keylolRenderBlock, 0, len(blocks))
-	for _, block := range blocks {
+	for i := 0; i < len(blocks); i++ {
+		block := blocks[i]
 		switch block.Kind {
 		case "image":
 			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
@@ -319,6 +330,23 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		case "inline_image":
 			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
 			iw, ih := keylolInlineImageDrawSize(img)
+			if i+1 < len(blocks) && (blocks[i+1].Kind == "text" || blocks[i+1].Kind == "heading2") {
+				next := blocks[i+1]
+				size := bodySize
+				lineH := bodyLH
+				kind := "inline_image_text"
+				if next.Kind == "heading2" {
+					size = 29
+					lineH = 42
+					kind = "inline_image_heading"
+				}
+				lines := wrapTextByPixels(dcMeasure, bodyFontBytes, size, next.Text, float64(contentW-iw-18))
+				if len(lines) > 0 {
+					renderBlocks = append(renderBlocks, keylolRenderBlock{kind: kind, text: next.Text, url: block.URL, img: img, width: iw, imgH: ih, height: maxInt(ih, len(lines)*lineH), lines: lines})
+					i++
+					continue
+				}
+			}
 			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "inline_image", url: block.URL, img: img, width: iw, height: ih})
 		case "heading1":
 			lines := wrapTextByPixels(dcMeasure, fontBytes, 34, block.Text, float64(contentW))
@@ -352,7 +380,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				height: 132,
 			})
 		case "text":
-			lines := wrapTextByPixels(dcMeasure, fontBytes, bodySize, block.Text, float64(contentW))
+			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, bodySize, block.Text, float64(contentW))
 			if len(lines) > 0 {
 				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "text", text: block.Text, lines: lines, height: len(lines) * bodyLH})
 			}
@@ -409,7 +437,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				if keylolLooksLikeLink(line) {
 					c = color.RGBA{R: 0, G: 102, B: 204, A: 255}
 				}
-				drawInlineEmoji(dc, fontBytes, bodySize, c, line, float64(x), float64(y))
+				drawInlineEmoji(dc, bodyFontBytes, bodySize, c, line, float64(x), float64(y))
 				y += bodyLH
 			}
 		case "image":
@@ -421,6 +449,24 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			y += block.height + imageGap
 		case "inline_image":
 			drawKeylolInlineImage(dc, block.img, x, y, block.width, block.height)
+			y += block.height
+		case "inline_image_text", "inline_image_heading":
+			imgY := y + (block.height-block.imgH)/2
+			drawKeylolInlineImage(dc, block.img, x, imgY, block.width, block.imgH)
+			textX := x + block.width + 16
+			yy := y + 2
+			size := bodySize
+			lineH := bodyLH
+			c := color.RGBA{R: 45, G: 48, B: 56, A: 255}
+			if block.kind == "inline_image_heading" {
+				size = 29
+				lineH = 42
+				c = color.RGBA{R: 39, G: 43, B: 51, A: 255}
+			}
+			for _, line := range block.lines {
+				drawInlineEmoji(dc, bodyFontBytes, size, c, line, float64(textX), float64(yy))
+				yy += lineH
+			}
 			y += block.height
 		case "heading1":
 			y = drawKeylolHeading1(dc, fontBytes, block.lines, x, y, contentW)
