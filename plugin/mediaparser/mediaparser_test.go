@@ -215,6 +215,34 @@ func TestKeylolBuildBlocksKeepsSteamCard(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksDedupesSteamCards(t *testing.T) {
+	html := `<a href="https://store.steampowered.com/app/1785650/NBA_2K26/">NBA 2K26</a><a href="https://store.steampowered.com/app/1785650/NBA_2K26/">Steam商店</a>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
+	count := 0
+	for _, block := range blocks {
+		if block.Kind == "steam_card" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("steam card count=%d blocks=%#v", count, blocks)
+	}
+}
+
+func TestKeylolBuildBlocksFormatsASFLinks(t *testing.T) {
+	html := `<p>Steam商店 Steam评测区 | 其乐相关帖 SteamDB AStats SCE Barter | Steam客户端中查看 入库或安装 | <a href="javascript:;" data-clipboard-text="!addlicense asf a/1785650">复制ASF代码</a></p>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
+	if len(blocks) != 2 {
+		t.Fatalf("blocks=%#v", blocks)
+	}
+	if blocks[0].Kind != "text" || !strings.Contains(blocks[0].Text, "复制\nASF代码") {
+		t.Fatalf("asf label should be split onto two lines: %#v", blocks)
+	}
+	if blocks[1].Kind != "asf_link" || blocks[1].Title != "1785650" {
+		t.Fatalf("bad asf link block: %#v", blocks)
+	}
+}
+
 func TestKeylolBuildBlocksUsesSplitAttachmentURL(t *testing.T) {
 	attachments := map[string]any{
 		"2432618": map[string]any{

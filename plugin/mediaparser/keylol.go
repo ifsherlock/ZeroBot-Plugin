@@ -312,6 +312,12 @@ func keylolTextBlocks(text string) []keylolBlock {
 			if block.URL != "" {
 				out = append(out, block)
 			}
+		case strings.HasPrefix(line, "[keylol_asf]"):
+			flush()
+			id := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_asf]"))
+			if regexp.MustCompile(`^\d+$`).MatchString(id) {
+				out = append(out, keylolBlock{Kind: "asf_link", Title: id})
+			}
 		case strings.HasPrefix(line, "[keylol_collapse]"):
 			flush()
 			out = append(out, keylolBlock{Kind: "collapse", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_collapse]"))})
@@ -483,11 +489,32 @@ func keylolReplaceTextLinks(s, base string) string {
 		}
 		text := keylolCleanBlockText(m[2])
 		href := absolutize(base, html.UnescapeString(htmlUnescape(m[1])))
+		if appID := keylolASFAppID(match + " " + href + " " + text); appID != "" {
+			return " 复制\nASF代码\n[keylol_asf]" + appID + "\n"
+		}
 		if text == "" || strings.EqualFold(text, "链接") || strings.EqualFold(text, "link") {
 			text = href
 		}
 		return " " + text + " "
 	})
+}
+
+func keylolASFAppID(raw string) string {
+	raw = html.UnescapeString(htmlUnescape(raw))
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`(?i)!addlicense\s+asf\s+a/(\d+)`),
+		regexp.MustCompile(`(?i)\ba/(\d+)\b`),
+	} {
+		if m := re.FindStringSubmatch(raw); len(m) > 1 {
+			return m[1]
+		}
+	}
+	if strings.Contains(strings.ToLower(raw), "asf") || strings.Contains(raw, "复制ASF代码") || strings.Contains(raw, "复制asf代码") {
+		if m := regexp.MustCompile(`\b(\d{5,10})\b`).FindStringSubmatch(raw); len(m) > 1 {
+			return m[1]
+		}
+	}
+	return ""
 }
 
 func keylolImageURLFromTag(tag string) string {
@@ -557,6 +584,7 @@ func keylolCleanBlockText(s string) string {
 
 func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
+	seenSteam := map[string]bool{}
 	for _, block := range blocks {
 		if block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
@@ -569,6 +597,16 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 			}
 		}
 		if (block.Kind == "image" || block.Kind == "inline_image" || block.Kind == "steam_card") && block.URL == "" {
+			continue
+		}
+		if block.Kind == "steam_card" {
+			key := keylolSteamAppID(block.URL)
+			if key != "" && seenSteam[key] {
+				continue
+			}
+			seenSteam[key] = true
+		}
+		if block.Kind == "asf_link" && strings.TrimSpace(block.Title) == "" {
 			continue
 		}
 		out = append(out, block)
