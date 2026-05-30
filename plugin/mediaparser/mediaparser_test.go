@@ -183,28 +183,42 @@ window.pageInfo = window.videoInfo ={
 }
 
 func TestAppendYTDLPPlatformArgs(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
 	cfg := defaultConfig()
-	cfg.YTDLPCookieFile = "/tmp/all-cookies.txt"
-	cfg.YouTubeCookieFile = "/tmp/yt-cookies.txt"
-	cfg.InstagramCookieFile = "/tmp/ig-cookies.txt"
+	cfg.YTDLPCookieFile = "/tmp/legacy-all-cookies.txt"
+	cfg.YouTubeCookie = "YT_TEST_COOKIE=value"
+	cfg.InstagramCookie = "IG_TEST_COOKIE=value"
 
 	ytArgs := appendYTDLPPlatformArgs([]string{"-J"}, cfg, "youtube")
 	if !containsArgPair(ytArgs, "--extractor-args", "youtube:player_client=default,android;formats=missing_pot") {
 		t.Fatalf("youtube extractor args missing: %#v", ytArgs)
 	}
-	if !containsArgPair(ytArgs, "--cookies", "/tmp/yt-cookies.txt") {
-		t.Fatalf("youtube cookie missing: %#v", ytArgs)
+	if !containsArgWithPrefix(ytArgs, "--cookies", cacheDir) {
+		t.Fatalf("youtube cookie file missing: %#v", ytArgs)
 	}
-	if containsArgPair(ytArgs, "--cookies", "/tmp/all-cookies.txt") {
-		t.Fatalf("youtube should prefer platform cookie: %#v", ytArgs)
+	if containsArgPair(ytArgs, "--cookies", "/tmp/legacy-all-cookies.txt") {
+		t.Fatalf("youtube should not use global tool cookie: %#v", ytArgs)
 	}
 
 	igArgs := appendYTDLPPlatformArgs([]string{"-J"}, cfg, "instagram")
-	if !containsArgPair(igArgs, "--cookies", "/tmp/ig-cookies.txt") {
-		t.Fatalf("instagram cookie missing: %#v", igArgs)
+	if !containsArgWithPrefix(igArgs, "--cookies", cacheDir) {
+		t.Fatalf("instagram cookie file missing: %#v", igArgs)
 	}
-	if containsArgPair(igArgs, "--cookies", "/tmp/all-cookies.txt") {
-		t.Fatalf("instagram should prefer platform cookie: %#v", igArgs)
+	if containsArgPair(igArgs, "--cookies", "/tmp/legacy-all-cookies.txt") {
+		t.Fatalf("instagram should not use global tool cookie: %#v", igArgs)
+	}
+}
+
+func TestBiliQualityFollowsGlobalResolution(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.VideoMaxResolution = 720
+	cfg.BilibiliMaxQuality = "4K"
+	normalizeConfig(&cfg)
+	if cfg.BilibiliMaxQuality != "720P" {
+		t.Fatalf("bilibili quality=%q", cfg.BilibiliMaxQuality)
 	}
 }
 
@@ -220,6 +234,15 @@ func TestXiaohongshuHeadersIncludeCookie(t *testing.T) {
 func containsArgPair(args []string, key, value string) bool {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == key && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
+func containsArgWithPrefix(args []string, key, prefix string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == key && strings.HasPrefix(args[i+1], prefix) {
 			return true
 		}
 	}
