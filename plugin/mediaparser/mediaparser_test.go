@@ -549,6 +549,20 @@ func TestCardWrapKeepsEnglishWords(t *testing.T) {
 	}
 }
 
+func TestCardTitleWrapAvoidsOrphansAndHangingPunctuation(t *testing.T) {
+	lines := wrapCardText("完全由大脑驱动的哈基米德田园猫太豪了", 32)
+	if len(lines) != 1 {
+		t.Fatalf("short Chinese title should not be split into orphan lines: %#v", lines)
+	}
+
+	lines = wrapCardText("【AC19】 给Ac娘19岁写的一首歌～《AC Pink Heart》 来了！", 34)
+	for _, line := range lines {
+		if strings.HasSuffix(line, "《") || strings.HasPrefix(line, "》") {
+			t.Fatalf("title line has hanging book-title punctuation: %#v", lines)
+		}
+	}
+}
+
 func TestCombinedMediaPlatformsNeedMixedItems(t *testing.T) {
 	for _, platform := range []string{"instagram", "twitter", "weibo"} {
 		meta := mediaMeta{

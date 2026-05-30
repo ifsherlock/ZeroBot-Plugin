@@ -165,10 +165,7 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
 
 	title := firstNonEmpty(meta.Title, meta.Desc, "媒体解析")
-	titleLines := wrapDisplayText(title, 32, 2)
-	if len(titleLines) == 0 {
-		titleLines = []string{title}
-	}
+	titleLines := []string{}
 	summaryLines := []string{}
 	if len(summaryLines) == 0 {
 		summaryLines = []string{"该视频暂无总结"}
@@ -182,6 +179,10 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	headerTop := float64(panelY + 18)
 	contentX := panelX + contentPad
 	contentW := panelW - contentPad*2
+	titleLines = wrapDisplayTextByPixels(fontBytes, 42, title, float64(contentW), 2)
+	if len(titleLines) == 0 {
+		titleLines = []string{title}
+	}
 	summaryLines = wrapTextByPixels(gg.NewContext(cardWidth, 100), bodyFontBytes, 30, cardSummaryText(meta), float64(contentW))
 	if len(summaryLines) > 5 {
 		summaryLines = summaryLines[:5]
@@ -246,11 +247,8 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	images := compactCardImages(fetchCardImages(imageURLs, meta.ImageHeads))
 
 	title := firstNonEmpty(meta.Title, "媒体解析")
-	titleLines := wrapDisplayText(title, 56, 2)
+	titleLines := []string{}
 	descLines := []string{}
-	if len(titleLines) == 0 {
-		titleLines = []string{title}
-	}
 
 	outerPad := cardOuterPad
 	panelX, panelY := outerPad, outerPad
@@ -260,6 +258,10 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	headerTop := float64(panelY + 18)
 	galleryX := panelX + contentPad
 	galleryW := panelW - contentPad*2
+	titleLines = wrapDisplayTextByPixels(fontBytes, 42, title, float64(galleryW), 2)
+	if len(titleLines) == 0 {
+		titleLines = []string{title}
+	}
 	descLines = wrapTextByPixels(gg.NewContext(cardWidth, 100), bodyFontBytes, 30, meta.Desc, float64(galleryW))
 	if len(descLines) > 14 {
 		descLines = descLines[:14]
@@ -774,7 +776,7 @@ func wrapTextByPixels(dc *gg.Context, fontBytes []byte, size float64, s string, 
 			out = append(out, line)
 		}
 	}
-	return out
+	return fixWrappedLinePunctuation(out)
 }
 
 func keylolLooksLikeLink(line string) bool {
@@ -2022,6 +2024,18 @@ func wrapDisplayText(s string, width, maxLines int) []string {
 	return out
 }
 
+func wrapDisplayTextByPixels(fontBytes []byte, size float64, s string, maxW float64, maxLines int) []string {
+	out := wrapTextByPixels(gg.NewContext(cardWidth, 100), fontBytes, size, strings.TrimSpace(s), maxW)
+	if maxLines > 0 && len(out) > maxLines {
+		out = out[:maxLines]
+		rs := []rune(out[len(out)-1])
+		if len(rs) > 1 {
+			out[len(out)-1] = strings.TrimRight(string(rs[:len(rs)-1]), "，。！？；：、,.!?;: ") + "..."
+		}
+	}
+	return fixWrappedLinePunctuation(out)
+}
+
 func wrapCardText(s string, width int) []string {
 	out := []string{}
 	for _, raw := range strings.Split(s, "\n") {
@@ -2069,7 +2083,7 @@ func wrapCardParagraph(s string, width int) []string {
 	if strings.TrimSpace(line) != "" {
 		lines = append(lines, strings.TrimSpace(line))
 	}
-	return lines
+	return fixWrappedLinePunctuation(lines)
 }
 
 func cardWrapTokens(s string) []string {
@@ -2115,8 +2129,48 @@ func cardRuneWidth(r rune) int {
 	if r == ' ' {
 		return 1
 	}
-	if isEmojiRune(r) || r >= 0x2e80 {
+	if isEmojiRune(r) {
 		return 2
 	}
 	return 1
+}
+
+func fixWrappedLinePunctuation(lines []string) []string {
+	if len(lines) < 2 {
+		return lines
+	}
+	out := append([]string(nil), lines...)
+	for i := 0; i < len(out)-1; i++ {
+		out[i] = strings.TrimSpace(out[i])
+		out[i+1] = strings.TrimSpace(out[i+1])
+		if out[i] == "" || out[i+1] == "" {
+			continue
+		}
+		nextRunes := []rune(out[i+1])
+		if len(nextRunes) > 0 && isNoLineStartRune(nextRunes[0]) {
+			out[i] += string(nextRunes[0])
+			out[i+1] = strings.TrimSpace(string(nextRunes[1:]))
+			continue
+		}
+		lineRunes := []rune(out[i])
+		if len(lineRunes) > 0 && isNoLineEndRune(lineRunes[len(lineRunes)-1]) {
+			out[i+1] = string(lineRunes[len(lineRunes)-1]) + out[i+1]
+			out[i] = strings.TrimSpace(string(lineRunes[:len(lineRunes)-1]))
+		}
+	}
+	filtered := out[:0]
+	for _, line := range out {
+		if strings.TrimSpace(line) != "" {
+			filtered = append(filtered, strings.TrimSpace(line))
+		}
+	}
+	return filtered
+}
+
+func isNoLineStartRune(r rune) bool {
+	return strings.ContainsRune("，。！？；：、）】》」』”’〉》〕］｝…～,.!?;:%)]}", r)
+}
+
+func isNoLineEndRune(r rune) bool {
+	return strings.ContainsRune("（【《「『“‘〈《〔［｛([{", r)
 }
