@@ -905,10 +905,47 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 }
 
 func shouldForwardCombinedMedia(meta *mediaMeta) bool {
-	if meta == nil || meta.Platform != "instagram" {
+	if meta == nil || !isCombinedMediaPlatform(meta.Platform) {
 		return false
 	}
-	return len(meta.VideoURLs)+len(meta.ImageURLs) > 1
+	return hasMixedMediaItems(*meta)
+}
+
+func isCombinedMediaPlatform(platform string) bool {
+	switch platform {
+	case "instagram", "twitter", "weibo":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasMixedMediaItems(meta mediaMeta) bool {
+	hasVideo, hasImage := false, false
+	for _, item := range meta.MediaItems {
+		switch item.Kind {
+		case "video":
+			hasVideo = true
+		case "image":
+			hasImage = true
+		}
+	}
+	if len(meta.MediaItems) == 0 {
+		hasVideo = len(meta.VideoURLs) > 0
+		hasImage = len(meta.ImageURLs) > 0
+	}
+	return hasVideo && hasImage
+}
+
+func mediaItemsFor(videos, images [][]string) []mediaItem {
+	items := make([]mediaItem, 0, len(videos)+len(images))
+	for i := range videos {
+		items = append(items, mediaItem{Kind: "video", Index: i})
+	}
+	for i := range images {
+		items = append(items, mediaItem{Kind: "image", Index: i})
+	}
+	return items
 }
 
 func mediaVideoTarget(meta *mediaMeta, i int) string {
@@ -956,7 +993,6 @@ func sendCombinedMediaForward(ctx *zero.Ctx, meta *mediaMeta) error {
 	nodes := message.Message{}
 	botName := "瑙嗛瑙ｆ瀽bot"
 	botID := ctx.Event.SelfID
-	mediaNode := message.Message{}
 	items := meta.MediaItems
 	if len(items) == 0 {
 		for i := range meta.VideoURLs {
@@ -971,18 +1007,15 @@ func sendCombinedMediaForward(ctx *zero.Ctx, meta *mediaMeta) error {
 		switch item.Kind {
 		case "video":
 			if target := mediaVideoTarget(meta, item.Index); target != "" {
-				mediaNode = append(mediaNode, message.Video(target))
+				nodes = append(nodes, message.CustomNode(botName, botID, message.Message{message.Video(target)}))
 				videoCount++
 			}
 		case "image":
 			if target := mediaImageTarget(meta, item.Index); target != "" {
-				mediaNode = append(mediaNode, message.Image(target))
+				nodes = append(nodes, message.CustomNode(botName, botID, message.Message{message.Image(target)}))
 				imageCount++
 			}
 		}
-	}
-	if len(mediaNode) > 0 {
-		nodes = append(nodes, message.CustomNode(botName, botID, mediaNode))
 	}
 	if text := galleryForwardText(meta); text != "" {
 		nodes = append(nodes, message.CustomNode(botName, botID, message.Message{message.Text(text)}))

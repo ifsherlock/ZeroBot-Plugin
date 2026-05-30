@@ -57,7 +57,7 @@ func shouldRenderAsGalleryCard(meta mediaMeta) bool {
 	if len(meta.VideoURLs) == 0 {
 		return true
 	}
-	return meta.Platform == "instagram" && len(meta.VideoURLs)+len(meta.ImageURLs) > 1
+	return isCombinedMediaPlatform(meta.Platform) && hasMixedMediaItems(meta)
 }
 
 func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
@@ -493,7 +493,6 @@ func renderDefaultPlatformLogoImage(platform string) (image.Image, error) {
 }
 
 func drawInlineEmoji(dc *gg.Context, fontBytes []byte, size float64, c color.Color, s string, x, y float64) float64 {
-	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0
 	}
@@ -1047,7 +1046,7 @@ func drawFloatingCoverCell(dc *gg.Context, img image.Image, x, y, w, h int, show
 }
 
 func shouldDrawPlayOverlay(meta mediaMeta) bool {
-	return len(meta.VideoURLs) > 0 && !(meta.Platform == "instagram" && len(meta.VideoURLs)+len(meta.ImageURLs) > 1)
+	return len(meta.VideoURLs) > 0 && !(isCombinedMediaPlatform(meta.Platform) && hasMixedMediaItems(meta))
 }
 
 func galleryGridHeightForImages(imgs []image.Image, w int) int {
@@ -1331,14 +1330,94 @@ func wrapCardText(s string, width int) []string {
 		if raw == "" {
 			continue
 		}
-		rs := []rune(raw)
-		for len(rs) > width {
-			out = append(out, string(rs[:width]))
-			rs = rs[width:]
-		}
-		if len(rs) > 0 {
-			out = append(out, string(rs))
-		}
+		out = append(out, wrapCardParagraph(raw, width)...)
 	}
 	return out
+}
+
+func wrapCardParagraph(s string, width int) []string {
+	tokens := cardWrapTokens(s)
+	lines := []string{}
+	line := ""
+	lineW := 0
+	for _, token := range tokens {
+		tokenW := cardTextWidth(token)
+		if tokenW == 0 {
+			continue
+		}
+		if line != "" && lineW+tokenW > width {
+			lines = append(lines, strings.TrimSpace(line))
+			line, lineW = "", 0
+		}
+		if line == "" && tokenW > width {
+			chunk := ""
+			chunkW := 0
+			for _, r := range token {
+				rw := cardRuneWidth(r)
+				if chunk != "" && chunkW+rw > width {
+					lines = append(lines, strings.TrimSpace(chunk))
+					chunk, chunkW = "", 0
+				}
+				chunk += string(r)
+				chunkW += rw
+			}
+			line, lineW = chunk, chunkW
+			continue
+		}
+		line += token
+		lineW += tokenW
+	}
+	if strings.TrimSpace(line) != "" {
+		lines = append(lines, strings.TrimSpace(line))
+	}
+	return lines
+}
+
+func cardWrapTokens(s string) []string {
+	tokens := []string{}
+	buf := strings.Builder{}
+	flush := func() {
+		if buf.Len() > 0 {
+			tokens = append(tokens, buf.String())
+			buf.Reset()
+		}
+	}
+	for _, r := range s {
+		if r == '\t' || r == '\r' || r == '\n' {
+			r = ' '
+		}
+		if r == ' ' {
+			flush()
+			if len(tokens) > 0 && tokens[len(tokens)-1] != " " {
+				tokens = append(tokens, " ")
+			}
+			continue
+		}
+		if cardRuneWidth(r) >= 2 {
+			flush()
+			tokens = append(tokens, string(r))
+			continue
+		}
+		buf.WriteRune(r)
+	}
+	flush()
+	return tokens
+}
+
+func cardTextWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		w += cardRuneWidth(r)
+	}
+	return w
+}
+
+func cardRuneWidth(r rune) int {
+	if r == ' ' {
+		return 1
+	}
+	if isEmojiRune(r) || r >= 0x2e80 {
+		return 2
+	}
+	return 1
 }

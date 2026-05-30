@@ -287,6 +287,38 @@ func TestInstagramBuildMetaUsesOwnerAvatarAndCarousel(t *testing.T) {
 	if len(meta.VideoURLs) != 1 || meta.VideoURLs[0][0] != "https://video/high.mp4" {
 		t.Fatalf("bad videos=%#v", meta.VideoURLs)
 	}
+	if len(meta.MediaItems) != 2 || meta.MediaItems[0].Kind != "image" || meta.MediaItems[1].Kind != "video" {
+		t.Fatalf("bad media item order=%#v", meta.MediaItems)
+	}
+}
+
+func TestCardWrapKeepsEnglishWords(t *testing.T) {
+	lines := wrapCardText("Representing Holland at the upcoming football world tournament? @virgilvandijk is taking it all in ⚽", 34)
+	for _, line := range lines {
+		for _, broken := range []string{"upco", "vir", "gil"} {
+			if line == broken {
+				t.Fatalf("unexpected broken word line: %#v", lines)
+			}
+		}
+	}
+	joined := strings.Join(lines, " ")
+	if !strings.Contains(joined, "upcoming football") || !strings.Contains(joined, "@virgilvandijk") {
+		t.Fatalf("bad wrapped text: %#v", lines)
+	}
+}
+
+func TestCombinedMediaPlatformsNeedMixedItems(t *testing.T) {
+	for _, platform := range []string{"instagram", "twitter", "weibo"} {
+		meta := mediaMeta{
+			Platform:   platform,
+			VideoURLs:  [][]string{{"video.mp4"}},
+			ImageURLs:  [][]string{{"image.jpg"}, {"video-cover.jpg"}},
+			MediaItems: []mediaItem{{Kind: "video", Index: 0}, {Kind: "image", Index: 0}},
+		}
+		if !shouldForwardCombinedMedia(&meta) || !shouldRenderAsGalleryCard(meta) || shouldDrawPlayOverlay(meta) {
+			t.Fatalf("%s mixed media rules not applied", platform)
+		}
+	}
 }
 
 func containsArgPair(args []string, key, value string) bool {

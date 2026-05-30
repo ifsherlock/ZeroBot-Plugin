@@ -27,13 +27,23 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 		}
 	}
 	videos := [][]string{}
+	videoThumbs := []string{}
 	for _, video := range info.Videos {
 		if video.URL != "" {
 			videos = append(videos, []string{"range:" + video.URL})
 		}
+		if video.Thumb != "" {
+			videoThumbs = append(videoThumbs, video.Thumb)
+		}
 	}
 	if len(images) == 0 && len(videos) == 0 && strings.TrimSpace(info.Text) == "" {
 		return mediaMeta{}, fmt.Errorf("推文不包含文本、图片或视频")
+	}
+	items := mediaItemsFor(videos, images)
+	if len(videos) > 0 && len(images) > 0 {
+		for _, thumb := range videoThumbs {
+			images = append(images, []string{thumb})
+		}
 	}
 	return mediaMeta{
 		URL:        raw,
@@ -47,6 +57,7 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 		Cover:      info.Cover,
 		VideoURLs:  videos,
 		ImageURLs:  images,
+		MediaItems: items,
 		VideoHeads: buildHeaders(true, "", defaultUA),
 		ImageHeads: buildHeaders(false, "", defaultUA),
 		ForceLocal: len(videos) > 0,

@@ -207,6 +207,10 @@ func buildWeiboMeta(raw string, data map[string]any) mediaMeta {
 	if cover == "" {
 		cover = firstNestedHTTPURLByKeys(data, 5, "cover", "thumbnail", "page_pic", "pic")
 	}
+	items := mediaItemsFor(videoGroups, imageGroups)
+	if len(videoGroups) > 0 && len(imageGroups) > 0 && cover != "" {
+		imageGroups = append(imageGroups, []string{cover})
+	}
 	return mediaMeta{
 		URL:        raw,
 		SourceURL:  raw,
@@ -219,6 +223,7 @@ func buildWeiboMeta(raw string, data map[string]any) mediaMeta {
 		Cover:      cover,
 		VideoURLs:  videoGroups,
 		ImageURLs:  imageGroups,
+		MediaItems: items,
 		VideoHeads: buildHeaders(true, "https://weibo.com/", weiboUA),
 		ImageHeads: buildHeaders(false, "https://weibo.com/", weiboUA),
 		ForceLocal: len(videoGroups) > 0,
