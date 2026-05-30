@@ -133,23 +133,24 @@ type config struct {
 }
 
 type mediaMeta struct {
-	URL          string
-	SourceURL    string
-	Platform     string
-	Title        string
-	Author       string
-	Avatar       string
-	Timestamp    string
-	Desc         string
-	Cover        string
-	VideoURLs    [][]string
-	ImageURLs    [][]string
-	VideoHeads   map[string]string
-	ImageHeads   map[string]string
-	ForceLocal   bool
-	AccessText   string
-	Error        string
-	KeylolBlocks []keylolBlock
+	URL            string
+	SourceURL      string
+	Platform       string
+	Title          string
+	Author         string
+	Avatar         string
+	Timestamp      string
+	Desc           string
+	Cover          string
+	VideoURLs      [][]string
+	ImageURLs      [][]string
+	VideoHeads     map[string]string
+	ImageHeads     map[string]string
+	ForceLocal     bool
+	AccessText     string
+	Error          string
+	KeylolBlocks   []keylolBlock
+	KeylolCategory string
 
 	FilePaths        []string
 	VideoSizes       []float64

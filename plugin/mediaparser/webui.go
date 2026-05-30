@@ -825,8 +825,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="sectionTitle"><b>Keylol 卡片</b><span class="muted">底部文案支持 {time}、{title}、{author} 占位符。</span></div>
 <div class="settingsFields single">
 <label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
-<label class="field">日夜主题 <select id="keylolTheme"><option value="auto">按北京时间自动</option><option value="light">白天浅色</option><option value="dark">夜间深色</option></select></label>
 </div>
+<div class="controlPills"><label class="row">跟随北京时间 <span id="keylolThemeAutoSwitch"></span></label><label class="row">深色模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">开启“跟随北京时间”时会自动日夜切换；关闭后用“深色模式”手动指定黑白。</span></div>
 <div class="controlPills"><label class="row">ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">开启后，帖子含“复制ASF代码”时会在卡片后追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
 </div>
 </div>
@@ -857,6 +857,7 @@ function showPluginSection(name,updateHash=true){
 function markDirty(){dirty=true; $('saveMsg').textContent='有未保存修改'}
 function checked(v){return v?' checked':''}
 function switchHTML(expr,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+expr+'=this.checked;markDirty()"><span class="slider"></span></label>'}
+function actionSwitchHTML(fn,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+fn+'(this.checked)"><span class="slider"></span></label>'}
 function bindSwitch(map,key,name){return switchHTML("cfg."+key+"['"+name+"']", !!map[name])}
 function bindParseCardSwitch(name){const on=!!(cfg.platform_enabled&&cfg.platform_enabled[name]);return '<label class="switch"><input type="checkbox"'+checked(on)+' data-platform="'+escapeHTML(name)+'" onchange="setPlatformParseCard(this.dataset.platform,this.checked)"><span class="slider"></span></label>'}
 function bindMediaDownloadSwitch(name){const on=!!(cfg.platform_download_video&&cfg.platform_download_video[name]);return '<label class="switch"><input type="checkbox"'+checked(on)+' data-platform="'+escapeHTML(name)+'" onchange="setPlatformMediaDownload(this.dataset.platform,this.checked)"><span class="slider"></span></label>'}
@@ -864,6 +865,9 @@ function setPlatformParseCard(name,on){cfg.platform_enabled[name]=on; cfg.platfo
 function setPlatformMediaDownload(name,on){cfg.platform_download_video[name]=on; cfg.platform_send_media[name]=on; markDirty()}
 function resolutionCell(name){const v=cfg.platform_video_resolution&&Object.prototype.hasOwnProperty.call(cfg.platform_video_resolution,name)?Number(cfg.platform_video_resolution[name]):'';return '<select data-platform="'+escapeHTML(name)+'" onchange="setPlatformResolution(this.dataset.platform,this.value)"><option value=""'+(v===''?' selected':'')+'>跟随全局</option><option value="0"'+(v===0?' selected':'')+'>不限</option><option value="360"'+(v===360?' selected':'')+'>360p</option><option value="720"'+(v===720?' selected':'')+'>720p</option><option value="1080"'+(v===1080?' selected':'')+'>1080p</option></select>'}
 function setPlatformResolution(name,value){cfg.platform_video_resolution=cfg.platform_video_resolution||{}; if(value==='') delete cfg.platform_video_resolution[name]; else cfg.platform_video_resolution[name]=Number(value); markDirty()}
+function setKeylolThemeAuto(on){cfg.keylol_theme=on?'auto':((cfg.keylol_theme==='dark'||cfg.keylol_theme==='night'||cfg.keylol_theme==='black')?'dark':'light');renderKeylolThemeSwitches();markDirty()}
+function setKeylolThemeDark(on){cfg.keylol_theme=on?'dark':'light';renderKeylolThemeSwitches();markDirty()}
+function renderKeylolThemeSwitches(){const mode=String((cfg&&cfg.keylol_theme)||'auto').toLowerCase();const auto=mode==='auto'||!mode;const dark=mode==='dark'||mode==='night'||mode==='black';$('keylolThemeAutoSwitch').innerHTML=actionSwitchHTML('setKeylolThemeAuto',auto);$('keylolThemeDarkSwitch').innerHTML=actionSwitchHTML('setKeylolThemeDark',auto?false:dark);const darkInput=$('keylolThemeDarkSwitch').querySelector('input');if(darkInput) darkInput.disabled=auto}
 function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
@@ -935,7 +939,7 @@ function render(){
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
  $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
- $('keylolTheme').value=cfg.keylol_theme||'auto';
+ renderKeylolThemeSwitches();
  $('keylolASFForwardSwitch').innerHTML=switchHTML('cfg.keylol_asf_forward', cfg.keylol_asf_forward!==false);
  renderSystemSettings();
  updateAccessVisibility();
@@ -1029,7 +1033,7 @@ async function save(){
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
  cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
- cfg.keylol_theme=String($('keylolTheme').value||'auto').trim()||'auto';
+ cfg.keylol_theme=String(cfg.keylol_theme||'auto').trim()||'auto';
  cfg.keylol_asf_forward=cfg.keylol_asf_forward!==false;
  cfg.send_info_card=!!cfg.auto_parse; cfg.send_media=!!cfg.download_video; platforms.forEach(p=>{cfg.platform_info_card[p.name]=!!cfg.platform_enabled[p.name]; cfg.platform_send_media[p.name]=!!cfg.platform_download_video[p.name]});
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;

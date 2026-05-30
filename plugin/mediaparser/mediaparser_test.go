@@ -329,6 +329,22 @@ func TestKeylolCleanTitleUnescapesQuotes(t *testing.T) {
 	}
 }
 
+func TestKeylolCategoryLabel(t *testing.T) {
+	cases := []struct {
+		thread map[string]any
+		raw    string
+		want   string
+	}{
+		{map[string]any{"fid": "319", "typeid": "469"}, "https://keylol.com/t572814-1-1", "福利放送·Steam"},
+		{map[string]any{"fid": "301", "typeid": "380"}, "https://keylol.com/forum.php?mod=viewthread&tid=1037076&typeid=380", "交易市场·Steam"},
+	}
+	for _, tt := range cases {
+		if got := keylolCategoryLabel(tt.thread, tt.raw); got != tt.want {
+			t.Fatalf("keylolCategoryLabel=%q want %q", got, tt.want)
+		}
+	}
+}
+
 func TestKeylolShortVideoDesc(t *testing.T) {
 	if !keylolShortVideoDesc("") || !keylolShortVideoDesc("短简介") {
 		t.Fatal("empty and short video descriptions should use compact card")
@@ -1165,6 +1181,115 @@ func TestRenderKeylolCompactVideoPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(out)
+}
+
+func TestRenderAllPlatformCardPreviews(t *testing.T) {
+	if os.Getenv("MEDIAPARSER_ALL_PLATFORM_PREVIEW") == "" {
+		t.Skip("set MEDIAPARSER_ALL_PLATFORM_PREVIEW=1 to render all platform previews")
+	}
+	outDir := firstNonEmpty(os.Getenv("MEDIAPARSER_PREVIEW_DIR"), filepath.Join("..", "..", "build", "mediaparser-all-platform-preview"))
+	oldCacheDir := cacheDir
+	cacheDir = outDir
+	defer func() { cacheDir = oldCacheDir }()
+
+	assetSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var img image.Image
+		switch r.URL.Path {
+		case "/avatar.png":
+			img = testGradientImage(180, 180, color.RGBA{R: 98, G: 154, B: 230, A: 255}, color.RGBA{R: 231, G: 244, B: 255, A: 255})
+		case "/cover-wide.png":
+			img = testGradientImage(1280, 720, color.RGBA{R: 42, G: 62, B: 92, A: 255}, color.RGBA{R: 72, G: 154, B: 202, A: 255})
+		case "/cover-tall.png":
+			img = testGradientImage(720, 1080, color.RGBA{R: 102, G: 76, B: 170, A: 255}, color.RGBA{R: 232, G: 95, B: 124, A: 255})
+		default:
+			img = testGradientImage(900, 900, color.RGBA{R: 40, G: 92, B: 120, A: 255}, color.RGBA{R: 238, G: 184, B: 98, A: 255})
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, img)
+	}))
+	defer assetSrv.Close()
+
+	base := mediaMeta{
+		Author:    "预览用户",
+		Avatar:    assetSrv.URL + "/avatar.png",
+		Timestamp: "2026-05-31 04:30",
+		Desc:      "这是一段用于检查卡片排版、平台 logo、透明底和正文换行的预览文本。",
+		Cover:     assetSrv.URL + "/cover-wide.png",
+		VideoURLs: [][]string{{assetSrv.URL + "/video.mp4"}},
+	}
+	platformsForPreview := []string{"bilibili", "douyin", "tiktok", "kuaishou", "weibo", "xiaohongshu", "xianyu", "acfun", "youtube", "instagram", "toutiao", "xiaoheihe", "twitter"}
+	written := []string{}
+	for _, platform := range platformsForPreview {
+		video := base
+		video.SourceURL = "preview-" + platform + "-video"
+		video.Platform = platform
+		video.Title = platformLabel(platform) + " 视频模式"
+		out, err := renderInfoCard(video)
+		if err != nil {
+			t.Fatalf("%s video: %v", platform, err)
+		}
+		written = append(written, out)
+
+		gallery := base
+		gallery.SourceURL = "preview-" + platform + "-gallery"
+		gallery.Platform = platform
+		gallery.Title = platformLabel(platform) + " 图文模式"
+		gallery.VideoURLs = nil
+		gallery.ImageURLs = [][]string{{assetSrv.URL + "/cover-wide.png"}, {assetSrv.URL + "/cover-tall.png"}, {assetSrv.URL + "/cover-square.png"}}
+		out, err = renderInfoCard(gallery)
+		if err != nil {
+			t.Fatalf("%s gallery: %v", platform, err)
+		}
+		written = append(written, out)
+
+		if isCombinedMediaPlatform(platform) {
+			mixed := gallery
+			mixed.SourceURL = "preview-" + platform + "-mixed"
+			mixed.Title = platformLabel(platform) + " 混合模式"
+			mixed.VideoURLs = [][]string{{assetSrv.URL + "/video.mp4"}}
+			mixed.MediaItems = []mediaItem{{Kind: "image", Index: 0}, {Kind: "video", Index: 0}, {Kind: "image", Index: 1}}
+			out, err = renderInfoCard(mixed)
+			if err != nil {
+				t.Fatalf("%s mixed: %v", platform, err)
+			}
+			written = append(written, out)
+		}
+	}
+	steamOut, err := renderInfoCard(mediaMeta{
+		SourceURL:          "preview-steam-video",
+		Platform:           "steam",
+		Title:              "人渣",
+		Desc:               "欢迎来到《SCUM》——一款残酷的开放世界生存游戏。",
+		Cover:              assetSrv.URL + "/cover-tall.png",
+		SteamHeaderImage:   assetSrv.URL + "/cover-wide.png",
+		SteamGenres:        []string{"动作", "冒险", "独立", "大型多人在线"},
+		SteamReviewPercent: 74,
+		SteamReviewSummary: "Mostly Positive",
+		SteamPriceCurrent:  "¥ 70.00",
+		SteamPriceOriginal: "¥ 175.00",
+		SteamDiscount:      60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	written = append(written, steamOut)
+	keylolOut, err := renderInfoCard(mediaMeta{
+		SourceURL:      "preview-keylol-thread",
+		Platform:       "keylol",
+		Title:          "限免游戏福利《暗黑破坏神四》国服",
+		Author:         "福利搬运",
+		Timestamp:      "刚刚",
+		KeylolCategory: "福利放送·Steam",
+		KeylolBlocks: []keylolBlock{
+			{Kind: "text", Text: "这里是 Keylol 帖子正文预览，用于检查头部分类、右上角 logo 和时间位置。"},
+			{Kind: "image", URL: assetSrv.URL + "/cover-wide.png"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	written = append(written, keylolOut)
+	t.Logf("wrote %d previews to %s\n%s", len(written), outDir, strings.Join(written, "\n"))
 }
 
 func TestRenderKeylolLivePreview(t *testing.T) {

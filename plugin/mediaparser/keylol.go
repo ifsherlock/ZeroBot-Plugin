@@ -85,20 +85,80 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	authorID := firstNonEmpty(getString(post, "authorid"), getString(thread, "authorid"))
 	timestamp := keylolTime(firstNonEmpty(getString(post, "dateline"), getString(thread, "dateline")))
 	avatar := keylolAvatarURL(authorID)
+	category := keylolCategoryLabel(thread, raw)
 
 	return mediaMeta{
-		URL:          raw,
-		SourceURL:    raw,
-		Platform:     "keylol",
-		Title:        title,
-		Author:       author,
-		Avatar:       avatar,
-		Timestamp:    timestamp,
-		Desc:         desc,
-		ImageURLs:    images,
-		ImageHeads:   keylolHeaders(cfg, raw),
-		KeylolBlocks: blocks,
+		URL:            raw,
+		SourceURL:      raw,
+		Platform:       "keylol",
+		Title:          title,
+		Author:         author,
+		Avatar:         avatar,
+		Timestamp:      timestamp,
+		Desc:           desc,
+		ImageURLs:      images,
+		ImageHeads:     keylolHeaders(cfg, raw),
+		KeylolBlocks:   blocks,
+		KeylolCategory: category,
 	}, nil
+}
+
+func keylolCategoryLabel(thread map[string]any, rawURL string) string {
+	forum := keylolForumName(getString(thread, "fid"))
+	typeName := keylolTypeName(getString(thread, "typeid"))
+	if forum == "" {
+		forum = keylolForumNameFromURL(rawURL)
+	}
+	if typeName == "" {
+		typeName = keylolTypeNameFromURL(rawURL)
+	}
+	switch {
+	case forum != "" && typeName != "":
+		return forum + "·" + typeName
+	case forum != "":
+		return forum
+	case typeName != "":
+		return typeName
+	default:
+		return "Keylol"
+	}
+}
+
+func keylolForumName(fid string) string {
+	switch strings.TrimSpace(fid) {
+	case "319":
+		return "福利放送"
+	case "301":
+		return "交易市场"
+	default:
+		return ""
+	}
+}
+
+func keylolTypeName(typeid string) string {
+	switch strings.TrimSpace(typeid) {
+	case "469", "380":
+		return "Steam"
+	default:
+		return ""
+	}
+}
+
+func keylolForumNameFromURL(raw string) string {
+	if strings.Contains(raw, "fid=319") || strings.Contains(raw, "/f319") {
+		return "福利放送"
+	}
+	if strings.Contains(raw, "fid=301") || strings.Contains(raw, "/f301") {
+		return "交易市场"
+	}
+	return ""
+}
+
+func keylolTypeNameFromURL(raw string) string {
+	if strings.Contains(raw, "typeid=469") || strings.Contains(raw, "typeid=380") {
+		return "Steam"
+	}
+	return ""
 }
 
 func keylolHeaders(cfg config, referer string) map[string]string {

@@ -52,12 +52,12 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 		return renderSteamGameCard(meta, fontBytes)
 	}
 	if shouldConsiderLongImageCard(meta) {
-		return renderLongImageCard(meta, fontBytes)
+		return renderUnifiedLongImageCard(meta, fontBytes)
 	}
 	if shouldRenderAsGalleryCard(meta) {
-		return renderGalleryCard(meta, fontBytes)
+		return renderUnifiedGalleryCard(meta, fontBytes)
 	}
-	return renderVideoCard(meta, fontBytes)
+	return renderUnifiedVideoCard(meta, fontBytes)
 }
 
 func keylolBodyFontBytes(fallback []byte) []byte {
@@ -96,7 +96,7 @@ func renderSteamGameCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	dc.SetLineWidth(1.5)
 	dc.SetRGBA255(255, 255, 255, 42)
 	dc.Stroke()
-	drawOfficialSteamLogo(dc, fontBytes, float64(panelX+panelW-58), float64(panelY+48), 54)
+	drawSteamLogoVariant(dc, fontBytes, float64(panelX+panelW-58), float64(panelY+48), 54, "steam_dark")
 
 	coverX, coverY, coverW, coverH := panelX+28, panelY+30, 250, panelH-60
 	if cover := fetchCardImage(meta.Cover, nil); cover != nil {
@@ -188,21 +188,47 @@ func drawSteamBadge(dc *gg.Context, fontBytes []byte, cx, cy float64) {
 }
 
 func drawOfficialSteamLogo(dc *gg.Context, fontBytes []byte, cx, cy float64, size int) {
-	img := loadPlatformLogo("steam")
+	logoName := "steam_light"
+	if keylolThemeDark(keylolCardThemeNow()) {
+		logoName = "steam_dark"
+	}
+	drawSteamLogoVariant(dc, fontBytes, cx, cy, size, logoName)
+}
+
+func drawSteamLogoVariant(dc *gg.Context, fontBytes []byte, cx, cy float64, size int, logoName string) {
+	img := loadPlatformLogo(logoName)
 	if img == nil {
-		img = fetchCachedCardImage("official-steam-logo", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/256px-Steam_icon_logo.svg.png", nil)
+		img = fetchCachedCardImage("official-steam-logo-v4", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/512px-Steam_icon_logo.svg.png", nil)
 	}
 	if img != nil {
 		fit := imaging.Fit(img, size, size, imaging.Lanczos)
 		dc.DrawImageAnchored(fit, int(cx), int(cy), 0.5, 0.5)
 		return
 	}
-	dc.SetRGBA255(255, 255, 255, 50)
-	dc.DrawCircle(cx, cy, float64(size)/2)
+	drawSteamLogoFallback(dc, cx, cy, float64(size))
+}
+
+func drawSteamLogoFallback(dc *gg.Context, cx, cy, size float64) {
+	r := size / 2
+	for i := int(r); i >= 0; i-- {
+		t := float64(i) / r
+		dc.SetRGB255(int(19+4*t), int(135-105*t), int(184-138*t))
+		dc.DrawCircle(cx, cy, float64(i))
+		dc.Fill()
+	}
+	dc.SetRGB255(255, 255, 255)
+	dc.SetLineWidth(size * 0.09)
+	dc.DrawCircle(cx+size*0.17, cy-size*0.16, size*0.17)
+	dc.Stroke()
+	dc.SetLineWidth(size * 0.16)
+	dc.DrawLine(cx-size*0.04, cy+size*0.06, cx+size*0.04, cy-size*0.02)
+	dc.DrawLine(cx+size*0.04, cy-size*0.02, cx+size*0.22, cy-size*0.13)
+	dc.Stroke()
+	dc.DrawCircle(cx-size*0.2, cy+size*0.23, size*0.17)
 	dc.Fill()
-	mustFont(dc, fontBytes, float64(size)*0.28)
-	dc.SetRGBA255(255, 255, 255, 150)
-	dc.DrawStringAnchored("STEAM", cx, cy+float64(size)*0.04, 0.5, 0.5)
+	dc.SetRGB255(9, 30, 72)
+	dc.DrawCircle(cx-size*0.2, cy+size*0.23, size*0.09)
+	dc.Fill()
 }
 
 func shouldRenderAsGalleryCard(meta mediaMeta) bool {
@@ -217,6 +243,321 @@ func shouldRenderAsGalleryCard(meta mediaMeta) bool {
 
 func shouldConsiderLongImageCard(meta mediaMeta) bool {
 	return len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 1 && len(meta.ImageURLs[0]) > 0 && strings.TrimSpace(meta.Desc) != ""
+}
+
+const (
+	unifiedCardW    = 760
+	unifiedOuterPad = 24
+)
+
+type unifiedCardTheme struct {
+	Dark          bool
+	BG            color.RGBA
+	Panel         color.RGBA
+	Border        color.RGBA
+	Title         color.RGBA
+	Body          color.RGBA
+	Muted         color.RGBA
+	MediaBG       color.RGBA
+	BoxBG         color.RGBA
+	BoxBorder     color.RGBA
+	Topic         color.RGBA
+	PlatformLogoY float64
+}
+
+func unifiedThemeNow() unifiedCardTheme {
+	dark := keylolThemeDark(keylolCardThemeNow())
+	if dark {
+		return unifiedCardTheme{
+			Dark:      true,
+			BG:        color.RGBA{R: 24, G: 25, B: 28, A: 255},
+			Panel:     color.RGBA{R: 50, G: 51, B: 55, A: 255},
+			Border:    color.RGBA{R: 108, G: 110, B: 116, A: 255},
+			Title:     color.RGBA{R: 255, G: 255, B: 255, A: 255},
+			Body:      color.RGBA{R: 201, G: 204, B: 208, A: 255},
+			Muted:     color.RGBA{R: 148, G: 153, B: 160, A: 255},
+			MediaBG:   color.RGBA{R: 42, G: 45, B: 50, A: 255},
+			BoxBG:     color.RGBA{R: 70, G: 72, B: 76, A: 255},
+			BoxBorder: color.RGBA{R: 92, G: 94, B: 100, A: 255},
+			Topic:     color.RGBA{R: 100, G: 150, B: 220, A: 255},
+		}
+	}
+	return unifiedCardTheme{
+		BG:        color.RGBA{R: 241, G: 242, B: 245, A: 255},
+		Panel:     color.RGBA{R: 255, G: 255, B: 255, A: 255},
+		Border:    color.RGBA{R: 227, G: 229, B: 231, A: 255},
+		Title:     color.RGBA{R: 24, G: 25, B: 28, A: 255},
+		Body:      color.RGBA{R: 97, G: 102, B: 109, A: 255},
+		Muted:     color.RGBA{R: 148, G: 153, B: 160, A: 255},
+		MediaBG:   color.RGBA{R: 227, G: 229, B: 231, A: 255},
+		BoxBG:     color.RGBA{R: 246, G: 247, B: 248, A: 255},
+		BoxBorder: color.RGBA{R: 227, G: 229, B: 231, A: 255},
+		Topic:     color.RGBA{R: 90, G: 134, B: 206, A: 255},
+	}
+}
+
+func unifiedLayout() (panelX, panelY, panelW, panelPad, contentW int) {
+	panelX, panelY = unifiedOuterPad, unifiedOuterPad
+	panelW = unifiedCardW - unifiedOuterPad*2
+	panelPad = 38
+	contentW = panelW - panelPad*2
+	return
+}
+
+func renderUnifiedVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	tm := unifiedThemeNow()
+	panelX, panelY, panelW, panelPad, contentW := unifiedLayout()
+	coverImg := fetchCardImage(firstCardCover(meta), meta.ImageHeads)
+	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
+	title := firstNonEmpty(meta.Title, meta.Desc, "媒体解析")
+	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
+	if len(titleLines) == 0 {
+		titleLines = []string{title}
+	}
+	summaryLines := wrapTextByPixels(gg.NewContext(unifiedCardW, 100), bodyFontBytes, 22, cardSummaryText(meta), float64(contentW-34))
+	if len(summaryLines) > 5 {
+		summaryLines = summaryLines[:5]
+	}
+	if len(summaryLines) == 0 {
+		summaryLines = []string{"该视频暂无总结"}
+	}
+	headerH := 86
+	titleY := panelY + panelPad + headerH + 38
+	coverY := titleY + len(titleLines)*42 + 16
+	coverH := int(float64(contentW) * 9 / 16)
+	summaryY := coverY + coverH + 26
+	summaryH := unifiedTextBoxHeight(len(summaryLines))
+	panelH := summaryY + summaryH + panelPad - panelY
+	height := panelY + panelH + unifiedOuterPad
+
+	dc := gg.NewContext(unifiedCardW, height)
+	drawUnifiedBackground(dc, tm, unifiedCardW, height)
+	drawUnifiedPanel(dc, tm, panelX, panelY, panelW, panelH)
+	drawUnifiedHeader(dc, fontBytes, tm, meta, avatarImg, panelX+panelPad, panelY+panelPad, contentW)
+	drawUnifiedTitle(dc, fontBytes, tm, titleLines, panelX+panelPad, titleY)
+	drawUnifiedMediaCell(dc, tm, coverImg, panelX+panelPad, coverY, contentW, coverH, shouldDrawPlayOverlay(meta))
+	drawUnifiedTextBox(dc, bodyFontBytes, tm, "视频智能总结", summaryLines, panelX+panelPad, summaryY, contentW)
+	return saveCardPNG(dc, meta)
+}
+
+func renderUnifiedGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	tm := unifiedThemeNow()
+	panelX, panelY, panelW, panelPad, contentW := unifiedLayout()
+	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
+	imageURLs := make([]string, 0, len(meta.ImageURLs))
+	for _, group := range meta.ImageURLs {
+		if len(group) > 0 {
+			imageURLs = append(imageURLs, group[0])
+		}
+		if len(imageURLs) >= 9 {
+			break
+		}
+	}
+	images := compactCardImages(fetchCardImages(imageURLs, meta.ImageHeads))
+	title := firstNonEmpty(meta.Title, "媒体解析")
+	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
+	if len(titleLines) == 0 {
+		titleLines = []string{title}
+	}
+	descLines := wrapTextByPixels(gg.NewContext(unifiedCardW, 100), bodyFontBytes, 22, meta.Desc, float64(contentW-34))
+	if len(descLines) > 12 {
+		descLines = descLines[:12]
+	}
+	headerH := 86
+	titleY := panelY + panelPad + headerH + 38
+	gridY := titleY + len(titleLines)*42 + 18
+	gridH := galleryGridHeightForImages(images, contentW)
+	descY := gridY
+	if gridH > 0 {
+		descY += gridH + 26
+	}
+	descH := 0
+	if len(descLines) > 0 {
+		descH = unifiedTextBoxHeight(len(descLines))
+	}
+	panelH := descY + descH + panelPad - panelY
+	height := panelY + panelH + unifiedOuterPad
+
+	dc := gg.NewContext(unifiedCardW, height)
+	drawUnifiedBackground(dc, tm, unifiedCardW, height)
+	drawUnifiedPanel(dc, tm, panelX, panelY, panelW, panelH)
+	drawUnifiedHeader(dc, fontBytes, tm, meta, avatarImg, panelX+panelPad, panelY+panelPad, contentW)
+	drawUnifiedTitle(dc, fontBytes, tm, titleLines, panelX+panelPad, titleY)
+	drawGalleryGrid(dc, images, panelX+panelPad, gridY, contentW, gridH)
+	if len(descLines) > 0 {
+		drawUnifiedTextBox(dc, bodyFontBytes, tm, "正文", descLines, panelX+panelPad, descY, contentW)
+	}
+	return saveCardPNG(dc, meta)
+}
+
+func renderUnifiedLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	img := fetchCardImage(meta.ImageURLs[0][0], meta.ImageHeads)
+	if !shouldRenderLongImageCard(meta, img) {
+		return renderUnifiedGalleryCard(meta, fontBytes)
+	}
+	tm := unifiedThemeNow()
+	panelX, panelY, panelW, panelPad, contentW := unifiedLayout()
+	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
+	title := firstNonEmpty(meta.Title, "媒体解析")
+	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
+	descLines := wrapTextByPixels(gg.NewContext(unifiedCardW, 100), bodyFontBytes, 22, meta.Desc, float64(contentW-34))
+	if len(descLines) > 12 {
+		descLines = descLines[:12]
+	}
+	headerH := 86
+	titleY := panelY + panelPad + headerH + 38
+	textBoxY := titleY + len(titleLines)*42 + 18
+	imageY := textBoxY
+	if len(descLines) > 0 {
+		imageY += unifiedTextBoxHeight(len(descLines)) + 18
+	}
+	imageH := longImageCardHeight(img, contentW)
+	if imageH < 360 {
+		imageH = 360
+	}
+	panelH := imageY + imageH + panelPad - panelY
+	height := panelY + panelH + unifiedOuterPad
+
+	dc := gg.NewContext(unifiedCardW, height)
+	drawUnifiedBackground(dc, tm, unifiedCardW, height)
+	drawUnifiedPanel(dc, tm, panelX, panelY, panelW, panelH)
+	drawUnifiedHeader(dc, fontBytes, tm, meta, avatarImg, panelX+panelPad, panelY+panelPad, contentW)
+	drawUnifiedTitle(dc, fontBytes, tm, titleLines, panelX+panelPad, titleY)
+	if len(descLines) > 0 {
+		drawUnifiedTextBox(dc, bodyFontBytes, tm, "正文", descLines, panelX+panelPad, textBoxY, contentW)
+	}
+	drawUnifiedImageCellContain(dc, tm, img, panelX+panelPad, imageY, contentW, imageH)
+	return saveCardPNG(dc, meta)
+}
+
+func unifiedTextBoxHeight(lines int) int {
+	if lines <= 0 {
+		return 0
+	}
+	return 34 + lines*34 + 24
+}
+
+func drawUnifiedBackground(dc *gg.Context, tm unifiedCardTheme, w, h int) {
+	setRGB(dc, tm.BG)
+	dc.Clear()
+}
+
+func drawUnifiedPanel(dc *gg.Context, tm unifiedCardTheme, x, y, w, h int) {
+	for i := 18; i >= 1; i-- {
+		alpha := 2 + i
+		if tm.Dark {
+			alpha = 6 + i*2
+		}
+		dc.SetRGBA255(0, 0, 0, alpha)
+		dc.DrawRoundedRectangle(float64(x), float64(y+i), float64(w), float64(h), 24)
+		dc.Fill()
+	}
+	setRGB(dc, tm.Panel)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 24)
+	dc.FillPreserve()
+	dc.SetLineWidth(1.5)
+	setRGB(dc, tm.Border)
+	dc.Stroke()
+}
+
+func drawUnifiedHeader(dc *gg.Context, fontBytes []byte, tm unifiedCardTheme, meta mediaMeta, avatar image.Image, x, y, w int) {
+	displayAuthor := truncate(firstNonEmpty(cardDisplayAuthor(meta.Author), "未知用户"), 18)
+	drawUnifiedAvatar(dc, fontBytes, avatar, x, y, 72, displayAuthor, tm)
+	drawInlineEmoji(dc, fontBytes, 26, tm.Title, displayAuthor, float64(x+92), float64(y+26))
+	if meta.Timestamp != "" {
+		drawInlineEmoji(dc, fontBytes, 20, tm.Muted, meta.Timestamp, float64(x+92), float64(y+58))
+	}
+	drawPlatformLogo(dc, fontBytes, meta.Platform, float64(x+w), float64(y+36))
+}
+
+func drawUnifiedAvatar(dc *gg.Context, fontBytes []byte, img image.Image, x, y, size int, author string, tm unifiedCardTheme) {
+	border := 2
+	if tm.Dark {
+		border = 3
+	}
+	setRGB(dc, tm.Border)
+	dc.DrawCircle(float64(x+size/2), float64(y+size/2), float64(size/2+border))
+	dc.Fill()
+	drawAvatar(dc, fontBytes, img, x, y, size, author)
+}
+
+func drawUnifiedTitle(dc *gg.Context, fontBytes []byte, tm unifiedCardTheme, lines []string, x, y int) {
+	yy := float64(y)
+	for _, line := range lines {
+		drawInlineEmoji(dc, fontBytes, 31, tm.Title, line, float64(x), yy)
+		yy += 42
+	}
+}
+
+func drawUnifiedMediaCell(dc *gg.Context, tm unifiedCardTheme, img image.Image, x, y, w, h int, showPlay bool) {
+	drawUnifiedImageCell(dc, tm, img, x, y, w, h, imaging.Center)
+	if showPlay {
+		drawUnifiedPlayOverlay(dc, tm, float64(x+w/2), float64(y+h/2))
+	}
+}
+
+func drawUnifiedImageCell(dc *gg.Context, tm unifiedCardTheme, img image.Image, x, y, w, h int, anchor imaging.Anchor) {
+	radius := 10.0
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), radius)
+	dc.ClipPreserve()
+	setRGB(dc, tm.MediaBG)
+	dc.Fill()
+	if img != nil {
+		dc.DrawImage(imaging.Fill(img, w, h, anchor, imaging.Lanczos), x, y)
+	}
+	dc.ResetClip()
+}
+
+func drawUnifiedImageCellContain(dc *gg.Context, tm unifiedCardTheme, img image.Image, x, y, w, h int) {
+	radius := 10.0
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), radius)
+	dc.ClipPreserve()
+	setRGB(dc, tm.MediaBG)
+	dc.Fill()
+	if img != nil {
+		fit := imaging.Fit(img, w, h, imaging.Lanczos)
+		b := fit.Bounds()
+		dc.DrawImage(fit, x+(w-b.Dx())/2, y+(h-b.Dy())/2)
+	}
+	dc.ResetClip()
+}
+
+func drawUnifiedPlayOverlay(dc *gg.Context, tm unifiedCardTheme, cx, cy float64) {
+	if tm.Dark {
+		dc.SetRGBA255(255, 255, 255, 45)
+	} else {
+		dc.SetRGBA255(0, 0, 0, 102)
+	}
+	dc.DrawCircle(cx, cy, 32)
+	dc.FillPreserve()
+	dc.SetLineWidth(1.5)
+	dc.SetRGBA255(255, 255, 255, 75)
+	dc.Stroke()
+	dc.SetRGB255(255, 255, 255)
+	dc.MoveTo(cx-8, cy-15)
+	dc.LineTo(cx-8, cy+15)
+	dc.LineTo(cx+16, cy)
+	dc.ClosePath()
+	dc.Fill()
+}
+
+func drawUnifiedTextBox(dc *gg.Context, fontBytes []byte, tm unifiedCardTheme, title string, lines []string, x, y, w int) {
+	h := unifiedTextBoxHeight(len(lines))
+	setRGB(dc, tm.BoxBG)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 10)
+	dc.FillPreserve()
+	dc.SetLineWidth(1)
+	setRGB(dc, tm.BoxBorder)
+	dc.Stroke()
+	drawInlineEmoji(dc, fontBytes, 22, tm.Title, "✨ "+title, float64(x+26), float64(y+30))
+	yy := float64(y + 66)
+	for _, line := range lines {
+		drawTopicLineWithColors(dc, fontBytes, 22, line, float64(x+26), yy, tm.Body, tm.Topic)
+		yy += 34
+	}
 }
 
 func renderLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
@@ -635,12 +976,8 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	drawKeylolPanel(dc, outerPad, outerPad, w-outerPad*2, panelH, theme)
 	x := outerPad + panelPad
 	y := outerPad + panelPad
-	drawKeylolBadge(dc, fontBytes, float64(x), float64(y+10))
-	if meta.Timestamp != "" {
-		mustFont(dc, fontBytes, 22)
-		setRGB(dc, theme.Muted)
-		dc.DrawStringAnchored(meta.Timestamp, float64(w-outerPad-panelPad), float64(y+28), 1, 0.5)
-	}
+	drawKeylolBadge(dc, fontBytes, firstNonEmpty(meta.KeylolCategory, "Keylol"), float64(x), float64(y+10))
+	drawKeylolTopRightLogo(dc, fontBytes, float64(w-outerPad-panelPad), float64(y+30))
 	y += 74
 	for _, line := range titleLines {
 		drawInlineEmoji(dc, fontBytes, titleSize, theme.Title, line, float64(x), float64(y))
@@ -648,6 +985,12 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 	authorLine := firstNonEmpty(meta.Author, "Keylol 用户")
 	drawKeylolAuthorLine(dc, fontBytes, authorLine, x, y+6)
+	if meta.Timestamp != "" {
+		mustFont(dc, fontBytes, 22)
+		setRGB(dc, theme.Muted)
+		ax, _ := dc.MeasureString(authorLine)
+		dc.DrawStringAnchored("· "+meta.Timestamp, float64(x)+ax+64, float64(y+6), 0, 0.5)
+	}
 	y += 48
 	setRGB(dc, theme.Line)
 	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 2)
@@ -940,11 +1283,30 @@ func drawKeylolPanel(dc *gg.Context, x, y, w, h int, theme keylolCardTheme) {
 	dc.Fill()
 }
 
-func drawKeylolBadge(dc *gg.Context, fontBytes []byte, x, y float64) {
+func drawKeylolBadge(dc *gg.Context, fontBytes []byte, label string, x, y float64) {
+	label = firstNonEmpty(strings.TrimSpace(label), "Keylol")
+	mustFont(dc, fontBytes, 20)
+	tw, _ := dc.MeasureString(label)
+	w := 132.0
+	if tw+34 > w {
+		w = tw + 34
+	}
 	dc.SetRGB255(74, 137, 218)
-	dc.DrawRoundedRectangle(x, y, 132, 40, 16)
+	dc.DrawRoundedRectangle(x, y, w, 40, 16)
 	dc.Fill()
-	drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255}, "🎮 Keylol", x+16, y+21)
+	drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255}, label, x+17, y+21)
+}
+
+func drawKeylolTopRightLogo(dc *gg.Context, fontBytes []byte, right, cy float64) {
+	if img := fetchCachedCardImage("keylol-official-logo-v1", "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png", nil); img != nil {
+		fit := imaging.Fit(img, 118, 42, imaging.Lanczos)
+		b := fit.Bounds()
+		dc.DrawImage(fit, int(right)-b.Dx(), int(cy)-b.Dy()/2)
+		return
+	}
+	mustFont(dc, fontBytes, 29)
+	dc.SetRGB255(74, 137, 218)
+	dc.DrawStringAnchored("Keylol", right, cy+1, 1, 0.5)
 }
 
 func drawKeylolAuthorLine(dc *gg.Context, fontBytes []byte, author string, x, y int) {
@@ -1846,6 +2208,27 @@ func isVariationSelector(r rune) bool {
 	return r == 0xfe0e || r == 0xfe0f
 }
 
+func drawTopicLineWithColors(dc *gg.Context, fontBytes []byte, size float64, s string, x, y float64, body, topic color.Color) {
+	topicRE := regexp.MustCompile(`#([^#\s]+(?:\[话题\])?)#`)
+	matches := topicRE.FindAllStringIndex(s, -1)
+	if len(matches) == 0 {
+		drawInlineEmoji(dc, fontBytes, size, body, s, x, y)
+		return
+	}
+	cursor := x
+	last := 0
+	for _, m := range matches {
+		if m[0] > last {
+			cursor += drawInlineEmoji(dc, fontBytes, size, body, s[last:m[0]], cursor, y)
+		}
+		cursor += drawInlineEmoji(dc, fontBytes, size, topic, s[m[0]:m[1]], cursor, y)
+		last = m[1]
+	}
+	if last < len(s) {
+		drawInlineEmoji(dc, fontBytes, size, body, s[last:], cursor, y)
+	}
+}
+
 func isEmojiRune(r rune) bool {
 	return (r >= 0x1f300 && r <= 0x1faff) || (r >= 0x2600 && r <= 0x27bf)
 }
@@ -2058,8 +2441,21 @@ func drawBilibiliTransparentLogo(dc *gg.Context, fontBytes []byte, right, cy flo
 }
 
 func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy float64) bool {
-	img := loadPlatformLogo(platform)
+	if platform == "kuaishou" {
+		return false
+	}
+	logoPlatform := platform
+	if platform == "xiaoheihe" {
+		logoPlatform = "xiaoheihe_light"
+		if keylolThemeDark(keylolCardThemeNow()) {
+			logoPlatform = "xiaoheihe_dark"
+		}
+	}
+	img := loadPlatformLogo(logoPlatform)
 	if img == nil {
+		return false
+	}
+	if !logoHasTransparency(img) {
 		return false
 	}
 	const pad = 8
@@ -2072,14 +2468,12 @@ func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy floa
 	if aspect <= 1.35 {
 		w, h = 112.0, 112.0
 	}
+	if platform == "xianyu" {
+		w, h = 96.0, 96.0
+	}
 	x, y := right-w, cy-h/2
 	fit := imaging.Fit(img, int(w)-pad*2, int(h)-pad*2, imaging.Lanczos)
 	b := fit.Bounds()
-	if !logoHasTransparency(img) {
-		dc.SetRGB255(255, 255, 255)
-		dc.DrawRoundedRectangle(x, y, w, h, 8)
-		dc.Fill()
-	}
 	dc.DrawImage(fit, int(x)+(int(w)-b.Dx())/2, int(y)+(int(h)-b.Dy())/2)
 	return true
 }
@@ -2164,6 +2558,7 @@ func logoHasVisibleContent(img image.Image) bool {
 		step = 1
 	}
 	visible := 0
+	opaque := 0
 	sampled := 0
 	i := 0
 	for y := b.Min.Y; y < b.Max.Y; y++ {
@@ -2178,6 +2573,7 @@ func logoHasVisibleContent(img image.Image) bool {
 			if a>>8 < 24 {
 				continue
 			}
+			opaque++
 			rr, gg, bb := int(r>>8), int(g>>8), int(bl>>8)
 			if rr < 242 || gg < 242 || bb < 242 {
 				visible++
@@ -2186,6 +2582,10 @@ func logoHasVisibleContent(img image.Image) bool {
 	}
 	if sampled == 0 {
 		return false
+	}
+	opaqueRatio := float64(opaque) / float64(sampled)
+	if opaqueRatio > 0.001 && opaqueRatio < 0.95 && logoHasTransparency(img) {
+		return true
 	}
 	return float64(visible)/float64(sampled) > 0.001
 }
@@ -2225,11 +2625,9 @@ func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right
 		drawBilibiliTransparentLogo(dc, fontBytes, right, cy, 1)
 		return true
 	}
+	dark := keylolThemeDark(keylolCardThemeNow())
 	w, h := 238.0, 88.0
 	x, y := right-w, cy-h/2
-	dc.SetRGB255(255, 255, 255)
-	dc.DrawRoundedRectangle(x, y, w, h, 8)
-	dc.Fill()
 	switch platform {
 	case "xiaohongshu":
 		mustFont(dc, fontBytes, 46)
@@ -2238,7 +2636,11 @@ func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right
 	case "xiaoheihe":
 		drawHeyboxIcon(dc, x+10, y+17)
 		mustFont(dc, fontBytes, 30)
-		dc.SetRGB255(28, 28, 32)
+		if dark {
+			dc.SetRGB255(238, 241, 246)
+		} else {
+			dc.SetRGB255(28, 28, 32)
+		}
 		dc.DrawStringAnchored("小黑盒", right-4, cy-10, 1, 0.5)
 		mustFont(dc, fontBytes, 15)
 		dc.DrawStringAnchored("HEYBOX", right-8, cy+24, 1, 0.5)
@@ -2249,7 +2651,11 @@ func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right
 	case "kuaishou":
 		drawKuaishouMark(dc, x+8, y+10)
 		mustFont(dc, fontBytes, 40)
-		dc.SetRGB255(64, 64, 64)
+		if dark {
+			dc.SetRGB255(255, 120, 48)
+		} else {
+			dc.SetRGB255(64, 64, 64)
+		}
 		dc.DrawStringAnchored("快手", right-4, cy+2, 1, 0.5)
 	case "acfun":
 		mustFont(dc, fontBytes, 42)
@@ -2276,7 +2682,11 @@ func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right
 }
 
 func drawHeyboxIcon(dc *gg.Context, x, y float64) {
-	dc.SetRGB255(28, 28, 32)
+	if keylolThemeDark(keylolCardThemeNow()) {
+		dc.SetRGB255(238, 241, 246)
+	} else {
+		dc.SetRGB255(28, 28, 32)
+	}
 	dc.MoveTo(x+2, y+28)
 	dc.LineTo(x+26, y+14)
 	dc.LineTo(x+26, y+28)
