@@ -396,6 +396,50 @@ func TestBiliQualityFollowsGlobalResolution(t *testing.T) {
 	}
 }
 
+func TestPlatformResolutionOverridesGlobalResolution(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.VideoMaxResolution = 1080
+	cfg.PlatformResolution = map[string]int{
+		"bilibili": 720,
+		"acfun":    360,
+	}
+	normalizeConfig(&cfg)
+
+	bili := configForPlatform(cfg, "bilibili")
+	if bili.VideoMaxResolution != 720 {
+		t.Fatalf("bilibili resolution=%d", bili.VideoMaxResolution)
+	}
+	if bili.BilibiliMaxQuality != "720P" {
+		t.Fatalf("bilibili quality=%q", bili.BilibiliMaxQuality)
+	}
+
+	acfun := configForPlatform(cfg, "acfun")
+	if acfun.VideoMaxResolution != 360 {
+		t.Fatalf("acfun resolution=%d", acfun.VideoMaxResolution)
+	}
+
+	douyin := configForPlatform(cfg, "douyin")
+	if douyin.VideoMaxResolution != 1080 {
+		t.Fatalf("douyin should use global resolution, got %d", douyin.VideoMaxResolution)
+	}
+}
+
+func TestNormalizeConfigDropsInvalidPlatformResolution(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.VideoMaxResolution = 720
+	cfg.PlatformResolution = map[string]int{
+		"bilibili": 999,
+	}
+	normalizeConfig(&cfg)
+
+	if cfg.PlatformResolution["bilibili"] != 0 {
+		t.Fatalf("invalid platform resolution should reset to 0, got %d", cfg.PlatformResolution["bilibili"])
+	}
+	if got := configForPlatform(cfg, "bilibili").VideoMaxResolution; got != 0 {
+		t.Fatalf("explicit unlimited platform override should win over global, got %d", got)
+	}
+}
+
 func TestXiaohongshuHeadersIncludeCookie(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.XiaohongshuCookie = "a=b; xsec=1"

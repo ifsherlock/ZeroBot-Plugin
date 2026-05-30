@@ -758,7 +758,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel span2 page plugin-section active" data-page="mediaparser" data-plugin-section="basic"><div class="sectionTitle"><b>解析状态</b></div><p class="muted">解析成功 <b id="okn2">-</b> 次，失败 <b id="failn2">-</b> 次。</p></div>
 <div class="span4 page plugin-section" data-page="mediaparser" data-plugin-section="platforms" id="platforms">
 <div class="sectionTitle"><b>平台开关与 Logo</b><span class="muted">解析卡片表示识别链接并发送卡片；媒体下载表示额外发送原图、视频或合并转发。</span></div>
-<table><thead><tr><th>平台</th><th>解析卡片</th><th>媒体下载</th><th>Logo</th></tr></thead><tbody id="platformRows"></tbody></table>
+<table><thead><tr><th>平台</th><th>解析卡片</th><th>媒体下载</th><th>下载画质</th><th>Logo</th></tr></thead><tbody id="platformRows"></tbody></table>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="access" id="access">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">先判断私聊/群号是否允许，再判断群聊发言人；三套名单互不影响。</span></div>
@@ -793,7 +793,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="runtime" id="runtime">
-<div class="sectionTitle"><b>下载与 Cookie</b><span class="muted">全局画质对所有平台生效；YouTube 和 Instagram 直接粘贴 Cookie，程序会自动生成 yt-dlp 所需的临时 cookie 文件。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="sectionTitle"><b>下载与 Cookie</b><span class="muted">全局画质作为默认值，平台设置里可以单独覆盖；YouTube 和 Instagram 直接粘贴 Cookie，程序会自动生成 yt-dlp 所需的临时 cookie 文件。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="settingsGrid">
 <div class="settingsCard">
 <div class="sectionTitle"><b>下载规则</b><span class="muted">视频体积超限时只发送预览卡片。</span></div>
@@ -858,6 +858,8 @@ function bindParseCardSwitch(name){const on=!!(cfg.platform_enabled&&cfg.platfor
 function bindMediaDownloadSwitch(name){const on=!!(cfg.platform_download_video&&cfg.platform_download_video[name]);return '<label class="switch"><input type="checkbox"'+checked(on)+' data-platform="'+escapeHTML(name)+'" onchange="setPlatformMediaDownload(this.dataset.platform,this.checked)"><span class="slider"></span></label>'}
 function setPlatformParseCard(name,on){cfg.platform_enabled[name]=on; cfg.platform_info_card[name]=on; markDirty()}
 function setPlatformMediaDownload(name,on){cfg.platform_download_video[name]=on; cfg.platform_send_media[name]=on; markDirty()}
+function resolutionCell(name){const v=cfg.platform_video_resolution&&Object.prototype.hasOwnProperty.call(cfg.platform_video_resolution,name)?Number(cfg.platform_video_resolution[name]):'';return '<select data-platform="'+escapeHTML(name)+'" onchange="setPlatformResolution(this.dataset.platform,this.value)"><option value=""'+(v===''?' selected':'')+'>跟随全局</option><option value="0"'+(v===0?' selected':'')+'>不限</option><option value="360"'+(v===360?' selected':'')+'>360p</option><option value="720"'+(v===720?' selected':'')+'>720p</option><option value="1080"'+(v===1080?' selected':'')+'>1080p</option></select>'}
+function setPlatformResolution(name,value){cfg.platform_video_resolution=cfg.platform_video_resolution||{}; if(value==='') delete cfg.platform_video_resolution[name]; else cfg.platform_video_resolution[name]=Number(value); markDirty()}
 function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
@@ -918,7 +920,8 @@ async function load(){
 function render(){
  const items=[['auto_parse','解析卡片'],['download_video','媒体下载'],['parse_reaction','解析回应'],['debug','调试日志'],['avoid_av1','禁用 AV1'],['use_yt_dlp_fallback','yt-dlp 备用']];
  $('globalControls').innerHTML=items.map(x=>'<label class="row">'+x[1]+switchHTML('cfg.'+x[0],!!cfg[x[0]])+'</label>').join('');
- $('platformRows').innerHTML=platforms.map(p=>'<tr><td><b>'+p.label+'</b><div class="muted">'+(p.local||p.name)+'</div></td><td>'+bindParseCardSwitch(p.name)+'</td><td>'+bindMediaDownloadSwitch(p.name)+'</td><td>'+logoCell(p)+'</td></tr>').join('');
+ cfg.platform_video_resolution=cfg.platform_video_resolution||{};
+ $('platformRows').innerHTML=platforms.map(p=>'<tr><td><b>'+p.label+'</b><div class="muted">'+(p.local||p.name)+'</div></td><td>'+bindParseCardSwitch(p.name)+'</td><td>'+bindMediaDownloadSwitch(p.name)+'</td><td>'+resolutionCell(p.name)+'</td><td>'+logoCell(p)+'</td></tr>').join('');
  if(!cfg.platform_group_block) cfg.platform_group_block={};
  $('pmode').value=cfg.private_access_mode||'none'; $('gmode').value=cfg.group_access_mode||'none'; $('gumode').value=cfg.group_user_access_mode||'none';
  $('userWhitelist').value=listText(cfg.user_whitelist); $('userBlacklist').value=listText(cfg.user_blacklist);

@@ -103,6 +103,7 @@ type config struct {
 	DownloadVideo       bool                      `json:"download_video"`
 	MaxVideoMB          int64                     `json:"max_video_mb"`
 	VideoMaxResolution  int                       `json:"video_max_resolution"`
+	PlatformResolution  map[string]int            `json:"platform_video_resolution"`
 	CacheTTLMinutes     int                       `json:"cache_ttl_minutes"`
 	TimeoutSeconds      int                       `json:"timeout_seconds"`
 	Proxy               string                    `json:"proxy"`
@@ -256,6 +257,7 @@ func defaultConfig() config {
 		DownloadVideo:        true,
 		MaxVideoMB:           defaultMaxVideoMB,
 		VideoMaxResolution:   0,
+		PlatformResolution:   map[string]int{},
 		CacheTTLMinutes:      defaultTTLMinutes,
 		TimeoutSeconds:       defaultTimeoutSec,
 		Debug:                true,
@@ -387,8 +389,16 @@ func normalizeConfig(cfg *config) {
 	if cfg.MaxVideoMB <= 0 {
 		cfg.MaxVideoMB = defaultMaxVideoMB
 	}
-	if cfg.VideoMaxResolution != 0 && cfg.VideoMaxResolution != 360 && cfg.VideoMaxResolution != 720 && cfg.VideoMaxResolution != 1080 {
+	if !validVideoResolution(cfg.VideoMaxResolution) {
 		cfg.VideoMaxResolution = 0
+	}
+	if cfg.PlatformResolution == nil {
+		cfg.PlatformResolution = map[string]int{}
+	}
+	for _, p := range platforms {
+		if v, ok := cfg.PlatformResolution[p.Name]; ok && !validVideoResolution(v) {
+			cfg.PlatformResolution[p.Name] = 0
+		}
 	}
 	if cfg.CacheTTLMinutes <= 0 {
 		cfg.CacheTTLMinutes = defaultTTLMinutes
@@ -422,7 +432,7 @@ func normalizeConfig(cfg *config) {
 	if strings.TrimSpace(cfg.FailReactionEmoji) == "" {
 		cfg.FailReactionEmoji = "❌"
 	}
-	cfg.BilibiliMaxQuality = biliQualityFromResolution(cfg.VideoMaxResolution)
+	cfg.BilibiliMaxQuality = biliQualityFromResolution(platformMaxResolution(*cfg, "bilibili"))
 }
 
 func saveConfig() error {
@@ -444,6 +454,30 @@ func saveConfigLocked() error {
 		return err
 	}
 	return os.WriteFile(configPath, data, 0644)
+}
+
+func validVideoResolution(res int) bool {
+	return res == 0 || res == 360 || res == 720 || res == 1080
+}
+
+func platformMaxResolution(cfg config, platform string) int {
+	if cfg.PlatformResolution != nil {
+		if res, ok := cfg.PlatformResolution[platform]; ok && validVideoResolution(res) {
+			return res
+		}
+	}
+	if validVideoResolution(cfg.VideoMaxResolution) {
+		return cfg.VideoMaxResolution
+	}
+	return 0
+}
+
+func configForPlatform(cfg config, platform string) config {
+	cfg.VideoMaxResolution = platformMaxResolution(cfg, platform)
+	if platform == "bilibili" {
+		cfg.BilibiliMaxQuality = biliQualityFromResolution(cfg.VideoMaxResolution)
+	}
+	return cfg
 }
 
 func snapshotConfig() config {
@@ -648,23 +682,42 @@ func handleCommand(ctx *zero.Ctx) {
 			ctx.SendChain(message.Text("用法: /媒体解析 画质 不限制|360p|720p|1080p"))
 			return
 		}
-		res, ok := parseVideoResolution(args[1])
+		value := args[1]
+		res, ok := parseVideoResolution(value)
 		if !ok {
 			ctx.SendChain(message.Text("画质只能是 不限制 / 360p / 720p / 1080p"))
 			return
 		}
-		currentConf.VideoMaxResolution = res
+		if currentConf.PlatformResolution == nil {
+			currentConf.PlatformResolution = map[string]int{}
+		}
+		currentConf.PlatformResolution["bilibili"] = res
 	case "画质", "resolution", "quality", "video_quality", "res":
 		if len(args) < 2 {
 			ctx.SendChain(message.Text("usage: /媒体解析 resolution unlimited|360p|720p|1080p"))
 			return
 		}
-		res, ok := parseVideoResolution(args[1])
+		platform := ""
+		value := args[1]
+		if len(args) >= 3 {
+			if p := normalizePlatformName(args[1]); p != "" {
+				platform = p
+				value = args[2]
+			}
+		}
+		res, ok := parseVideoResolution(value)
 		if !ok {
 			ctx.SendChain(message.Text("resolution must be unlimited / 360p / 720p / 1080p"))
 			return
 		}
-		currentConf.VideoMaxResolution = res
+		if platform != "" {
+			if currentConf.PlatformResolution == nil {
+				currentConf.PlatformResolution = map[string]int{}
+			}
+			currentConf.PlatformResolution[platform] = res
+		} else {
+			currentConf.VideoMaxResolution = res
+		}
 	case "清缓存":
 		stateMu.Unlock()
 		n, err := cleanCache()
@@ -818,6 +871,7 @@ func snapshotRuntime() RuntimeStatus {
 
 func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	started := time.Now()
+	cfg = configForPlatform(cfg, link.Platform)
 	logrus.Infof("[mediaparser] parsing platform=%s url=%s", link.Platform, link.URL)
 	meta, err := parseNative(cfg, link)
 	if err != nil && cfg.UseYTDLPFallback {
@@ -834,7 +888,10 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	if cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform) {
 		infoCardSent = sendInfoCard(ctx, cfg, meta)
 	}
-	if cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform) {
+	mediaEnabled := cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform)
+	logDebug(cfg, "media_gate platform=%s send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
+		meta.Platform, cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), mediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
+	if mediaEnabled {
 		if err := sendMediaNodes(ctx, cfg, &meta); err != nil {
 			return err
 		}
@@ -914,8 +971,9 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 		if target == "" {
 			continue
 		}
+		sendStarted := time.Now()
 		ctx.SendChain(message.Video(target))
-		logrus.Infof("[mediaparser] sent_video platform=%s title=%q target=%s", meta.Platform, meta.Title, target)
+		logrus.Infof("[mediaparser] sent_video platform=%s title=%q target=%s send_elapsed=%s", meta.Platform, meta.Title, target, time.Since(sendStarted).Round(time.Millisecond))
 	}
 	for i := range meta.ImageURLs {
 		target := mediaImageTarget(meta, i)
@@ -1127,7 +1185,9 @@ func processDownloads(cfg config, meta *mediaMeta) error {
 		}
 		needLocal := meta.ForceLocal || strings.HasPrefix(group[0], "dash:") || strings.HasPrefix(group[0], "m3u8:")
 		if !needLocal {
+			stage := time.Now()
 			size, status := probeSize(group[0], meta.VideoHeads)
+			logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=direct stage=probe elapsed=%s status=%d size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), status, float64(size)/1024/1024)
 			if status == 403 {
 				meta.HasAccessDenied = true
 				meta.VideoModes[i] = "skip"
@@ -1209,36 +1269,62 @@ func downloadMediaGroup(cfg config, meta *mediaMeta, index int, group []string) 
 		if len(parts) == 0 || parts[0] == "" {
 			return "", 0, errors.New("DASH 视频流为空")
 		}
+		stage := time.Now()
 		videoTmp, _, err := downloadHTTPFile(cfg, stripMediaPrefix(parts[0]), meta.VideoHeads, cacheFile(meta, "video", index, ".m4s"))
 		if err != nil {
+			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=dash stage=video elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
 		}
+		logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=dash stage=video elapsed=%s size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), fileSizeMB(videoTmp))
 		if len(parts) == 1 || strings.TrimSpace(parts[1]) == "" {
 			return videoTmp, fileSizeMB(videoTmp), nil
 		}
+		stage = time.Now()
 		audioTmp, _, err := downloadHTTPFile(cfg, stripMediaPrefix(parts[1]), meta.VideoHeads, cacheFile(meta, "audio", index, ".m4s"))
 		if err != nil {
+			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=dash stage=audio elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
 		}
+		logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=dash stage=audio elapsed=%s size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), fileSizeMB(audioTmp))
 		out := cacheFile(meta, "dash", index, ".mp4")
+		stage = time.Now()
 		if err := ffmpegMerge(cfg, videoTmp, audioTmp, out); err != nil {
+			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=dash stage=ffmpeg_copy elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
 		}
+		logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=dash stage=ffmpeg_copy elapsed=%s size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), fileSizeMB(out))
 		_ = os.Remove(videoTmp)
 		_ = os.Remove(audioTmp)
 		return out, fileSizeMB(out), nil
 	}
 	if strings.HasPrefix(raw, "m3u8:") {
 		out := cacheFile(meta, "m3u8", index, ".mp4")
+		stage := time.Now()
 		if err := ffmpegM3U8(cfg, strings.TrimPrefix(raw, "m3u8:"), meta.VideoHeads, out); err != nil {
+			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=m3u8 stage=ffmpeg_pull elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
 		}
+		logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=m3u8 stage=ffmpeg_pull elapsed=%s size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), fileSizeMB(out))
 		return out, fileSizeMB(out), nil
 	}
 	if strings.HasPrefix(raw, "ytdlp:") {
-		return downloadWithYTDLP(cfg, meta, strings.TrimPrefix(raw, "ytdlp:"))
+		stage := time.Now()
+		path, sizeMB, err := downloadWithYTDLP(cfg, meta, strings.TrimPrefix(raw, "ytdlp:"))
+		if err != nil {
+			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=ytdlp stage=download elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
+			return "", 0, err
+		}
+		logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=ytdlp stage=download elapsed=%s size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), sizeMB)
+		return path, sizeMB, nil
 	}
-	return downloadHTTPFile(cfg, stripMediaPrefix(raw), meta.VideoHeads, cacheFile(meta, "video", index, ".mp4"))
+	stage := time.Now()
+	path, sizeMB, err := downloadHTTPFile(cfg, stripMediaPrefix(raw), meta.VideoHeads, cacheFile(meta, "video", index, ".mp4"))
+	if err != nil {
+		logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=http stage=download elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
+		return "", 0, err
+	}
+	logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=http stage=download elapsed=%s size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), sizeMB)
+	return path, sizeMB, nil
 }
 
 func downloadHTTPFile(cfg config, raw string, headers map[string]string, out string) (string, float64, error) {
