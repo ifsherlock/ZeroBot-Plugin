@@ -986,10 +986,12 @@ func TestRenderKeylolLivePreview(t *testing.T) {
 		t.Skip("set MEDIAPARSER_KEYLOL_LIVE_PREVIEW to a keylol thread URL")
 	}
 	oldCacheDir := cacheDir
-	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-live-preview")
+	cacheDir = firstNonEmpty(os.Getenv("MEDIAPARSER_KEYLOL_PREVIEW_DIR"), filepath.Join("..", "..", "build", "mediaparser-keylol-live-preview"))
 	defer func() { cacheDir = oldCacheDir }()
 
-	meta, err := parseKeylol(defaultConfig(), raw)
+	cfg := defaultConfig()
+	cfg.KeylolCookie = os.Getenv("MEDIAPARSER_KEYLOL_COOKIE")
+	meta, err := parseKeylol(cfg, raw)
 	if err != nil {
 		t.Fatal(err)
 	}
