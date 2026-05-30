@@ -1,0 +1,114 @@
+package mediaparser
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+)
+
+type SystemSettings struct {
+	WebUIAddr     string  `json:"webui_addr"`
+	WSURL         string  `json:"ws_url"`
+	WSToken       string  `json:"ws_token,omitempty"`
+	Nickname      string  `json:"nickname"`
+	CommandPrefix string  `json:"command_prefix"`
+	SuperUsers    []int64 `json:"super_users"`
+}
+
+type systemSettingsResponse struct {
+	WebUIAddr      string   `json:"webui_addr"`
+	WSURL          string   `json:"ws_url"`
+	WSToken        string   `json:"ws_token,omitempty"`
+	WSTokenSet     bool     `json:"ws_token_set"`
+	Nickname       string   `json:"nickname"`
+	CommandPrefix  string   `json:"command_prefix"`
+	SuperUsers     []int64  `json:"super_users"`
+	PendingRestart []string `json:"pending_restart"`
+}
+
+var (
+	systemMu       sync.RWMutex
+	runtimeSystem  SystemSettings
+	lastSystemPath string
+)
+
+func SystemSettingsPath() string {
+	return filepath.Join(engine.DataFolder(), "system.json")
+}
+
+func LoadSystemSettings() SystemSettings {
+	settings, _ := readSystemSettings()
+	return settings
+}
+
+func SetRuntimeSystemSettings(settings SystemSettings) {
+	systemMu.Lock()
+	runtimeSystem = normalizeSystemSettings(settings)
+	systemMu.Unlock()
+}
+
+func readSystemSettings() (SystemSettings, error) {
+	path := SystemSettingsPath()
+	lastSystemPath = path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return SystemSettings{}, nil
+		}
+		return SystemSettings{}, err
+	}
+	var settings SystemSettings
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return SystemSettings{}, err
+	}
+	return normalizeSystemSettings(settings), nil
+}
+
+func saveSystemSettings(settings SystemSettings) error {
+	settings = normalizeSystemSettings(settings)
+	path := SystemSettingsPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func normalizeSystemSettings(settings SystemSettings) SystemSettings {
+	settings.WebUIAddr = strings.TrimSpace(settings.WebUIAddr)
+	settings.WSURL = strings.TrimSpace(settings.WSURL)
+	settings.WSToken = strings.TrimSpace(settings.WSToken)
+	settings.Nickname = strings.TrimSpace(settings.Nickname)
+	settings.CommandPrefix = strings.TrimSpace(settings.CommandPrefix)
+	settings.SuperUsers = uniqueInt64(settings.SuperUsers)
+	return settings
+}
+
+func uniqueInt64(in []int64) []int64 {
+	seen := map[int64]bool{}
+	out := make([]int64, 0, len(in))
+	for _, v := range in {
+		if v <= 0 || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+func mergeInt64(a, b []int64) []int64 {
+	out := append(append([]int64{}, a...), b...)
+	return uniqueInt64(out)
+}

@@ -55,6 +55,11 @@ func init() {
 	flag.BoolVar(&file.SkipOriginal, "mirror", false, "Use mirrored lazy data at first")
 
 	flag.Parse()
+	flagProvided := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) {
+		flagProvided[f.Name] = true
+	})
+	systemSettings := mediaparser.LoadSystemSettings()
 
 	if *h {
 		fmt.Println("Usage:")
@@ -74,6 +79,7 @@ func init() {
 			sus = append(sus, i)
 		}
 	}
+	sus = mergeIDs(sus, systemSettings.SuperUsers)
 
 	if *runcfg != "" {
 		f, err := os.Open(*runcfg)
@@ -97,6 +103,22 @@ func init() {
 		return
 	}
 
+	if !flagProvided["u"] && systemSettings.WSURL != "" {
+		*url = systemSettings.WSURL
+	}
+	if !flagProvided["t"] && systemSettings.WSToken != "" {
+		*token = systemSettings.WSToken
+	}
+	if !flagProvided["n"] && systemSettings.Nickname != "" {
+		*adana = systemSettings.Nickname
+	}
+	if !flagProvided["p"] && systemSettings.CommandPrefix != "" {
+		*prefix = systemSettings.CommandPrefix
+	}
+	if !flagProvided["webui"] && systemSettings.WebUIAddr != "" {
+		*webui = systemSettings.WebUIAddr
+	}
+
 	config.W = []*driver.WSClient{driver.NewWebSocketClient(*url, *token)}
 	config.Z = zero.Config{
 		NickName:       append([]string{*adana}, "ATRI", "atri"),
@@ -112,6 +134,14 @@ func init() {
 	if *webui != "" {
 		os.Setenv("ZBP_BUILTIN_WEBUI", *webui)
 	}
+	mediaparser.SetRuntimeSystemSettings(mediaparser.SystemSettings{
+		WebUIAddr:     *webui,
+		WSURL:         *url,
+		WSToken:       *token,
+		Nickname:      *adana,
+		CommandPrefix: *prefix,
+		SuperUsers:    sus,
+	})
 
 	if *save != "" {
 		f, err := os.Create(*save)
@@ -126,6 +156,19 @@ func init() {
 		logrus.Infoln("[main] config saved to", *save)
 		os.Exit(0)
 	}
+}
+
+func mergeIDs(a, b []int64) []int64 {
+	seen := map[int64]bool{}
+	out := make([]int64, 0, len(a)+len(b))
+	for _, id := range append(append([]int64{}, a...), b...) {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 func main() {

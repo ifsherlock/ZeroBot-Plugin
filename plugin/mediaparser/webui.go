@@ -54,6 +54,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 			"now":            time.Now(),
 			"go":             runtime.Version(),
 			"config_path":    configPath,
+			"system_path":    SystemSettingsPath(),
 			"cache_dir":      cacheDir,
 			"mediaparser":    snapshotConfig(),
 			"runtime_status": snapshotRuntime(),
@@ -87,6 +88,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 			writeMethodNotAllowed(w)
 		}
 	})
+	mux.HandleFunc("/api/system/settings", serveSystemSettingsAPI)
 	mux.HandleFunc("/api/mediaparser/cache/clear", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeMethodNotAllowed(w)
@@ -161,6 +163,123 @@ func fetchOneBotGroups() ([]webGroup, int64, error) {
 		return groups[i].Name < groups[j].Name
 	})
 	return groups, selfID, err
+}
+
+func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"settings": systemSettingsForWeb(), "path": SystemSettingsPath()})
+	case http.MethodPost:
+		var payload SystemSettings
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		current := systemSettingsForSave()
+		if strings.TrimSpace(payload.WSToken) == "" {
+			payload.WSToken = current.WSToken
+		}
+		payload = normalizeSystemSettings(payload)
+		if err := saveSystemSettings(payload); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		applyRuntimeSystemSettings(payload)
+		writeJSON(w, map[string]any{"ok": true, "settings": systemSettingsForWeb()})
+	default:
+		writeMethodNotAllowed(w)
+	}
+}
+
+func systemSettingsForSave() SystemSettings {
+	saved, _ := readSystemSettings()
+	systemMu.RLock()
+	current := runtimeSystem
+	systemMu.RUnlock()
+	if saved.WebUIAddr == "" {
+		saved.WebUIAddr = current.WebUIAddr
+	}
+	if saved.WSURL == "" {
+		saved.WSURL = current.WSURL
+	}
+	if saved.WSToken == "" {
+		saved.WSToken = current.WSToken
+	}
+	if saved.Nickname == "" {
+		saved.Nickname = firstNonEmpty(firstString(zero.BotConfig.NickName), current.Nickname)
+	}
+	if saved.CommandPrefix == "" {
+		saved.CommandPrefix = zero.BotConfig.CommandPrefix
+	}
+	if len(saved.SuperUsers) == 0 {
+		saved.SuperUsers = append([]int64{}, zero.BotConfig.SuperUsers...)
+	}
+	return normalizeSystemSettings(saved)
+}
+
+func systemSettingsForWeb() systemSettingsResponse {
+	settings := systemSettingsForSave()
+	systemMu.RLock()
+	current := runtimeSystem
+	systemMu.RUnlock()
+	pending := []string{}
+	if settings.WebUIAddr != "" && current.WebUIAddr != "" && settings.WebUIAddr != current.WebUIAddr {
+		pending = append(pending, "WebUI 监听地址")
+	}
+	if settings.WSURL != "" && current.WSURL != "" && settings.WSURL != current.WSURL {
+		pending = append(pending, "OneBot WS 地址")
+	}
+	if settings.WSToken != "" && current.WSToken != "" && settings.WSToken != current.WSToken {
+		pending = append(pending, "OneBot Token")
+	}
+	return systemSettingsResponse{
+		WebUIAddr:      firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
+		WSURL:          firstNonEmpty(settings.WSURL, current.WSURL),
+		WSTokenSet:     settings.WSToken != "",
+		Nickname:       firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
+		CommandPrefix:  firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
+		SuperUsers:     uniqueInt64(settings.SuperUsers),
+		PendingRestart: pending,
+	}
+}
+
+func applyRuntimeSystemSettings(settings SystemSettings) {
+	settings = normalizeSystemSettings(settings)
+	if settings.Nickname != "" {
+		zero.BotConfig.NickName = uniqueWebStrings(append([]string{settings.Nickname}, zero.BotConfig.NickName...))
+	}
+	if settings.CommandPrefix != "" {
+		zero.BotConfig.CommandPrefix = settings.CommandPrefix
+	}
+	if len(settings.SuperUsers) > 0 {
+		zero.BotConfig.SuperUsers = uniqueInt64(settings.SuperUsers)
+	}
+	systemMu.Lock()
+	runtimeSystem.Nickname = firstNonEmpty(settings.Nickname, runtimeSystem.Nickname)
+	runtimeSystem.CommandPrefix = firstNonEmpty(settings.CommandPrefix, runtimeSystem.CommandPrefix)
+	runtimeSystem.SuperUsers = uniqueInt64(settings.SuperUsers)
+	systemMu.Unlock()
+}
+
+func firstString(in []string) string {
+	if len(in) == 0 {
+		return ""
+	}
+	return in[0]
+}
+
+func uniqueWebStrings(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
 }
 
 func serveLogoAPI(w http.ResponseWriter, r *http.Request) {
@@ -484,7 +603,7 @@ h1{font-size:18px;margin:0;font-weight:760}.app{display:grid;grid-template-colum
 .metric{display:flex;flex-direction:column;gap:6px;min-height:94px}.metric span:first-child{font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric b{font-size:26px}.muted{color:var(--muted)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}
 table{width:100%;border-collapse:separate;border-spacing:0;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{background:#f8fafc;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fbfdff}
 button,select,input,textarea{border:1px solid var(--line);border-radius:8px;background:white;color:var(--text);padding:0 10px}button,select,input{height:34px}textarea{width:100%;min-height:110px;padding:9px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff;font-weight:650}button:hover{border-color:#b8c5d6}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#fecdd3;color:var(--red);background:#fff7f7}
-.hidden{display:none!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
+.hidden,.page{display:none!important}.page.active{display:block!important}.page.active.metric{display:flex!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
 .groupTools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
@@ -500,29 +619,47 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <aside class="sidebar">
 <div class="brand">ZBP Console</div>
 <nav class="nav">
-<a class="active" href="#overview">总览</a>
-<a href="#global">全局开关</a>
-<a href="#platforms">平台</a>
-<a href="#access">访问控制</a>
-<a href="#group-platform">群平台</a>
-<a href="#runtime">下载与调试</a>
+<a class="active" href="#overview" data-page-link="overview" onclick="showPage('overview')">总览</a>
+<a href="#system" data-page-link="system" onclick="showPage('system')">全局设置</a>
+<a href="#plugins" data-page-link="plugins" onclick="showPage('plugins')">插件中心</a>
+<a href="#mediaparser" data-page-link="mediaparser" onclick="showPage('mediaparser')">聚合解析</a>
+<a href="#logs" data-page-link="logs" onclick="showPage('logs')">日志诊断</a>
+<a href="#maintenance" data-page-link="maintenance" onclick="showPage('maintenance')">数据维护</a>
 </nav>
 </aside>
 <main class="wrap">
 <div class="hero"><div><h2>机器人控制台</h2><p>查看运行状态，调整媒体解析与插件配置。</p></div><div class="toolbar"><button onclick="refreshStatus()">刷新状态</button><button class="danger" onclick="clearCache()">清理缓存</button></div></div>
 <section class="grid">
 <div class="span4" id="overview"></div>
-<div class="panel metric"><span class="muted">服务状态</span><b id="svc">-</b></div>
-<div class="panel metric"><span class="muted">机器人 QQ</span><b id="self">-</b></div>
-<div class="panel metric"><span class="muted">解析成功</span><b id="okn">-</b></div>
-<div class="panel metric"><span class="muted">解析失败</span><b id="failn">-</b></div>
-<div class="panel span2" id="global"><div class="sectionTitle"><b>全局开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
-<div class="panel span2"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
-<div class="span4" id="platforms">
+<div class="panel metric page active" data-page="overview"><span class="muted">服务状态</span><b id="svc">-</b></div>
+<div class="panel metric page active" data-page="overview"><span class="muted">机器人 QQ</span><b id="self">-</b></div>
+<div class="panel metric page active" data-page="overview"><span class="muted">解析成功</span><b id="okn">-</b></div>
+<div class="panel metric page active" data-page="overview"><span class="muted">解析失败</span><b id="failn">-</b></div>
+<div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
+<div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>运行信息</b></div><p class="muted" id="runtimeSummary">-</p></div>
+<div class="panel span4 page" data-page="system" id="system">
+<div class="sectionTitle"><b>全局设置</b><span class="muted">端口和 WS 地址保存后需要重启服务生效；超级管理员、昵称、命令前缀会立即写入运行时。</span><span class="right msg" id="systemMsg"></span></div>
+<div class="accessGrid">
+<label class="field">WebUI 监听地址 <input id="sysWebui" placeholder="0.0.0.0:3000"></label>
+<label class="field">OneBot WS 地址 <input id="sysWS" placeholder="ws://127.0.0.1:3001"></label>
+<label class="field">OneBot Token <input id="sysToken" type="password" placeholder="留空表示不修改"></label>
+<label class="field">机器人昵称 <input id="sysNick" placeholder="ZeroBot"></label>
+<label class="field">命令前缀 <input id="sysPrefix" placeholder="/"></label>
+<label class="field">超级管理员 QQ <textarea id="sysSuperUsers" placeholder="一行一个 QQ"></textarea></label>
+</div>
+<div class="row" style="margin-top:12px"><button class="primary" onclick="saveSystemSettings()">保存全局设置</button><span class="muted" id="sysPending"></span></div>
+</div>
+<div class="panel span4 page" data-page="plugins" id="plugins">
+<div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button disabled>待接入</button></td></tr></tbody></table>
+</div>
+<div class="panel span2 page" data-page="mediaparser" id="global"><div class="sectionTitle"><b>聚合解析总开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
+<div class="panel span2 page" data-page="mediaparser"><div class="sectionTitle"><b>解析状态</b></div><p class="muted">解析成功 <b id="okn2">-</b> 次，失败 <b id="failn2">-</b> 次。</p></div>
+<div class="span4 page" data-page="mediaparser" id="platforms">
 <div class="sectionTitle"><b>平台开关与 Logo</b><span class="muted">每个平台可独立控制解析、卡片、媒体和下载。</span></div>
 <table><thead><tr><th>平台</th><th>解析</th><th>卡片</th><th>媒体</th><th>下载</th><th>Logo</th></tr></thead><tbody id="platformRows"></tbody></table>
 </div>
-<div class="panel span4" id="access">
+<div class="panel span4 page" data-page="mediaparser" id="access">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">先判断私聊/群号是否允许，再判断群聊发言人；三套名单互不影响。</span></div>
 <div class="row" style="margin-top:12px">
 <label>私聊模式 <select id="pmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
@@ -545,7 +682,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupBox accessField" data-mode="gmode" data-kind="blacklist"><div class="row"><b>勾选到群黑名单</b><input id="groupBlackSearch" placeholder="搜索群名或群号" oninput="renderGroupPickers()"></div><div class="groupList" id="groupBlackPicker"></div></div>
 </div>
 </div>
-<div class="panel span4" id="group-platform">
+<div class="panel span4 page" data-page="mediaparser" id="group-platform">
 <div class="sectionTitle"><b>群平台开关</b><span class="muted">先选群，再选择这个群里要屏蔽哪些平台；不影响其他群。</span></div>
 <div class="row" style="margin-top:12px">
 <label>群 <select id="platformBlockGroupSelect" onchange="renderPlatformGroupBlock()"></select></label>
@@ -554,7 +691,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
-<div class="panel span4" id="runtime">
+<div class="panel span4 page" data-page="mediaparser" id="runtime">
 <div class="row">
 <b>下载与调试</b>
 <label>分辨率 <select id="res"><option value="0">不限</option><option value="360">360p</option><option value="720">720p</option><option value="1080">1080p</option></select></label>
@@ -566,12 +703,19 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <button class="primary right" onclick="save()">保存</button>
 </div>
 </div>
+<div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">第一阶段先展示运行摘要和最近消息，后续可以接 journal 过滤。</span></div><p class="muted lastMsg expanded" id="logSummary">-</p></div>
+<div class="panel span4 page" data-page="maintenance" id="maintenance"><div class="sectionTitle"><b>数据维护</b><span class="muted">缓存、Logo、本地配置文件维护。</span></div><div class="row"><button class="danger" onclick="clearCache()">清理媒体缓存</button><span class="muted" id="maintenanceMsg">配置文件只保存在本机 data 目录，不会上传到 GitHub。</span></div></div>
 </section>
 </main>
 </div>
 <script>
-let cfg=null, platforms=[], logos={}, groups=[], dirty=false;
+let cfg=null, sys=null, platforms=[], logos={}, groups=[], dirty=false;
 const $=id=>document.getElementById(id);
+function showPage(name){
+ document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===name));
+ document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===name));
+ if(location.hash!=='#'+name) history.replaceState(null,'','#'+name);
+}
 function markDirty(){dirty=true; $('saveMsg').textContent='有未保存修改'}
 function checked(v){return v?' checked':''}
 function switchHTML(expr,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+expr+'=this.checked;markDirty()"><span class="slider"></span></label>'}
@@ -596,12 +740,17 @@ async function refreshStatus(){
  $('svc').innerHTML='<span class="ok">运行中</span>'; $('topState').textContent=dirty?'有未保存修改':'WebUI 已连接';
  const rt=st.runtime_status||{}; const bot=st.bot||{};
  $('self').textContent=rt.last_self_id||bot.self_id||'-'; $('okn').textContent=rt.parse_success||0; $('failn').textContent=rt.parse_failed||0;
+ $('okn2').textContent=rt.parse_success||0; $('failn2').textContent=rt.parse_failed||0;
  $('lastMsg').textContent=rt.last_message||'暂无消息';
+ $('runtimeSummary').textContent='Go '+(st.go||'-')+' / WebUI '+((sys&&sys.webui_addr)||'-')+' / WS '+((sys&&sys.ws_url)||'-');
+ $('logSummary').textContent='最近消息：'+(rt.last_message||'暂无')+'\n成功：'+(rt.parse_success||0)+'，失败：'+(rt.parse_failed||0);
 }
 async function load(){
  const data=await (await fetch('/api/mediaparser/config')).json();
+ const sysData=await (await fetch('/api/system/settings')).json();
  const logoData=await (await fetch('/api/mediaparser/logos')).json();
  cfg=data.config; platforms=data.platforms;
+ sys=sysData.settings||{};
  logos=logoData.logos||{};
  await refreshStatus();
  render();
@@ -616,9 +765,36 @@ function render(){
  $('groupWhitelist').value=listText(cfg.group_whitelist); $('groupBlacklist').value=listText(cfg.group_blacklist);
  $('groupUserWhitelist').value=listText(cfg.group_user_whitelist); $('groupUserBlacklist').value=listText(cfg.group_user_blacklist);
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
+ renderSystemSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
  if(!groups.length) loadGroups(false); else renderGroupPickers();
+ showPage((location.hash||'#overview').slice(1)||'overview');
+}
+function renderSystemSettings(){
+ if(!sys) return;
+ $('sysWebui').value=sys.webui_addr||'';
+ $('sysWS').value=sys.ws_url||'';
+ $('sysToken').value='';
+ $('sysToken').placeholder=sys.ws_token_set?'已设置，留空不修改':'留空表示不设置';
+ $('sysNick').value=sys.nickname||'';
+ $('sysPrefix').value=sys.command_prefix||'/';
+ $('sysSuperUsers').value=(sys.super_users||[]).join('\n');
+ const pending=sys.pending_restart||[];
+ $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
+}
+async function saveSystemSettings(){
+ const payload={
+  webui_addr:String($('sysWebui').value||'').trim(),
+  ws_url:String($('sysWS').value||'').trim(),
+  ws_token:String($('sysToken').value||'').trim(),
+  nickname:String($('sysNick').value||'').trim(),
+  command_prefix:String($('sysPrefix').value||'/').trim()||'/',
+  super_users:Object.keys(parseList($('sysSuperUsers').value)).map(x=>Number(x))
+ };
+ const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ $('systemMsg').textContent=r.ok?'全局设置已保存':'全局设置保存失败';
+ if(r.ok){const data=await r.json(); sys=data.settings||sys; renderSystemSettings(); await refreshStatus();}
 }
 async function loadGroups(force){
  try{
