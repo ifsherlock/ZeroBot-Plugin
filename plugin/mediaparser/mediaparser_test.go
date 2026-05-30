@@ -286,7 +286,7 @@ func TestKeylolBuildBlocksKeepsColorAndLinkBlocks(t *testing.T) {
 		kinds = append(kinds, block.Kind+":"+block.Text)
 	}
 	got := strings.Join(kinds, "|")
-	for _, want := range []string{"color_red:论坛信息", "color_green:Steam购买", "link:2026年6月发售游戏汇总"} {
+	for _, want := range []string{"color_red:论坛信息", "color_green:Steam购买", "text:2026年6月发售游戏汇总"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %s in %#v", want, blocks)
 		}
@@ -298,6 +298,20 @@ func TestKeylolInlineImageKeepsTextOrder(t *testing.T) {
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
 	if len(blocks) != 2 || blocks[0].Kind != "inline_image" || blocks[1].Kind != "text" || !strings.Contains(blocks[1].Text, "Bunny Guys") {
 		t.Fatalf("bad inline image/text blocks: %#v", blocks)
+	}
+}
+
+func TestKeylolInlineImageAllowsRepeatedBadges(t *testing.T) {
+	html := `<img width="44" height="19" src="https://blob.keylol.com/forum/new.png"> 第一行<br><img width="44" height="19" src="https://blob.keylol.com/forum/new.png"> 第二行`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
+	count := 0
+	for _, block := range blocks {
+		if block.Kind == "inline_image" {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatalf("repeated inline badges should be preserved, got %d: %#v", count, blocks)
 	}
 }
 
@@ -362,6 +376,44 @@ func TestKeylolBuildBlocksFormatsASFLinks(t *testing.T) {
 	}
 	if blocks[2].Kind != "asf_link" || blocks[2].Title != "1785650" {
 		t.Fatalf("bad asf link block: %#v", blocks)
+	}
+}
+
+func TestKeylolBuildBlocksKeepsSteamToolbarTogether(t *testing.T) {
+	html := `<a href="https://store.steampowered.com/app/2878980/NBA_2K26/">NBA 2K26</a><br>
+<span><a href="https://store.steampowered.com/app/2878980/NBA_2K26/">Steam商店</a>，<a href="https://store.steampowered.com/app/2878980/NBA_2K26/#app_reviews_hash">Steam评测区</a> | <a href="https://keylol.com/plugin.php?id=keylol_tags:redirect&appid=2878980">其乐相关帖</a>，<a href="https://steamdb.info/app/2878980/">SteamDB</a>，<a href="https://astats.astats.nl/astats/Steam_Game_Info.php?AppID=2878980">AStats</a>，<a href="https://www.steamcardexchange.net/index.php?gamepage-appid-2878980">SCE</a>，<a href="https://barter.vg/steam/app/2878980/">Barter</a> | <a href="steam://nav/games/details/2878980">Steam客户端中查看</a>，<a href="steam://install/2878980">入库或安装</a> | <a href="#asf2878980" onclick="setCopy('!addlicense asf a/'+this.href.split('#asf')[1], '代码复制成功');return false;">复制ASF代码</a></span>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039213-1-1")
+	gotKinds := []string{}
+	for _, block := range blocks {
+		gotKinds = append(gotKinds, block.Kind+":"+block.Text+block.Title)
+	}
+	got := strings.Join(gotKinds, "|")
+	if strings.Count(got, "steam_card:") != 1 || !strings.Contains(got, "toolbar:Steam商店") || !strings.Contains(got, "toolbar:复制ASF代码") || !strings.Contains(got, "asf_link:2878980") {
+		t.Fatalf("bad toolbar blocks: %#v", blocks)
+	}
+	if strings.Contains(got, "|link:") || strings.HasPrefix(got, "link:") {
+		t.Fatalf("toolbar should not split normal links: %#v", blocks)
+	}
+}
+
+func TestKeylolASFForwardItems(t *testing.T) {
+	blocks := []keylolBlock{
+		{Kind: "steam_card", URL: "https://store.steampowered.com/app/2878980/NBA_2K26/", Title: "NBA 2K26", Cover: "https://cdn.example.com/nba.jpg"},
+		{Kind: "toolbar", Text: "复制ASF代码"},
+		{Kind: "asf_link", Title: "2878980"},
+		{Kind: "steam_card", URL: "https://store.steampowered.com/app/1785650/TopSpin_2K25/", Title: "TopSpin 2K25", Cover: "https://cdn.example.com/topspin.jpg"},
+		{Kind: "asf_link", Title: "1785650"},
+		{Kind: "asf_link", Title: "1785650"},
+	}
+	items := keylolASFForwardItems(mediaMeta{Platform: "keylol", KeylolBlocks: blocks})
+	if len(items) != 2 {
+		t.Fatalf("items=%#v", items)
+	}
+	if items[0].AppID != "2878980" || items[0].Title != "NBA 2K26" || items[0].Code != "!addlicense asf a/2878980" || items[0].Cover == "" {
+		t.Fatalf("bad first item: %#v", items[0])
+	}
+	if items[1].AppID != "1785650" || items[1].Title != "TopSpin 2K25" || items[1].Code != "!addlicense asf a/1785650" {
+		t.Fatalf("bad second item: %#v", items[1])
 	}
 }
 
@@ -872,6 +924,81 @@ func TestRenderInfoCardPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(twitterGallery)
+}
+
+func TestRenderKeylolSteamToolbarPreview(t *testing.T) {
+	if os.Getenv("MEDIAPARSER_KEYLOL_PREVIEW") == "" {
+		t.Skip("set MEDIAPARSER_KEYLOL_PREVIEW=1 to render keylol preview")
+	}
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-preview")
+	defer func() { cacheDir = oldCacheDir }()
+
+	html := `<a href="https://store.steampowered.com/app/2878980/NBA_2K26/">NBA 2K26</a><br>
+<span style="font-size:10px"><a href="https://store.steampowered.com/app/2878980/NBA_2K26/">Steam商店</a>，<a href="https://store.steampowered.com/app/2878980/NBA_2K26/#app_reviews_hash">Steam评测区</a> | <a href="https://keylol.com/plugin.php?id=keylol_tags:redirect&appid=2878980">其乐相关帖</a>，<a href="https://steamdb.info/app/2878980/">SteamDB</a>，<a href="https://astats.astats.nl/astats/Steam_Game_Info.php?AppID=2878980">AStats</a>，<a href="https://www.steamcardexchange.net/index.php?gamepage-appid-2878980">SCE</a>，<a href="https://barter.vg/steam/app/2878980/">Barter</a> | <a href="steam://nav/games/details/2878980">Steam客户端中查看</a>，<a href="steam://install/2878980">入库或安装</a> | <a href="#asf2878980" onclick="setCopy('!addlicense asf a/'+this.href.split('#asf')[1], '代码复制成功');return false;">复制ASF代码</a></span><br>
+<a href="https://store.steampowered.com/app/1785650/TopSpin_2K25/">TopSpin 2K25</a><br>
+<span style="font-size:10px"><a href="https://store.steampowered.com/app/1785650/TopSpin_2K25/">Steam商店</a>，<a href="https://store.steampowered.com/app/1785650/TopSpin_2K25/#app_reviews_hash">Steam评测区</a> | <a href="https://keylol.com/plugin.php?id=keylol_tags:redirect&appid=1785650">其乐相关帖</a>，<a href="https://steamdb.info/app/1785650/">SteamDB</a>，<a href="https://astats.astats.nl/astats/Steam_Game_Info.php?AppID=1785650">AStats</a>，<a href="https://www.steamcardexchange.net/index.php?gamepage-appid-1785650">SCE</a>，<a href="https://barter.vg/steam/app/1785650/">Barter</a> | <a href="steam://nav/games/details/1785650">Steam客户端中查看</a>，<a href="steam://install/1785650">入库或安装</a> | <a href="#asf1785650" onclick="setCopy('!addlicense asf a/'+this.href.split('#asf')[1], '代码复制成功');return false;">复制ASF代码</a></span>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039213-1-1")
+	blocks = keylolEnrichSteamBlocks(blocks)
+	out, err := renderInfoCard(mediaMeta{
+		URL:          "https://keylol.com/t1039213-1-1",
+		SourceURL:    "keylol-toolbar-preview",
+		Platform:     "keylol",
+		Title:        "【预告】HB 游戏包 2K Sports Champions",
+		Author:       "万猫飞仙",
+		Timestamp:    "昨天 02:13",
+		Desc:         keylolDescFromBlocks(blocks),
+		KeylolBlocks: blocks,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(out)
+}
+
+func TestRenderKeylolLivePreview(t *testing.T) {
+	raw := os.Getenv("MEDIAPARSER_KEYLOL_LIVE_PREVIEW")
+	if raw == "" {
+		t.Skip("set MEDIAPARSER_KEYLOL_LIVE_PREVIEW to a keylol thread URL")
+	}
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-live-preview")
+	defer func() { cacheDir = oldCacheDir }()
+
+	meta, err := parseKeylol(defaultConfig(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := renderInfoCard(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(out)
+}
+
+func TestRenderKeylolSpoilerPreview(t *testing.T) {
+	if os.Getenv("MEDIAPARSER_KEYLOL_SPOILER_PREVIEW") == "" {
+		t.Skip("set MEDIAPARSER_KEYLOL_SPOILER_PREVIEW=1 to render keylol spoiler preview")
+	}
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-spoiler-preview")
+	defer func() { cacheDir = oldCacheDir }()
+
+	blocks := keylolBuildBlocks(`经典镜头结尾，留下 Will Return 的提示，<br><span class="bbcode_spoiler"><span class="bbcode_spoiler_content">追击环肆女郎</span></span><br>后续图片应继续正常排版。`, nil, "https://keylol.com/t1039233-1-1")
+	out, err := renderInfoCard(mediaMeta{
+		URL:          "https://keylol.com/t1039233-1-1",
+		SourceURL:    "keylol-spoiler-preview",
+		Platform:     "keylol",
+		Title:        "涂黑文字块预览",
+		Author:       "万猫飞仙",
+		Timestamp:    "刚刚",
+		Desc:         keylolDescFromBlocks(blocks),
+		KeylolBlocks: blocks,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(out)
 }
 
 func TestRenderLiveUserCardPreview(t *testing.T) {

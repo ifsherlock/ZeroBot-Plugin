@@ -120,6 +120,7 @@ type config struct {
 	InstagramCookie    string `json:"instagram_cookie"`
 	KeylolCookie       string `json:"keylol_cookie"`
 	KeylolFooter       string `json:"keylol_footer"`
+	KeylolASFForward   bool   `json:"keylol_asf_forward"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
 	UseYTDLPFallback     bool   `json:"use_yt_dlp_fallback"`
@@ -270,6 +271,7 @@ func defaultConfig() config {
 		YTDLPPath:            "yt-dlp",
 		YouTubeExtractorArgs: "youtube:player_client=default,android;formats=missing_pot",
 		KeylolFooter:         "Keylol 帖子截图 · 浏览器渲染 · {time}",
+		KeylolASFForward:     true,
 	}
 }
 
@@ -670,6 +672,12 @@ func handleCommand(ctx *zero.Ctx) {
 			return
 		}
 		currentConf.UseYTDLPFallback = isOn(args[1])
+	case "keylol_asf_forward", "asf转发", "asf合并转发":
+		if len(args) < 2 {
+			ctx.SendChain(message.Text("用法: /媒体解析 asf转发 开启|关闭"))
+			return
+		}
+		currentConf.KeylolASFForward = isOn(args[1])
 	case "b站cookie", "bilibili_cookie":
 		if len(args) < 3 || args[1] != "设置" {
 			ctx.SendChain(message.Text("用法: /媒体解析 b站cookie 设置 COOKIE"))
@@ -888,6 +896,9 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	if cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform) {
 		infoCardSent = sendInfoCard(ctx, cfg, meta)
 	}
+	if cfg.KeylolASFForward && meta.Platform == "keylol" {
+		sendKeylolASFForward(ctx, meta)
+	}
 	mediaEnabled := cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform)
 	logDebug(cfg, "media_gate platform=%s send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
 		meta.Platform, cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), mediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
@@ -914,6 +925,97 @@ func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
 	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s", meta.Platform, meta.Title, card)
 	scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 	return true
+}
+
+type keylolASFForwardItem struct {
+	AppID string
+	Title string
+	Code  string
+	Cover string
+}
+
+func keylolASFForwardItems(meta mediaMeta) []keylolASFForwardItem {
+	if meta.Platform != "keylol" || len(meta.KeylolBlocks) == 0 {
+		return nil
+	}
+	steamByID := map[string]keylolBlock{}
+	for _, block := range meta.KeylolBlocks {
+		if block.Kind != "steam_card" {
+			continue
+		}
+		if id := keylolSteamAppID(block.URL); id != "" {
+			steamByID[id] = block
+		}
+	}
+	out := []keylolASFForwardItem{}
+	seen := map[string]bool{}
+	var lastSteam keylolBlock
+	for _, block := range meta.KeylolBlocks {
+		switch block.Kind {
+		case "steam_card":
+			lastSteam = block
+		case "asf_link":
+			appID := strings.TrimSpace(block.Title)
+			if appID == "" || seen[appID] {
+				continue
+			}
+			steam := steamByID[appID]
+			if steam.URL == "" && keylolSteamAppID(lastSteam.URL) == appID {
+				steam = lastSteam
+			}
+			seen[appID] = true
+			out = append(out, keylolASFForwardItem{
+				AppID: appID,
+				Title: firstNonEmpty(steam.Title, "Steam "+appID),
+				Code:  "!addlicense asf a/" + appID,
+				Cover: steam.Cover,
+			})
+		}
+	}
+	return out
+}
+
+func sendKeylolASFForward(ctx *zero.Ctx, meta mediaMeta) {
+	items := keylolASFForwardItems(meta)
+	if len(items) == 0 {
+		return
+	}
+	nodes := message.Message{}
+	botName := "视频解析bot"
+	botID := ctx.Event.SelfID
+	for _, item := range items {
+		item = enrichKeylolASFForwardItem(item)
+		msg := message.Message{message.Text(
+			"🎮 " + item.Title + "\n" +
+				"游戏ID: " + item.AppID + "\n" +
+				"ASF复制代码:\n" + item.Code,
+		)}
+		if item.Cover != "" {
+			msg = append(msg, message.Image(stripMediaPrefix(item.Cover)))
+		}
+		nodes = append(nodes, message.CustomNode(botName, botID, msg))
+	}
+	var resID int64
+	if ctx.Event.GroupID != 0 {
+		resID = ctx.SendGroupForwardMessage(ctx.Event.GroupID, nodes).Get("message_id").Int()
+	} else {
+		resID = ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes).Get("message_id").Int()
+	}
+	logrus.Infof("[mediaparser] sent_keylol_asf_forward title=%q nodes=%d message_id=%d", meta.Title, len(nodes), resID)
+}
+
+func enrichKeylolASFForwardItem(item keylolASFForwardItem) keylolASFForwardItem {
+	if item.AppID == "" || (item.Cover != "" && item.Title != "" && !strings.HasPrefix(item.Title, "Steam ")) {
+		return item
+	}
+	info, err := keylolFetchSteamApp("https://store.steampowered.com/app/" + item.AppID + "/")
+	if err != nil {
+		logrus.Warnf("[mediaparser] keylol_asf_steam_enrich_failed app_id=%s error=%v", item.AppID, err)
+		return item
+	}
+	item.Title = firstNonEmpty(info.Title, item.Title)
+	item.Cover = firstNonEmpty(info.Cover, item.Cover)
+	return item
 }
 
 func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
@@ -2077,7 +2179,7 @@ func formatStatusFor(cfg config) string {
 		}
 	}
 	return fmt.Sprintf(
-		"媒体解析状态\n自动解析: %v\n调试日志: %v\n私聊名单模式: %s\n群聊名单模式: %s\n群成员名单模式: %s\n信息图: %v\n媒体: %v\n下载视频: %v\n避开AV1: %v\n备用yt-dlp: %v\nB站Cookie: %v\n全局视频画质: %s\n视频上限: %dMB\n缓存TTL: %d分钟\n配置文件: %s\n启用平台: %s\n关闭平台: %s",
+		"媒体解析状态\n自动解析: %v\n调试日志: %v\n私聊名单模式: %s\n群聊名单模式: %s\n群成员名单模式: %s\n信息图: %v\n媒体: %v\n下载视频: %v\nKeylol ASF转发: %v\n避开AV1: %v\n备用yt-dlp: %v\nB站Cookie: %v\n全局视频画质: %s\n视频上限: %dMB\n缓存TTL: %d分钟\n配置文件: %s\n启用平台: %s\n关闭平台: %s",
 		cfg.AutoParse,
 		cfg.Debug,
 		cfg.PrivateAccessMode,
@@ -2086,6 +2188,7 @@ func formatStatusFor(cfg config) string {
 		cfg.SendInfoCard,
 		cfg.SendMedia,
 		cfg.DownloadVideo,
+		cfg.KeylolASFForward,
 		cfg.AvoidAV1,
 		cfg.UseYTDLPFallback,
 		cfg.BilibiliUseCookie && cfg.BilibiliCookie != "",

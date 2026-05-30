@@ -414,7 +414,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			if isBlankCardImage(img) {
 				img = nil
 			}
-			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-288))
+			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-keylolSteamCardCoverW-86))
 			if len(descLines) > 3 {
 				descLines = descLines[:3]
 			}
@@ -426,14 +426,14 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				cover:  block.Cover,
 				img:    img,
 				lines:  descLines,
-				height: 184,
+				height: 208,
 			})
 		case "video_embed":
 			img := keylolPrepareImage(fetchCardImage(block.Cover, nil))
 			if isBlankCardImage(img) {
 				img = nil
 			}
-			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-288))
+			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-keylolVideoCardCoverW-86))
 			if len(descLines) > 3 {
 				descLines = descLines[:3]
 			}
@@ -445,10 +445,10 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				cover:  block.Cover,
 				img:    img,
 				lines:  descLines,
-				height: 184,
+				height: 208,
 			})
 		case "asf_link":
-			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "asf_link", title: block.Title, height: 38})
+			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "asf_link", title: block.Title, height: 44})
 		case "toolbar":
 			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, toolbarSize, block.Text, float64(contentW))
 			if len(lines) > 0 {
@@ -463,20 +463,17 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 	titleLines := wrapTextByPixels(dcMeasure, fontBytes, titleSize, firstNonEmpty(meta.Title, "Keylol 帖子"), float64(contentW-150))
 	contentH := 0
-	for _, block := range renderBlocks {
-		if contentH > 0 {
-			contentH += blockGap
+	for i, block := range renderBlocks {
+		if i > 0 {
+			contentH += keylolBlockGap(renderBlocks[i-1], block, blockGap, imageGap)
 		}
 		contentH += block.height
-		if block.kind == "image" {
-			contentH += imageGap
-		}
 	}
 	if contentH < 120 {
 		contentH = 120
 	}
 	headerH := 86 + len(titleLines)*titleLH + 72
-	footerH := 112
+	footerH := 150
 	panelH := panelPad + headerH + contentH + footerH
 	height := panelH + outerPad*2
 
@@ -504,7 +501,10 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 2)
 	dc.Fill()
 	y += 44
-	for _, block := range renderBlocks {
+	for i, block := range renderBlocks {
+		if i > 0 {
+			y += keylolBlockGap(renderBlocks[i-1], block, blockGap, imageGap)
+		}
 		switch block.kind {
 		case "text":
 			for _, line := range block.lines {
@@ -521,7 +521,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				ix = x + (contentW-block.width)/2
 			}
 			drawKeylolFullImage(dc, block.img, ix, y, block.width, block.height)
-			y += block.height + imageGap
+			y += block.height
 		case "inline_image":
 			drawKeylolInlineImage(dc, block.img, x, y, block.width, block.height)
 			y += block.height
@@ -554,7 +554,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			drawKeylolCollapse(dc, fontBytes, block.lines, x, y, contentW, block.height)
 			y += block.height
 		case "spoiler":
-			drawKeylolSpoiler(dc, bodyFontBytes, block.lines, x, y, contentW, block.height)
+			drawKeylolSpoiler(dc, bodyFontBytes, block.lines, x, y, contentW, block.height, theme)
 			y += block.height
 		case "hidden_label":
 			drawKeylolHiddenLabel(dc, bodyFontBytes, block.lines, x, y, contentW, block.height)
@@ -578,7 +578,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			drawKeylolSteamCard(dc, fontBytes, block, x, y, contentW, block.height)
 			y += block.height
 		case "video_embed":
-			drawKeylolVideoCard(dc, fontBytes, block, x, y, contentW, block.height)
+			drawKeylolVideoCard(dc, fontBytes, block, x, y, contentW, block.height, theme)
 			y += block.height
 		case "asf_link":
 			drawKeylolASFLink(dc, fontBytes, block.title, x, y)
@@ -589,7 +589,6 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				y += toolbarLH
 			}
 		}
-		y += blockGap
 	}
 	mustFont(dc, fontBytes, 20)
 	setRGB(dc, theme.Footer)
@@ -626,6 +625,29 @@ func keylolBlocksForRender(meta mediaMeta) []keylolBlock {
 		}
 	}
 	return blocks
+}
+
+func keylolBlockGap(prev, cur keylolRenderBlock, base, imageGap int) int {
+	gap := base
+	if prev.kind == "image" || cur.kind == "image" {
+		gap = maxInt(gap, imageGap)
+	}
+	if prev.kind == "video_embed" || cur.kind == "video_embed" || prev.kind == "steam_card" || cur.kind == "steam_card" {
+		gap = maxInt(gap, 30)
+	}
+	if cur.kind == "heading1" || cur.kind == "heading2" {
+		gap = maxInt(gap, 34)
+	}
+	if prev.kind == "asf_link" && (cur.kind == "heading1" || cur.kind == "heading2" || cur.kind == "text") {
+		gap = maxInt(gap, 48)
+	}
+	if prev.kind == "video_embed" && (cur.kind == "heading1" || cur.kind == "heading2" || cur.kind == "image") {
+		gap = maxInt(gap, 56)
+	}
+	if prev.kind == "spoiler" {
+		gap = maxInt(gap, 42)
+	}
+	return gap
 }
 
 func keylolImageDrawSize(img image.Image, maxW int) (int, int) {
@@ -676,21 +698,35 @@ type keylolCardTheme struct {
 }
 
 func keylolCardThemeNow() keylolCardTheme {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MEDIAPARSER_KEYLOL_THEME"))) {
+	case "dark", "night", "black":
+		return keylolDarkTheme()
+	case "light", "day", "white":
+		return keylolLightTheme()
+	}
 	hour := time.Now().Hour()
 	if loc, err := time.LoadLocation("Asia/Shanghai"); err == nil {
 		hour = time.Now().In(loc).Hour()
 	}
 	if hour >= 18 || hour < 6 {
-		return keylolCardTheme{
-			BG:     color.RGBA{R: 7, G: 12, B: 20, A: 255},
-			Panel:  color.RGBA{R: 18, G: 24, B: 34, A: 255},
-			Title:  color.RGBA{R: 230, G: 235, B: 244, A: 255},
-			Body:   color.RGBA{R: 184, G: 190, B: 201, A: 255},
-			Muted:  color.RGBA{R: 127, G: 137, B: 153, A: 255},
-			Line:   color.RGBA{R: 42, G: 50, B: 62, A: 255},
-			Footer: color.RGBA{R: 104, G: 115, B: 132, A: 255},
-		}
+		return keylolDarkTheme()
 	}
+	return keylolLightTheme()
+}
+
+func keylolDarkTheme() keylolCardTheme {
+	return keylolCardTheme{
+		BG:     color.RGBA{R: 7, G: 12, B: 20, A: 255},
+		Panel:  color.RGBA{R: 18, G: 24, B: 34, A: 255},
+		Title:  color.RGBA{R: 230, G: 235, B: 244, A: 255},
+		Body:   color.RGBA{R: 184, G: 190, B: 201, A: 255},
+		Muted:  color.RGBA{R: 127, G: 137, B: 153, A: 255},
+		Line:   color.RGBA{R: 42, G: 50, B: 62, A: 255},
+		Footer: color.RGBA{R: 104, G: 115, B: 132, A: 255},
+	}
+}
+
+func keylolLightTheme() keylolCardTheme {
 	return keylolCardTheme{
 		BG:     color.RGBA{R: 234, G: 238, B: 244, A: 255},
 		Panel:  color.RGBA{R: 255, G: 255, B: 255, A: 255},
@@ -700,6 +736,10 @@ func keylolCardThemeNow() keylolCardTheme {
 		Line:   color.RGBA{R: 224, G: 228, B: 235, A: 255},
 		Footer: color.RGBA{R: 176, G: 184, B: 194, A: 255},
 	}
+}
+
+func keylolThemeDark(theme keylolCardTheme) bool {
+	return int(theme.BG.R)+int(theme.BG.G)+int(theme.BG.B) < 180
 }
 
 func setRGB(dc *gg.Context, c color.RGBA) {
@@ -786,20 +826,28 @@ func drawKeylolCollapse(dc *gg.Context, fontBytes []byte, lines []string, x, y, 
 	}
 }
 
-func drawKeylolSpoiler(dc *gg.Context, fontBytes []byte, lines []string, x, y, w, h int) {
-	dc.SetRGBA255(32, 38, 48, 190)
-	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 12)
-	dc.Fill()
-	dc.SetRGBA255(132, 146, 166, 110)
-	dc.SetLineWidth(1)
-	dc.DrawRoundedRectangle(float64(x)+0.5, float64(y)+0.5, float64(w)-1, float64(h)-1, 12)
-	dc.Stroke()
+func drawKeylolSpoiler(dc *gg.Context, fontBytes []byte, lines []string, x, y, w, h int, theme keylolCardTheme) {
 	yy := y + 32
 	for _, line := range lines {
-		drawInlineEmoji(dc, fontBytes, 23, color.RGBA{R: 221, G: 226, B: 235, A: 255}, line, float64(x+28), float64(yy))
 		mustFont(dc, fontBytes, 23)
 		lineW, _ := dc.MeasureString(line)
-		drawDottedLine(dc, float64(x+28), float64(yy+8), float64(x+28)+lineW, color.RGBA{R: 172, G: 186, B: 206, A: 190})
+		pillW := minInt(w, int(lineW)+38)
+		bg := color.RGBA{R: 38, G: 46, B: 58, A: 205}
+		fg := color.RGBA{R: 226, G: 231, B: 240, A: 255}
+		border := color.RGBA{R: 132, G: 146, B: 166, A: 96}
+		if !keylolThemeDark(theme) {
+			bg = color.RGBA{R: 230, G: 236, B: 244, A: 255}
+			fg = color.RGBA{R: 77, G: 86, B: 102, A: 255}
+			border = color.RGBA{R: 198, G: 207, B: 220, A: 255}
+		}
+		dc.SetColor(bg)
+		dc.DrawRoundedRectangle(float64(x), float64(yy-24), float64(pillW), 34, 9)
+		dc.Fill()
+		dc.SetColor(border)
+		dc.SetLineWidth(1)
+		dc.DrawRoundedRectangle(float64(x)+0.5, float64(yy-24)+0.5, float64(pillW)-1, 33, 9)
+		dc.Stroke()
+		drawInlineEmoji(dc, fontBytes, 23, fg, line, float64(x+18), float64(yy-7))
 		yy += 32
 	}
 }
@@ -863,7 +911,7 @@ func drawKeylolSteamCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	dc.DrawRoundedRectangle(fx+0.5, fy+0.5, float64(w)-1, float64(h)-1, 16)
 	dc.Stroke()
 
-	coverW := 232
+	coverW := keylolSteamCardCoverW
 	coverH := h - 28
 	coverX := x + 16
 	coverY := y + 14
@@ -876,12 +924,15 @@ func drawKeylolSteamCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 		dc.SetRGB255(145, 178, 214)
 		dc.DrawStringAnchored("Steam", float64(coverX+coverW/2), float64(coverY+coverH/2+9), 0.5, 0.5)
 	} else {
-		dc.DrawImage(imaging.Fill(block.img, coverW, coverH, imaging.Center, imaging.Lanczos), coverX, coverY)
+		dc.SetRGB255(13, 22, 34)
+		dc.Fill()
+		fit := imaging.Fit(block.img, coverW, coverH, imaging.Lanczos)
+		dc.DrawImage(fit, coverX+(coverW-fit.Bounds().Dx())/2, coverY+(coverH-fit.Bounds().Dy())/2)
 	}
 	dc.ResetClip()
 
-	textX := x + 268
-	title := truncate(firstNonEmpty(block.title, "Steam 游戏"), 46)
+	textX := x + coverW + 36
+	title := truncate(firstNonEmpty(block.title, "Steam 游戏"), 54)
 	drawInlineEmoji(dc, fontBytes, 25, color.RGBA{R: 237, G: 244, B: 255, A: 255}, "Steam 上的 "+title, float64(textX), float64(y+42))
 	yy := y + 78
 	for _, line := range block.lines {
@@ -893,18 +944,25 @@ func drawKeylolSteamCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	dc.DrawStringAnchored("在 Steam 上查看 →", float64(textX), float64(y+h-28), 0, 0.5)
 }
 
+const keylolSteamCardCoverW = 350
+
 func drawKeylolASFLink(dc *gg.Context, fontBytes []byte, appID string, x, y int) {
-	drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 58, G: 166, B: 230, A: 255}, "🎮 Steam "+strings.TrimSpace(appID)+" →", float64(x), float64(y+24))
+	drawInlineEmoji(dc, fontBytes, 27, color.RGBA{R: 53, G: 177, B: 246, A: 255}, "🎮 Steam "+strings.TrimSpace(appID)+" →", float64(x), float64(y+28))
 }
 
-func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlock, x, y, w, h int) {
+func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlock, x, y, w, h int, theme keylolCardTheme) {
 	fx, fy := float64(x), float64(y)
+	dark := keylolThemeDark(theme)
 	for i := 8; i >= 1; i-- {
 		dc.SetRGBA255(12, 20, 32, 7+i*3)
 		dc.DrawRoundedRectangle(fx, fy+float64(i), float64(w), float64(h), 16)
 		dc.Fill()
 	}
-	dc.SetRGB255(245, 249, 255)
+	if dark {
+		dc.SetRGB255(20, 34, 54)
+	} else {
+		dc.SetRGB255(245, 249, 255)
+	}
 	dc.DrawRoundedRectangle(fx, fy, float64(w), float64(h), 16)
 	dc.Fill()
 	dc.SetRGBA255(92, 136, 184, 70)
@@ -912,36 +970,59 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	dc.DrawRoundedRectangle(fx+0.5, fy+0.5, float64(w)-1, float64(h)-1, 16)
 	dc.Stroke()
 
-	coverW := 232
+	coverW := keylolVideoCardCoverW
 	coverH := h - 28
 	coverX := x + 16
 	coverY := y + 14
 	dc.DrawRoundedRectangle(float64(coverX), float64(coverY), float64(coverW), float64(coverH), 10)
 	dc.ClipPreserve()
 	if block.img == nil {
-		dc.SetRGB255(221, 234, 248)
+		if dark {
+			dc.SetRGB255(31, 45, 65)
+		} else {
+			dc.SetRGB255(221, 234, 248)
+		}
 		dc.Fill()
 		mustFont(dc, fontBytes, 26)
-		dc.SetRGB255(72, 126, 186)
+		if dark {
+			dc.SetRGB255(145, 178, 214)
+		} else {
+			dc.SetRGB255(72, 126, 186)
+		}
 		dc.DrawStringAnchored("Bilibili", float64(coverX+coverW/2), float64(coverY+coverH/2+9), 0.5, 0.5)
 	} else {
-		dc.DrawImage(imaging.Fill(block.img, coverW, coverH, imaging.Center, imaging.Lanczos), coverX, coverY)
+		if dark {
+			dc.SetRGB255(13, 22, 34)
+		} else {
+			dc.SetRGB255(232, 239, 248)
+		}
+		dc.Fill()
+		fit := imaging.Fit(block.img, coverW, coverH, imaging.Lanczos)
+		dc.DrawImage(fit, coverX+(coverW-fit.Bounds().Dx())/2, coverY+(coverH-fit.Bounds().Dy())/2)
 	}
 	dc.ResetClip()
 	drawPlayOverlay(dc, float64(coverX+coverW/2), float64(coverY+coverH/2))
 
-	textX := x + 268
-	title := truncate(firstNonEmpty(block.title, "Bilibili 视频"), 46)
-	drawInlineEmoji(dc, fontBytes, 25, color.RGBA{R: 28, G: 49, B: 72, A: 255}, title, float64(textX), float64(y+42))
+	textX := x + coverW + 36
+	title := truncate(firstNonEmpty(block.title, "Bilibili 视频"), 54)
+	titleColor := color.RGBA{R: 28, G: 49, B: 72, A: 255}
+	bodyColor := color.RGBA{R: 78, G: 98, B: 122, A: 255}
+	if dark {
+		titleColor = color.RGBA{R: 237, G: 244, B: 255, A: 255}
+		bodyColor = color.RGBA{R: 166, G: 188, B: 214, A: 255}
+	}
+	drawInlineEmoji(dc, fontBytes, 25, titleColor, title, float64(textX), float64(y+42))
 	yy := y + 78
 	for _, line := range block.lines {
-		drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, color.RGBA{R: 78, G: 98, B: 122, A: 255}, line, float64(textX), float64(yy))
+		drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, bodyColor, line, float64(textX), float64(yy))
 		yy += 28
 	}
 	mustFont(dc, fontBytes, 19)
 	dc.SetRGB255(58, 166, 230)
 	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(textX), float64(y+h-28), 0, 0.5)
 }
+
+const keylolVideoCardCoverW = 350
 
 func keylolPrepareImage(img image.Image) image.Image {
 	if img == nil {
@@ -1001,20 +1082,72 @@ func wrapTextByPixels(dc *gg.Context, fontBytes []byte, size float64, s string, 
 			continue
 		}
 		line := ""
-		for _, r := range []rune(para) {
-			next := line + string(r)
+		for _, token := range wrapTokens(para) {
+			next := line + token
 			if ww, _ := dc.MeasureString(next); ww > maxW && line != "" {
-				out = append(out, line)
-				line = string(r)
+				out = append(out, strings.TrimSpace(line))
+				line = strings.TrimLeft(token, " ")
 			} else {
 				line = next
 			}
+			for {
+				if ww, _ := dc.MeasureString(line); ww <= maxW || len([]rune(line)) <= 1 {
+					break
+				}
+				rs := []rune(line)
+				cut := len(rs) - 1
+				for cut > 1 {
+					if ww, _ := dc.MeasureString(string(rs[:cut])); ww <= maxW {
+						break
+					}
+					cut--
+				}
+				out = append(out, strings.TrimSpace(string(rs[:cut])))
+				line = strings.TrimLeft(string(rs[cut:]), " ")
+			}
 		}
 		if line != "" {
-			out = append(out, line)
+			out = append(out, strings.TrimSpace(line))
 		}
 	}
 	return fixWrappedLinePunctuation(out)
+}
+
+func wrapTokens(s string) []string {
+	rs := []rune(s)
+	out := []string{}
+	for i := 0; i < len(rs); {
+		r := rs[i]
+		if r == ' ' || r == '\t' {
+			for i < len(rs) && (rs[i] == ' ' || rs[i] == '\t') {
+				i++
+			}
+			out = append(out, " ")
+			continue
+		}
+		if isLatinTokenRune(r) {
+			start := i
+			for i < len(rs) && isLatinTokenRune(rs[i]) {
+				i++
+			}
+			out = append(out, string(rs[start:i]))
+			continue
+		}
+		out = append(out, string(r))
+		i++
+	}
+	return out
+}
+
+func isLatinTokenRune(r rune) bool {
+	if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+		return true
+	}
+	switch r {
+	case '\'', '.', ',', ':', ';', '!', '?', '-', '_', '/', '+', '&', '®', '™':
+		return true
+	}
+	return false
 }
 
 func keylolLooksLikeLink(line string) bool {
@@ -2172,6 +2305,19 @@ func maxInt(values ...int) int {
 	out := 0
 	for _, v := range values {
 		if v > out {
+			out = v
+		}
+	}
+	return out
+}
+
+func minInt(values ...int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	out := values[0]
+	for _, v := range values[1:] {
+		if v < out {
 			out = v
 		}
 	}

@@ -194,11 +194,13 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 			return
 		}
 		raw = absolutize(base, ensureHTTPS(raw))
-		if !keylolContentImageOK(raw) || seenImages[raw] {
+		if !keylolContentImageOK(raw) || (!inline && seenImages[raw]) {
 			return
 		}
 		flushText()
-		seenImages[raw] = true
+		if !inline {
+			seenImages[raw] = true
+		}
 		kind := "image"
 		if inline {
 			kind = "inline_image"
@@ -411,8 +413,19 @@ func keylolReplaceSteamLinks(s, base string) string {
 			return match
 		}
 		title := keylolSteamTitleFromText(keylolCleanBlockText(m[2]), href)
+		if keylolSteamToolbarLinkText(title) {
+			return match
+		}
 		return "\n[keylol_steam]" + url.QueryEscape(href) + "|" + url.QueryEscape(title) + "\n"
 	})
+}
+
+func keylolSteamToolbarLinkText(text string) bool {
+	switch strings.TrimSpace(text) {
+	case "Steam商店", "Steam评测区", "Steam客户端中查看", "入库或安装":
+		return true
+	}
+	return false
 }
 
 func keylolSteamBlockFromMarker(line string) keylolBlock {
@@ -726,7 +739,7 @@ func keylolReplaceTextLinks(s, base string) string {
 		if strings.HasPrefix(text, "[keylol_red]") || strings.HasPrefix(text, "[keylol_green]") {
 			return "\n" + text + "\n"
 		}
-		return "\n[keylol_link]" + keylolOneLine(text) + "\n"
+		return " " + text + " "
 	})
 }
 
@@ -755,6 +768,7 @@ func keylolASFAppID(raw string) string {
 	raw = html.UnescapeString(htmlUnescape(raw))
 	for _, re := range []*regexp.Regexp{
 		regexp.MustCompile(`(?i)!addlicense\s+asf\s+a/(\d+)`),
+		regexp.MustCompile(`(?i)#asf(\d+)`),
 		regexp.MustCompile(`(?i)\ba/(\d+)\b`),
 	} {
 		if m := re.FindStringSubmatch(raw); len(m) > 1 {
@@ -783,9 +797,12 @@ func keylolLooksLikeSteamToolbar(line string) bool {
 
 func keylolCleanSteamToolbar(line string) string {
 	line = strings.TrimSpace(line)
-	line = strings.TrimRight(line, "|｜ ")
-	line = regexp.MustCompile(`\s*([|｜])\s*`).ReplaceAllString(line, " $1 ")
+	line = strings.TrimRight(line, "|｜/、，, ")
+	line = strings.NewReplacer("、", " / ", "，", " / ", ",", " / ").Replace(line)
+	line = regexp.MustCompile(`\s*([|｜])\s*`).ReplaceAllString(line, " | ")
+	line = regexp.MustCompile(`(?:\s*/\s*){2,}`).ReplaceAllString(line, " / ")
 	line = regexp.MustCompile(`\s+`).ReplaceAllString(line, " ")
+	line = strings.Trim(line, " /|｜")
 	return strings.TrimSpace(line)
 }
 
