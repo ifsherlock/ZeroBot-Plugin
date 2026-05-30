@@ -212,6 +212,38 @@ func TestKeylolBuildBlocksKeepsBilibiliIframePreview(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksKeepsBilibiliMediaTagPreview(t *testing.T) {
+	html := `宣传视频<br>[media]https://www.bilibili.com/video/BV16AGQ6LEQJ/[/media]<br>游戏截图`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039073-1-1")
+	for _, block := range blocks {
+		if block.Kind == "text" && strings.Contains(block.Text, "[media]") {
+			t.Fatalf("media tag leaked as text: %#v", blocks)
+		}
+		if block.Kind == "video_embed" && block.URL == "https://www.bilibili.com/video/BV16AGQ6LEQJ" {
+			return
+		}
+	}
+	t.Fatalf("missing media tag video block: %#v", blocks)
+}
+
+func TestKeylolBuildBlocksLabelsShownHiddenImages(t *testing.T) {
+	html := `<h2>游戏截图</h2><div class="showhide"><p>隐藏内容，<a href="javascript:;" class="showhide-btn">点击显示</a></p><div class="spoiler"><img file="https://img.example.com/a.jpg"></div></div>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039073-1-1")
+	foundLabel := false
+	foundImage := false
+	for _, block := range blocks {
+		if block.Kind == "hidden_label" && block.Text == "已显示隐藏内容" {
+			foundLabel = true
+		}
+		if block.Kind == "image" && block.URL == "https://img.example.com/a.jpg" {
+			foundImage = true
+		}
+	}
+	if !foundLabel || !foundImage {
+		t.Fatalf("hidden label/image missing: %#v", blocks)
+	}
+}
+
 func TestKeylolBuildBlocksKeepsSmiliesInline(t *testing.T) {
 	html := `蓝色窃听<img class="zoom" file="https://keylol.com/static/image/smiley/steamcn_9/0140.gif" width="61" height="55">不过后续不错`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039233-1-1")
@@ -224,7 +256,7 @@ func TestKeylolBuildBlocksKeepsSmiliesInline(t *testing.T) {
 }
 
 func TestKeylolBuildBlocksKeepsSpoilerStyled(t *testing.T) {
-	html := `美妙邦女郎<span class="bbcode_spoiler"><span class="bbcode_spoiler_content">还有会说日语的坏邦女郎</span></span><br>正文`
+	html := `美妙邦女郎<span class="bbcode_spoiler"><span class="bbcode_spoiler_content">还有会说日语的坏邦女郎</span></span><br>[spoil]不要显示标签[/spoil]<br>正文`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039233-1-1")
 	found := false
 	for _, block := range blocks {
@@ -236,6 +268,9 @@ func TestKeylolBuildBlocksKeepsSpoilerStyled(t *testing.T) {
 		}
 		if block.Kind == "text" && strings.Contains(block.Text, "还有会说日语") {
 			t.Fatalf("spoiler leaked as plain text: %#v", blocks)
+		}
+		if strings.Contains(block.Text, "[spoil]") || strings.Contains(block.Text, "[/spoil]") {
+			t.Fatalf("spoil tag leaked: %#v", blocks)
 		}
 	}
 	if !found {

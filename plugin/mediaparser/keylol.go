@@ -158,10 +158,11 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 
 func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
 	messageHTML = keylolStripHiddenTips(messageHTML)
-	messageHTML = keylolStripShowhideControls(messageHTML)
+	messageHTML = keylolMarkShowhideContent(messageHTML)
 	messageHTML = keylolReplaceSmileyImages(messageHTML)
 	messageHTML = keylolReplaceSpoilers(messageHTML)
 	messageHTML = keylolReplaceStyledText(messageHTML)
+	messageHTML = keylolReplaceMediaTags(messageHTML, base)
 	messageHTML = keylolReplaceSteamLinks(messageHTML, base)
 	messageHTML = keylolReplaceTextLinks(messageHTML, base)
 	messageHTML = keylolReplaceCollapseBlocks(messageHTML)
@@ -346,6 +347,12 @@ func keylolTextBlocks(text string) []keylolBlock {
 			if text != "" {
 				out = append(out, keylolBlock{Kind: "spoiler", Text: text})
 			}
+		case strings.HasPrefix(line, "[keylol_hidden]"):
+			flush()
+			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_hidden]"))
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "hidden_label", Text: text})
+			}
 		case strings.HasPrefix(line, "[keylol_red]"):
 			flush()
 			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_red]"))
@@ -363,6 +370,12 @@ func keylolTextBlocks(text string) []keylolBlock {
 			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_link]"))
 			if text != "" {
 				out = append(out, keylolBlock{Kind: "link", Text: text})
+			}
+		case strings.HasPrefix(line, "[keylol_video]"):
+			flush()
+			u := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_video]"))
+			if block := keylolVideoBlockFromURL(u); block.URL != "" {
+				out = append(out, block)
 			}
 		case strings.HasPrefix(line, "[keylol_collapse]"):
 			flush()
@@ -536,13 +549,42 @@ func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
 		return keylolBlock{}, fmt.Errorf("steam appdetails failed")
 	}
 	detail := getMap(app, "data")
+	cover := firstNonEmpty(getString(detail, "header_image"), getString(detail, "capsule_image"))
+	for _, raw := range getSlice(detail, "screenshots") {
+		if cover != "" {
+			break
+		}
+		if item, ok := raw.(map[string]any); ok {
+			cover = firstNonEmpty(getString(item, "path_thumbnail"), getString(item, "path_full"))
+		}
+	}
+	for _, raw := range getSlice(detail, "movies") {
+		if cover != "" {
+			break
+		}
+		if item, ok := raw.(map[string]any); ok {
+			cover = getString(item, "thumbnail")
+		}
+	}
 	return keylolBlock{
 		Kind:  "steam_card",
 		URL:   rawURL,
 		Title: getString(detail, "name"),
-		Desc:  truncate(keylolCleanBlockText(firstNonEmpty(getString(detail, "short_description"), getString(detail, "about_the_game"))), 200),
-		Cover: firstNonEmpty(getString(detail, "header_image"), getString(detail, "capsule_image")),
+		Desc:  keylolReadableSummary(firstNonEmpty(getString(detail, "short_description"), getString(detail, "about_the_game")), 360),
+		Cover: cover,
 	}, nil
+}
+
+func keylolReadableSummary(raw string, limit int) string {
+	text := keylolCleanBlockText(raw)
+	text = strings.ReplaceAll(text, "[/spoil]", "")
+	text = strings.ReplaceAll(text, "[spoil]", "")
+	text = keylolOneLine(text)
+	if limit > 0 && len([]rune(text)) > limit {
+		rs := []rune(text)
+		text = string(rs[:limit]) + "…"
+	}
+	return text
 }
 
 func keylolStripHiddenTips(s string) string {
@@ -552,11 +594,26 @@ func keylolStripHiddenTips(s string) string {
 	return s
 }
 
-func keylolStripShowhideControls(s string) string {
-	s = regexp.MustCompile(`(?is)<p>\s*隐藏内容[^<]*<a\b[^>]*class=["'][^"']*\bshowhide-btn\b[^"']*["'][^>]*>.*?</a>\s*</p>`).ReplaceAllString(s, "")
+func keylolMarkShowhideContent(s string) string {
+	s = regexp.MustCompile(`(?is)<p>\s*隐藏内容[^<]*<a\b[^>]*class=["'][^"']*\bshowhide-btn\b[^"']*["'][^>]*>.*?</a>\s*</p>`).ReplaceAllString(s, "\n[keylol_hidden]已显示隐藏内容\n")
 	s = regexp.MustCompile(`(?is)<a\b[^>]*class=["'][^"']*\bshowhide-btn\b[^"']*["'][^>]*>.*?</a>`).ReplaceAllString(s, "")
 	s = regexp.MustCompile(`(?is)<div>\s*<a\b[^>]*>\s*点击隐藏\s*</a>\s*</div>`).ReplaceAllString(s, "")
 	return s
+}
+
+func keylolReplaceMediaTags(s, base string) string {
+	re := regexp.MustCompile(`(?is)\[media\](.*?)\[/media\]`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 2 {
+			return match
+		}
+		raw := strings.TrimSpace(html.UnescapeString(htmlUnescape(m[1])))
+		if raw == "" {
+			return ""
+		}
+		return "\n[keylol_video]" + absolutize(base, ensureHTTPS(raw)) + "\n"
+	})
 }
 
 func keylolReplaceSmileyImages(s string) string {
@@ -582,6 +639,7 @@ func keylolSmileyText(raw string) string {
 }
 
 func keylolReplaceSpoilers(s string) string {
+	s = regexp.MustCompile(`(?is)\[/?spoil\]`).ReplaceAllString(s, "\n")
 	re := regexp.MustCompile(`(?is)<span\b[^>]*class=["'][^"']*\bbbcode_spoiler\b[^"']*["'][^>]*>\s*<span\b[^>]*class=["'][^"']*\bbbcode_spoiler_content\b[^"']*["'][^>]*>(.*?)</span>\s*</span>`)
 	return re.ReplaceAllStringFunc(s, func(match string) string {
 		m := re.FindStringSubmatch(match)
@@ -679,7 +737,11 @@ func keylolVideoBlockFromIframe(tag, base string) keylolBlock {
 		return keylolBlock{}
 	}
 	src := absolutize(base, html.UnescapeString(htmlUnescape(m[1])))
-	if bv := bvRE.FindString(src); bv != "" {
+	return keylolVideoBlockFromURL(src)
+}
+
+func keylolVideoBlockFromURL(raw string) keylolBlock {
+	if bv := bvRE.FindString(raw); bv != "" {
 		return keylolBlock{
 			Kind:  "video_embed",
 			URL:   "https://www.bilibili.com/video/" + bv,
@@ -796,7 +858,7 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	seenSteam := map[string]bool{}
 	for _, block := range blocks {
-		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "spoiler" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
+		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "spoiler" || block.Kind == "hidden_label" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
 			if block.Text == "" {
 				continue
@@ -888,9 +950,13 @@ func keylolNoiseLine(line string) bool {
 	for _, needle := range []string{
 		"转载或引用本网站内容", "不代表本社区立场", "本网站保留追究",
 		"下载附件", "点击文件名下载附件", "查看全部评分", "评分参与人数",
-		"隐藏内容", "点击显示", "点击隐藏",
 	} {
 		if strings.Contains(line, needle) {
+			return true
+		}
+	}
+	for _, exact := range []string{"隐藏内容", "隐藏内容，", "点击显示", "点击隐藏"} {
+		if strings.TrimSpace(line) == exact {
 			return true
 		}
 	}
