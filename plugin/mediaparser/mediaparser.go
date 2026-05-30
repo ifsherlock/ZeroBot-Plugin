@@ -115,8 +115,11 @@ type config struct {
 	BilibiliMaxQuality string `json:"bilibili_max_quality"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
-	UseYTDLPFallback bool   `json:"use_yt_dlp_fallback"`
-	YTDLPPath        string `json:"yt_dlp_path"`
+	UseYTDLPFallback     bool   `json:"use_yt_dlp_fallback"`
+	YTDLPPath            string `json:"yt_dlp_path"`
+	YTDLPCookieFile      string `json:"yt_dlp_cookie_file"`
+	InstagramCookieFile  string `json:"instagram_cookie_file"`
+	YouTubeExtractorArgs string `json:"youtube_extractor_args"`
 }
 
 type mediaMeta struct {
@@ -214,40 +217,41 @@ func defaultConfig() config {
 		output[p.Name] = outputAll
 	}
 	return config{
-		AutoParse:           true,
-		Keywords:            []string{"视频解析", "解析视频", "解析", "parse"},
-		AdminID:             10000,
-		AccessMode:          accessNone,
-		PrivateAccessMode:   accessNone,
-		GroupAccessMode:     accessNone,
-		GroupUserAccessMode: accessNone,
-		UserBlacklist:       map[int64]bool{},
-		GroupBlacklist:      map[int64]bool{},
-		GroupUserBlacklist:  map[int64]bool{},
-		UserWhitelist:       map[int64]bool{},
-		GroupWhitelist:      map[int64]bool{},
-		GroupUserWhitelist:  map[int64]bool{},
-		PlatformEnabled:     enabled,
-		PlatformInfoCard:    infoCard,
-		PlatformSendMedia:   sendMedia,
-		PlatformDownload:    download,
-		PlatformGroupBlock:  platformGroupBlock,
-		OutputMode:          output,
-		SendInfoCard:        true,
-		SendMedia:           true,
-		DownloadVideo:       true,
-		MaxVideoMB:          defaultMaxVideoMB,
-		VideoMaxResolution:  0,
-		CacheTTLMinutes:     defaultTTLMinutes,
-		TimeoutSeconds:      defaultTimeoutSec,
-		Debug:               true,
-		ParseReaction:       true,
-		ParseReactionEmoji:  "🍉",
-		FailReactionEmoji:   "❌",
-		AvoidAV1:            true,
-		BilibiliMaxQuality:  "不限制",
-		UseYTDLPFallback:    false,
-		YTDLPPath:           "yt-dlp",
+		AutoParse:            true,
+		Keywords:             []string{"视频解析", "解析视频", "解析", "parse"},
+		AdminID:              10000,
+		AccessMode:           accessNone,
+		PrivateAccessMode:    accessNone,
+		GroupAccessMode:      accessNone,
+		GroupUserAccessMode:  accessNone,
+		UserBlacklist:        map[int64]bool{},
+		GroupBlacklist:       map[int64]bool{},
+		GroupUserBlacklist:   map[int64]bool{},
+		UserWhitelist:        map[int64]bool{},
+		GroupWhitelist:       map[int64]bool{},
+		GroupUserWhitelist:   map[int64]bool{},
+		PlatformEnabled:      enabled,
+		PlatformInfoCard:     infoCard,
+		PlatformSendMedia:    sendMedia,
+		PlatformDownload:     download,
+		PlatformGroupBlock:   platformGroupBlock,
+		OutputMode:           output,
+		SendInfoCard:         true,
+		SendMedia:            true,
+		DownloadVideo:        true,
+		MaxVideoMB:           defaultMaxVideoMB,
+		VideoMaxResolution:   0,
+		CacheTTLMinutes:      defaultTTLMinutes,
+		TimeoutSeconds:       defaultTimeoutSec,
+		Debug:                true,
+		ParseReaction:        true,
+		ParseReactionEmoji:   "🍉",
+		FailReactionEmoji:    "❌",
+		AvoidAV1:             true,
+		BilibiliMaxQuality:   "不限制",
+		UseYTDLPFallback:     false,
+		YTDLPPath:            "yt-dlp",
+		YouTubeExtractorArgs: "youtube:player_client=default,android;formats=missing_pot",
 	}
 }
 
@@ -378,6 +382,11 @@ func normalizeConfig(cfg *config) {
 	if cfg.YTDLPPath == "" {
 		cfg.YTDLPPath = "yt-dlp"
 	}
+	if strings.TrimSpace(cfg.YouTubeExtractorArgs) == "" {
+		cfg.YouTubeExtractorArgs = "youtube:player_client=default,android;formats=missing_pot"
+	}
+	cfg.YTDLPCookieFile = strings.TrimSpace(cfg.YTDLPCookieFile)
+	cfg.InstagramCookieFile = strings.TrimSpace(cfg.InstagramCookieFile)
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"
 	}
@@ -1321,6 +1330,7 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 	if cfg.BilibiliUseCookie && cfg.BilibiliCookie != "" {
 		args = append(args, "--add-header", "Cookie:"+cfg.BilibiliCookie)
 	}
+	args = appendYTDLPPlatformArgs(args, cfg, link.Platform)
 	args = append(args, link.URL)
 	logDebug(cfg, "yt_dlp metadata command=%s args=%q", cfg.YTDLPPath, args)
 	cmd := exec.CommandContext(ctx, cfg.YTDLPPath, args...)
@@ -1328,7 +1338,7 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return mediaMeta{}, fmt.Errorf("yt-dlp: %w: %s", err, strings.TrimSpace(stderr.String()))
+		return mediaMeta{}, fmt.Errorf("yt-dlp: %w: %s", err, enrichYTDLPError(link.Platform, cfg, strings.TrimSpace(stderr.String())))
 	}
 	var info struct {
 		Title       string  `json:"title"`
@@ -1385,15 +1395,35 @@ func downloadWithYTDLP(cfg config, meta *mediaMeta, raw string) (string, float64
 	if cfg.BilibiliUseCookie && cfg.BilibiliCookie != "" {
 		args = append(args, "--add-header", "Cookie:"+cfg.BilibiliCookie)
 	}
+	args = appendYTDLPPlatformArgs(args, cfg, meta.Platform)
 	args = append(args, raw)
 	logDebug(cfg, "yt_dlp download command=%s args=%q", cfg.YTDLPPath, args)
 	cmd := exec.CommandContext(ctx, cfg.YTDLPPath, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", 0, fmt.Errorf("yt-dlp download: %w: %s", err, strings.TrimSpace(stderr.String()))
+		return "", 0, fmt.Errorf("yt-dlp download: %w: %s", err, enrichYTDLPError(meta.Platform, cfg, strings.TrimSpace(stderr.String())))
 	}
 	return out, fileSizeMB(out), nil
+}
+
+func appendYTDLPPlatformArgs(args []string, cfg config, platform string) []string {
+	if platform == "instagram" && cfg.InstagramCookieFile != "" {
+		args = append(args, "--cookies", cfg.InstagramCookieFile)
+	} else if cfg.YTDLPCookieFile != "" {
+		args = append(args, "--cookies", cfg.YTDLPCookieFile)
+	}
+	if platform == "youtube" && strings.TrimSpace(cfg.YouTubeExtractorArgs) != "" {
+		args = append(args, "--extractor-args", strings.TrimSpace(cfg.YouTubeExtractorArgs))
+	}
+	return args
+}
+
+func enrichYTDLPError(platform string, cfg config, detail string) string {
+	if platform == "instagram" && cfg.InstagramCookieFile == "" && cfg.YTDLPCookieFile == "" {
+		return detail + "\nInstagram 经常需要登录态 Cookie；请在 WebUI 的聚合解析 > 下载与调试里填写 Instagram Cookie 文件路径。"
+	}
+	return detail
 }
 
 func rateLimited(userID, groupID int64) bool {

@@ -182,6 +182,37 @@ window.pageInfo = window.videoInfo ={
 	}
 }
 
+func TestAppendYTDLPPlatformArgs(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.YTDLPCookieFile = "/tmp/all-cookies.txt"
+	cfg.InstagramCookieFile = "/tmp/ig-cookies.txt"
+
+	ytArgs := appendYTDLPPlatformArgs([]string{"-J"}, cfg, "youtube")
+	if !containsArgPair(ytArgs, "--extractor-args", "youtube:player_client=default,android;formats=missing_pot") {
+		t.Fatalf("youtube extractor args missing: %#v", ytArgs)
+	}
+	if !containsArgPair(ytArgs, "--cookies", "/tmp/all-cookies.txt") {
+		t.Fatalf("global cookie missing: %#v", ytArgs)
+	}
+
+	igArgs := appendYTDLPPlatformArgs([]string{"-J"}, cfg, "instagram")
+	if !containsArgPair(igArgs, "--cookies", "/tmp/ig-cookies.txt") {
+		t.Fatalf("instagram cookie missing: %#v", igArgs)
+	}
+	if containsArgPair(igArgs, "--cookies", "/tmp/all-cookies.txt") {
+		t.Fatalf("instagram should prefer platform cookie: %#v", igArgs)
+	}
+}
+
+func containsArgPair(args []string, key, value string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == key && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRenderInfoCardPreview(t *testing.T) {
 	if os.Getenv("MEDIAPARSER_CARD_PREVIEW") == "" {
 		t.Skip("set MEDIAPARSER_CARD_PREVIEW=1 to render preview")

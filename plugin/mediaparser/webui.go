@@ -702,6 +702,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <button class="danger" onclick="clearCache()">清理缓存</button>
 <button class="primary right" onclick="save()">保存</button>
 </div>
+<div class="accessGrid" style="margin-top:12px">
+<label class="field">yt-dlp Cookie 文件 <input id="ytdlpCookieFile" placeholder="/path/to/cookies.txt"></label>
+<label class="field">Instagram Cookie 文件 <input id="instagramCookieFile" placeholder="/path/to/instagram-cookies.txt"></label>
+<label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
+</div>
 </div>
 <div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">第一阶段先展示运行摘要和最近消息，后续可以接 journal 过滤。</span></div><p class="muted lastMsg expanded" id="logSummary">-</p></div>
 <div class="panel span4 page" data-page="maintenance" id="maintenance"><div class="sectionTitle"><b>数据维护</b><span class="muted">缓存、Logo、本地配置文件维护。</span></div><div class="row"><button class="danger" onclick="clearCache()">清理媒体缓存</button><span class="muted" id="maintenanceMsg">配置文件只保存在本机 data 目录，不会上传到 GitHub。</span></div></div>
@@ -765,6 +770,7 @@ function render(){
  $('groupWhitelist').value=listText(cfg.group_whitelist); $('groupBlacklist').value=listText(cfg.group_blacklist);
  $('groupUserWhitelist').value=listText(cfg.group_user_whitelist); $('groupUserBlacklist').value=listText(cfg.group_user_blacklist);
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
+ $('ytdlpCookieFile').value=cfg.yt_dlp_cookie_file||''; $('instagramCookieFile').value=cfg.instagram_cookie_file||''; $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  renderSystemSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
@@ -854,6 +860,7 @@ function renderPlatformGroupBlock(){
 function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function save(){
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
+ cfg.yt_dlp_cookie_file=String($('ytdlpCookieFile').value||'').trim(); cfg.instagram_cookie_file=String($('instagramCookieFile').value||'').trim(); cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;
  cfg.user_whitelist=parseList($('userWhitelist').value); cfg.user_blacklist=parseList($('userBlacklist').value);
  cfg.group_whitelist=parseList($('groupWhitelist').value); cfg.group_blacklist=parseList($('groupBlacklist').value);
