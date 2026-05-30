@@ -152,6 +152,27 @@ func TestKeylolFooterTemplate(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksKeepsForumWidgets(t *testing.T) {
+	html := `<div class="sff_collapse sff_collapsed"><div class="sff_collapse_b"><span>&gt;</span> 大型限时福利的具体定义</div><div class="sff_collapse_d">隐藏内容<div><a>点击隐藏</a></div></div></div>
+<h1 class="KyloStylisedHeader0">战网</h1>
+<img width="72" height="39" src="https://blob.keylol.com/forum/202211/29/logo.png?a=a"><h3 class="KyloStylisedHeader2">《暗黑破坏神Ⅳ》国服基础版</h3>
+正文`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
+	kinds := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		kinds = append(kinds, block.Kind)
+	}
+	got := strings.Join(kinds, ",")
+	for _, want := range []string{"collapse", "heading1", "inline_image", "heading2", "text"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %s in %s: %#v", want, got, blocks)
+		}
+	}
+	if strings.Contains(keylolDescFromBlocks(blocks), "隐藏内容") {
+		t.Fatalf("collapsed hidden content leaked: %#v", blocks)
+	}
+}
+
 func TestParseKeylolFirstPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("module") != "viewthread" || r.URL.Query().Get("tid") != "1039281" {

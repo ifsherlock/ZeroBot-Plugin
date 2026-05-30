@@ -150,22 +150,29 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
 	messageHTML = keylolStripHiddenTips(messageHTML)
 	messageHTML = keylolReplaceTextLinks(messageHTML, base)
+	messageHTML = keylolReplaceCollapseBlocks(messageHTML)
+	messageHTML = keylolReplaceHeadings(messageHTML)
 	blocks := []keylolBlock{}
 	seenImages := map[string]bool{}
 	var textBuf strings.Builder
+	appendTextBlock := func(text string) {
+		for _, part := range keylolTextBlocks(text) {
+			if len(blocks) > 0 && part.Kind == "text" && blocks[len(blocks)-1].Kind == "text" {
+				blocks[len(blocks)-1].Text = strings.TrimSpace(blocks[len(blocks)-1].Text + "\n" + part.Text)
+				continue
+			}
+			blocks = append(blocks, part)
+		}
+	}
 	flushText := func() {
 		text := keylolCleanBlockText(textBuf.String())
 		textBuf.Reset()
 		if text == "" || keylolNoiseLine(text) {
 			return
 		}
-		if len(blocks) > 0 && blocks[len(blocks)-1].Kind == "text" {
-			blocks[len(blocks)-1].Text = strings.TrimSpace(blocks[len(blocks)-1].Text + "\n" + text)
-			return
-		}
-		blocks = append(blocks, keylolBlock{Kind: "text", Text: text})
+		appendTextBlock(text)
 	}
-	addImage := func(raw string) {
+	addImage := func(raw string, inline bool) {
 		raw = strings.TrimSpace(html.UnescapeString(htmlUnescape(raw)))
 		raw = strings.Trim(raw, ` "'`)
 		if raw == "" {
@@ -177,7 +184,11 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 		}
 		flushText()
 		seenImages[raw] = true
-		blocks = append(blocks, keylolBlock{Kind: "image", URL: raw})
+		kind := "image"
+		if inline {
+			kind = "inline_image"
+		}
+		blocks = append(blocks, keylolBlock{Kind: kind, URL: raw})
 	}
 	tokenRE := regexp.MustCompile(`(?is)<img\b[^>]*>|<br\s*/?>|</p>|</div>|</li>|</tr>|</h[1-6]>`)
 	last := 0
@@ -185,7 +196,7 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 		textBuf.WriteString(messageHTML[last:loc[0]])
 		token := messageHTML[loc[0]:loc[1]]
 		if strings.HasPrefix(strings.ToLower(token), "<img") {
-			addImage(keylolImageURLFromTag(token))
+			addImage(keylolImageURLFromTag(token), keylolInlineImageTag(token))
 		} else {
 			textBuf.WriteString("\n")
 		}
@@ -201,6 +212,75 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 		}
 	}
 	return keylolCompactBlocks(blocks)
+}
+
+func keylolReplaceCollapseBlocks(s string) string {
+	re := regexp.MustCompile(`(?is)<div\b[^>]*class=["'][^"']*\bsff_collapse\b[^"']*["'][^>]*>\s*<div\b[^>]*class=["'][^"']*\bsff_collapse_b\b[^"']*["'][^>]*>(.*?)</div>`)
+	s = re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 2 {
+			return match
+		}
+		title := keylolCleanBlockText(m[1])
+		title = strings.TrimSpace(strings.TrimPrefix(title, ">"))
+		if title == "" {
+			title = "折叠内容"
+		}
+		return "\n[keylol_collapse]" + title + "\n"
+	})
+	s = regexp.MustCompile(`(?is)<div\b[^>]*class=["'][^"']*\bsff_collapse_d\b[^"']*["'][^>]*>.*?点击隐藏.*?</div>\s*</div>`).ReplaceAllString(s, "\n")
+	return s
+}
+
+func keylolReplaceHeadings(s string) string {
+	re := regexp.MustCompile(`(?is)<h([1-6])\b[^>]*>(.*?)</h[1-6]>`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 3 {
+			return match
+		}
+		text := keylolCleanBlockText(m[2])
+		if text == "" {
+			return "\n"
+		}
+		if m[1] == "1" {
+			return "\n[keylol_h1]" + text + "\n"
+		}
+		return "\n[keylol_h3]" + text + "\n"
+	})
+}
+
+func keylolTextBlocks(text string) []keylolBlock {
+	out := []keylolBlock{}
+	buf := []string{}
+	flush := func() {
+		if len(buf) == 0 {
+			return
+		}
+		out = append(out, keylolBlock{Kind: "text", Text: strings.Join(buf, "\n")})
+		buf = nil
+	}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "[keylol_collapse]"):
+			flush()
+			out = append(out, keylolBlock{Kind: "collapse", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_collapse]"))})
+		case strings.HasPrefix(line, "[keylol_h1]"):
+			flush()
+			out = append(out, keylolBlock{Kind: "heading1", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_h1]"))})
+		case strings.HasPrefix(line, "[keylol_h3]"):
+			flush()
+			out = append(out, keylolBlock{Kind: "heading2", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_h3]"))})
+		default:
+			buf = append(buf, line)
+		}
+	}
+	flush()
+	return out
 }
 
 func keylolStripHiddenTips(s string) string {
@@ -237,6 +317,25 @@ func keylolImageURLFromTag(tag string) string {
 		}
 	}
 	return ""
+}
+
+func keylolInlineImageTag(tag string) bool {
+	w := keylolTagIntAttr(tag, "width")
+	h := keylolTagIntAttr(tag, "height")
+	if w > 0 && h > 0 && w <= 180 && h <= 120 {
+		return true
+	}
+	return false
+}
+
+func keylolTagIntAttr(tag, name string) int {
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(name) + `=["']?(\d+)`)
+	m := re.FindStringSubmatch(tag)
+	if len(m) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n
 }
 
 func keylolContentImageOK(raw string) bool {
@@ -278,17 +377,17 @@ func keylolCleanBlockText(s string) string {
 func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	for _, block := range blocks {
-		if block.Kind == "text" {
+		if block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
 			if block.Text == "" {
 				continue
 			}
-			if len(out) > 0 && out[len(out)-1].Kind == "text" {
+			if block.Kind == "text" && len(out) > 0 && out[len(out)-1].Kind == "text" {
 				out[len(out)-1].Text += "\n" + block.Text
 				continue
 			}
 		}
-		if block.Kind == "image" && block.URL == "" {
+		if (block.Kind == "image" || block.Kind == "inline_image") && block.URL == "" {
 			continue
 		}
 		out = append(out, block)
@@ -309,7 +408,7 @@ func keylolImageGroupsFromBlocks(blocks []keylolBlock) [][]string {
 func keylolDescFromBlocks(blocks []keylolBlock) string {
 	parts := []string{}
 	for _, block := range blocks {
-		if block.Kind == "text" && strings.TrimSpace(block.Text) != "" {
+		if (block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2") && strings.TrimSpace(block.Text) != "" {
 			parts = append(parts, strings.TrimSpace(block.Text))
 		}
 	}

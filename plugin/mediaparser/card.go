@@ -313,6 +313,25 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
 			iw, ih := keylolImageDrawSize(img, contentW)
 			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "image", url: block.URL, img: img, width: iw, height: ih})
+		case "inline_image":
+			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
+			iw, ih := keylolInlineImageDrawSize(img)
+			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "inline_image", url: block.URL, img: img, width: iw, height: ih})
+		case "heading1":
+			lines := wrapTextByPixels(dcMeasure, fontBytes, 34, block.Text, float64(contentW))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "heading1", text: block.Text, lines: lines, height: len(lines)*48 + 18})
+			}
+		case "heading2":
+			lines := wrapTextByPixels(dcMeasure, fontBytes, 29, block.Text, float64(contentW))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "heading2", text: block.Text, lines: lines, height: len(lines) * 42})
+			}
+		case "collapse":
+			lines := wrapTextByPixels(dcMeasure, fontBytes, 24, block.Text, float64(contentW-64))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "collapse", text: block.Text, lines: lines, height: maxInt(48, len(lines)*34+14)})
+			}
 		case "text":
 			lines := wrapTextByPixels(dcMeasure, fontBytes, bodySize, block.Text, float64(contentW))
 			if len(lines) > 0 {
@@ -381,6 +400,19 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			}
 			drawKeylolFullImage(dc, block.img, ix, y, block.width, block.height)
 			y += block.height + imageGap
+		case "inline_image":
+			drawKeylolInlineImage(dc, block.img, x, y, block.width, block.height)
+			y += block.height
+		case "heading1":
+			y = drawKeylolHeading1(dc, fontBytes, block.lines, x, y, contentW)
+		case "heading2":
+			for _, line := range block.lines {
+				drawInlineEmoji(dc, fontBytes, 29, color.RGBA{R: 39, G: 43, B: 51, A: 255}, line, float64(x), float64(y))
+				y += 42
+			}
+		case "collapse":
+			drawKeylolCollapse(dc, fontBytes, block.lines, x, y, contentW, block.height)
+			y += block.height
 		}
 		y += blockGap
 	}
@@ -437,6 +469,27 @@ func keylolImageDrawSize(img image.Image, maxW int) (int, int) {
 	return maxW, maxInt(h, 1)
 }
 
+func keylolInlineImageDrawSize(img image.Image) (int, int) {
+	if img == nil {
+		return 120, 64
+	}
+	b := img.Bounds()
+	iw, ih := b.Dx(), b.Dy()
+	if iw <= 0 || ih <= 0 {
+		return 120, 64
+	}
+	maxH := 54
+	if ih > maxH {
+		iw = int(float64(iw) * float64(maxH) / float64(ih))
+		ih = maxH
+	}
+	if iw > 160 {
+		ih = int(float64(ih) * 160 / float64(iw))
+		iw = 160
+	}
+	return maxInt(iw, 1), maxInt(ih, 1)
+}
+
 func drawKeylolPanel(dc *gg.Context, x, y, w, h int) {
 	for i := 14; i >= 1; i-- {
 		dc.SetRGBA255(0, 0, 0, 3+i*2)
@@ -476,6 +529,46 @@ func drawKeylolFullImage(dc *gg.Context, img image.Image, x, y, w, h int) {
 	dc.SetLineWidth(1)
 	dc.DrawRectangle(float64(x), float64(y), float64(w), float64(h))
 	dc.Stroke()
+}
+
+func drawKeylolInlineImage(dc *gg.Context, img image.Image, x, y, w, h int) {
+	if img == nil {
+		return
+	}
+	dc.DrawImage(imaging.Resize(img, w, h, imaging.Lanczos), x, y)
+}
+
+func drawKeylolHeading1(dc *gg.Context, fontBytes []byte, lines []string, x, y, w int) int {
+	for _, line := range lines {
+		drawInlineEmoji(dc, fontBytes, 34, color.RGBA{R: 68, G: 68, B: 68, A: 255}, line, float64(x), float64(y))
+		y += 48
+	}
+	lineY := y - 10
+	dc.SetRGB255(85, 85, 85)
+	dc.SetLineWidth(3)
+	dc.DrawLine(float64(x), float64(lineY), float64(x+w), float64(lineY))
+	dc.Stroke()
+	dc.DrawLine(float64(x), float64(lineY+8), float64(x+w), float64(lineY+8))
+	dc.Stroke()
+	return lineY + 24
+}
+
+func drawKeylolCollapse(dc *gg.Context, fontBytes []byte, lines []string, x, y, w, h int) {
+	dc.SetRGB255(102, 187, 255)
+	dc.DrawRectangle(float64(x), float64(y), float64(w), float64(h))
+	dc.Fill()
+	dc.SetRGB255(87, 186, 232)
+	dc.SetLineWidth(1)
+	dc.DrawRectangle(float64(x), float64(y), float64(w), float64(h))
+	dc.Stroke()
+	mustFont(dc, fontBytes, 24)
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawStringAnchored(">", float64(x+22), float64(y+24), 0.5, 0.5)
+	yy := y + 31
+	for _, line := range lines {
+		drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 255, G: 255, B: 255, A: 255}, line, float64(x+46), float64(yy))
+		yy += 34
+	}
 }
 
 func keylolPrepareImage(img image.Image) image.Image {
