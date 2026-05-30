@@ -212,6 +212,52 @@ func TestKeylolBuildBlocksKeepsBilibiliIframePreview(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksKeepsSmiliesInline(t *testing.T) {
+	html := `蓝色窃听<img class="zoom" file="https://keylol.com/static/image/smiley/steamcn_9/0140.gif" width="61" height="55">不过后续不错`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039233-1-1")
+	if len(blocks) != 1 || blocks[0].Kind != "text" {
+		t.Fatalf("smiley should stay inline in text: %#v", blocks)
+	}
+	if strings.Contains(blocks[0].Text, "static/image/smiley") || !strings.Contains(blocks[0].Text, "😎") {
+		t.Fatalf("bad smiley text: %#v", blocks)
+	}
+}
+
+func TestKeylolBuildBlocksKeepsSpoilerStyled(t *testing.T) {
+	html := `美妙邦女郎<span class="bbcode_spoiler"><span class="bbcode_spoiler_content">还有会说日语的坏邦女郎</span></span><br>正文`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039233-1-1")
+	found := false
+	for _, block := range blocks {
+		if block.Kind == "spoiler" {
+			found = true
+			if block.Text != "还有会说日语的坏邦女郎" {
+				t.Fatalf("bad spoiler text: %#v", blocks)
+			}
+		}
+		if block.Kind == "text" && strings.Contains(block.Text, "还有会说日语") {
+			t.Fatalf("spoiler leaked as plain text: %#v", blocks)
+		}
+	}
+	if !found {
+		t.Fatalf("missing spoiler block: %#v", blocks)
+	}
+}
+
+func TestKeylolBuildBlocksKeepsColorAndLinkBlocks(t *testing.T) {
+	html := `<strong><span style="color:Red">论坛信息</span></strong><br><strong><span style="color:Green">Steam购买</span></strong><br><a href="https://keylol.com/t1039189-1-1">2026年6月发售游戏汇总</a>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039283-1-1")
+	kinds := []string{}
+	for _, block := range blocks {
+		kinds = append(kinds, block.Kind+":"+block.Text)
+	}
+	got := strings.Join(kinds, "|")
+	for _, want := range []string{"color_red:论坛信息", "color_green:Steam购买", "link:2026年6月发售游戏汇总"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %s in %#v", want, blocks)
+		}
+	}
+}
+
 func TestKeylolInlineImageKeepsTextOrder(t *testing.T) {
 	html := `<img width="72" height="39" src="https://blob.keylol.com/forum/new.png">《Bunny Guys》【现已可领取】`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")

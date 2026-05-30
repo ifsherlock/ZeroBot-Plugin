@@ -388,6 +388,22 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			if len(lines) > 0 {
 				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "collapse", text: block.Text, lines: lines, height: maxInt(48, len(lines)*34+14)})
 			}
+		case "spoiler":
+			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, 23, block.Text, float64(contentW-78))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "spoiler", text: block.Text, lines: lines, height: maxInt(52, len(lines)*32+18)})
+			}
+		case "color_red", "color_green", "link":
+			size := 28.0
+			lineH := 40
+			if block.Kind == "link" {
+				size = 24
+				lineH = 34
+			}
+			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, size, block.Text, float64(contentW))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: block.Kind, text: block.Text, lines: lines, height: len(lines) * lineH})
+			}
 		case "steam_card":
 			img := keylolPrepareImage(fetchCardImage(block.Cover, nil))
 			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-330))
@@ -526,6 +542,24 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		case "collapse":
 			drawKeylolCollapse(dc, fontBytes, block.lines, x, y, contentW, block.height)
 			y += block.height
+		case "spoiler":
+			drawKeylolSpoiler(dc, bodyFontBytes, block.lines, x, y, contentW, block.height)
+			y += block.height
+		case "color_red":
+			for _, line := range block.lines {
+				drawKeylolOutlinedText(dc, bodyFontBytes, 28, color.RGBA{R: 230, G: 70, B: 62, A: 255}, line, float64(x), float64(y))
+				y += 40
+			}
+		case "color_green":
+			for _, line := range block.lines {
+				drawKeylolOutlinedText(dc, bodyFontBytes, 28, color.RGBA{R: 54, G: 170, B: 96, A: 255}, line, float64(x), float64(y))
+				y += 40
+			}
+		case "link":
+			for _, line := range block.lines {
+				drawKeylolLinkLine(dc, bodyFontBytes, 24, line, x, y)
+				y += 34
+			}
 		case "steam_card":
 			drawKeylolSteamCard(dc, fontBytes, block, x, y, contentW, block.height)
 			y += block.height
@@ -735,6 +769,53 @@ func drawKeylolCollapse(dc *gg.Context, fontBytes []byte, lines []string, x, y, 
 	for _, line := range lines {
 		drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 255, G: 255, B: 255, A: 255}, line, float64(x+46), float64(yy))
 		yy += 34
+	}
+}
+
+func drawKeylolSpoiler(dc *gg.Context, fontBytes []byte, lines []string, x, y, w, h int) {
+	dc.SetRGBA255(32, 38, 48, 190)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 12)
+	dc.Fill()
+	dc.SetRGBA255(132, 146, 166, 110)
+	dc.SetLineWidth(1)
+	dc.DrawRoundedRectangle(float64(x)+0.5, float64(y)+0.5, float64(w)-1, float64(h)-1, 12)
+	dc.Stroke()
+	yy := y + 32
+	for _, line := range lines {
+		drawInlineEmoji(dc, fontBytes, 23, color.RGBA{R: 221, G: 226, B: 235, A: 255}, line, float64(x+28), float64(yy))
+		mustFont(dc, fontBytes, 23)
+		lineW, _ := dc.MeasureString(line)
+		drawDottedLine(dc, float64(x+28), float64(yy+8), float64(x+28)+lineW, color.RGBA{R: 172, G: 186, B: 206, A: 190})
+		yy += 32
+	}
+}
+
+func drawKeylolOutlinedText(dc *gg.Context, fontBytes []byte, size float64, c color.Color, s string, x, y float64) {
+	outline := color.RGBA{R: 255, G: 255, B: 255, A: 155}
+	for _, off := range [][2]float64{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+		drawInlineEmoji(dc, fontBytes, size, outline, s, x+off[0], y+off[1])
+	}
+	drawInlineEmoji(dc, fontBytes, size, c, s, x, y)
+}
+
+func drawKeylolLinkLine(dc *gg.Context, fontBytes []byte, size float64, s string, x, y int) {
+	c := color.RGBA{R: 71, G: 151, B: 218, A: 255}
+	drawInlineEmoji(dc, fontBytes, size, c, s, float64(x), float64(y))
+	mustFont(dc, fontBytes, size)
+	lineW, _ := dc.MeasureString(s)
+	drawDottedLine(dc, float64(x), float64(y+7), float64(x)+lineW, c)
+}
+
+func drawDottedLine(dc *gg.Context, x1, y, x2 float64, c color.Color) {
+	dc.SetColor(c)
+	dc.SetLineWidth(2)
+	for x := x1; x < x2; x += 10 {
+		end := x + 5
+		if end > x2 {
+			end = x2
+		}
+		dc.DrawLine(x, y, end, y)
+		dc.Stroke()
 	}
 }
 

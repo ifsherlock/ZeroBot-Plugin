@@ -159,6 +159,9 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
 	messageHTML = keylolStripHiddenTips(messageHTML)
 	messageHTML = keylolStripShowhideControls(messageHTML)
+	messageHTML = keylolReplaceSmileyImages(messageHTML)
+	messageHTML = keylolReplaceSpoilers(messageHTML)
+	messageHTML = keylolReplaceStyledText(messageHTML)
 	messageHTML = keylolReplaceSteamLinks(messageHTML, base)
 	messageHTML = keylolReplaceTextLinks(messageHTML, base)
 	messageHTML = keylolReplaceCollapseBlocks(messageHTML)
@@ -336,6 +339,30 @@ func keylolTextBlocks(text string) []keylolBlock {
 			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_toolbar]"))
 			if text != "" {
 				out = append(out, keylolBlock{Kind: "toolbar", Text: text})
+			}
+		case strings.HasPrefix(line, "[keylol_spoiler]"):
+			flush()
+			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_spoiler]"))
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "spoiler", Text: text})
+			}
+		case strings.HasPrefix(line, "[keylol_red]"):
+			flush()
+			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_red]"))
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "color_red", Text: text})
+			}
+		case strings.HasPrefix(line, "[keylol_green]"):
+			flush()
+			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_green]"))
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "color_green", Text: text})
+			}
+		case strings.HasPrefix(line, "[keylol_link]"):
+			flush()
+			text := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_link]"))
+			if text != "" {
+				out = append(out, keylolBlock{Kind: "link", Text: text})
 			}
 		case strings.HasPrefix(line, "[keylol_collapse]"):
 			flush()
@@ -532,6 +559,94 @@ func keylolStripShowhideControls(s string) string {
 	return s
 }
 
+func keylolReplaceSmileyImages(s string) string {
+	re := regexp.MustCompile(`(?is)<img\b[^>]*>`)
+	return re.ReplaceAllStringFunc(s, func(tag string) string {
+		raw := strings.ToLower(keylolImageURLFromTag(tag))
+		if !strings.Contains(raw, "/static/image/smiley/") {
+			return tag
+		}
+		return " " + keylolSmileyText(raw) + " "
+	})
+}
+
+func keylolSmileyText(raw string) string {
+	switch {
+	case strings.Contains(raw, "0140.gif"):
+		return "😎"
+	case strings.Contains(raw, "0130.gif"), strings.Contains(raw, "0131.gif"):
+		return "🙂"
+	default:
+		return "🙂"
+	}
+}
+
+func keylolReplaceSpoilers(s string) string {
+	re := regexp.MustCompile(`(?is)<span\b[^>]*class=["'][^"']*\bbbcode_spoiler\b[^"']*["'][^>]*>\s*<span\b[^>]*class=["'][^"']*\bbbcode_spoiler_content\b[^"']*["'][^>]*>(.*?)</span>\s*</span>`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 2 {
+			return match
+		}
+		text := keylolCleanBlockText(m[1])
+		if text == "" {
+			return ""
+		}
+		return "\n[keylol_spoiler]" + keylolOneLine(text) + "\n"
+	})
+}
+
+func keylolReplaceStyledText(s string) string {
+	re := regexp.MustCompile(`(?is)<(?:span|font)\b([^>]*)>(.*?)</(?:span|font)>`)
+	for i := 0; i < 3; i++ {
+		s = re.ReplaceAllStringFunc(s, func(match string) string {
+			m := re.FindStringSubmatch(match)
+			if len(m) < 3 {
+				return match
+			}
+			kind := keylolColorKind(m[1])
+			if kind == "" {
+				return match
+			}
+			text := keylolCleanBlockText(m[2])
+			if text == "" {
+				return ""
+			}
+			return "\n[keylol_" + kind + "]" + keylolOneLine(text) + "\n"
+		})
+	}
+	return s
+}
+
+func keylolColorKind(attrs string) string {
+	attrs = strings.ToLower(html.UnescapeString(htmlUnescape(attrs)))
+	colorValue := ""
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`color\s*:\s*([#a-z0-9]+)`),
+		regexp.MustCompile(`\bcolor\s*=\s*["']?([^"'\s>]+)`),
+	} {
+		if m := re.FindStringSubmatch(attrs); len(m) > 1 {
+			colorValue = strings.TrimSpace(m[1])
+			break
+		}
+	}
+	switch colorValue {
+	case "red", "#f00", "#ff0000":
+		return "red"
+	case "green", "darkgreen", "#008000", "#006400":
+		return "green"
+	}
+	return ""
+}
+
+func keylolOneLine(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	s = regexp.MustCompile(`\s*\n\s*`).ReplaceAllString(s, " ")
+	s = regexp.MustCompile(`[ \t]+`).ReplaceAllString(s, " ")
+	return strings.TrimSpace(s)
+}
+
 func keylolReplaceTextLinks(s, base string) string {
 	re := regexp.MustCompile(`(?is)<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>`)
 	return re.ReplaceAllStringFunc(s, func(match string) string {
@@ -550,7 +665,10 @@ func keylolReplaceTextLinks(s, base string) string {
 		if text == "" || strings.EqualFold(text, "链接") || strings.EqualFold(text, "link") {
 			text = href
 		}
-		return " " + text + " "
+		if strings.HasPrefix(text, "[keylol_red]") || strings.HasPrefix(text, "[keylol_green]") {
+			return "\n" + text + "\n"
+		}
+		return "\n[keylol_link]" + keylolOneLine(text) + "\n"
 	})
 }
 
@@ -678,7 +796,7 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 	out := make([]keylolBlock, 0, len(blocks))
 	seenSteam := map[string]bool{}
 	for _, block := range blocks {
-		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
+		if block.Kind == "text" || block.Kind == "toolbar" || block.Kind == "spoiler" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "collapse" {
 			block.Text = strings.TrimSpace(block.Text)
 			if block.Text == "" {
 				continue
@@ -719,7 +837,7 @@ func keylolImageGroupsFromBlocks(blocks []keylolBlock) [][]string {
 func keylolDescFromBlocks(blocks []keylolBlock) string {
 	parts := []string{}
 	for _, block := range blocks {
-		if (block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2") && strings.TrimSpace(block.Text) != "" {
+		if (block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2" || block.Kind == "color_red" || block.Kind == "color_green" || block.Kind == "link") && strings.TrimSpace(block.Text) != "" {
 			parts = append(parts, strings.TrimSpace(block.Text))
 		}
 	}
