@@ -602,6 +602,8 @@ func platformLabel(name string) string {
 		return "Heybox"
 	case "twitter":
 		return "X / Twitter"
+	case "keylol":
+		return "Keylol"
 	default:
 		return name
 	}
@@ -635,6 +637,8 @@ func platformLocalName(name string) string {
 		return "小黑盒"
 	case "twitter":
 		return "X / Twitter"
+	case "keylol":
+		return "其乐"
 	default:
 		return name
 	}
@@ -812,6 +816,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">小红书 Cookie <textarea id="xiaohongshuCookie" placeholder="a1=...; web_session=..."></textarea></label>
 <label class="field">YouTube Cookie <textarea id="youtubeCookie" placeholder="VISITOR_INFO1_LIVE=...; SID=..."></textarea></label>
 <label class="field">Instagram Cookie <textarea id="instagramCookie" placeholder="sessionid=...; ds_user_id=..."></textarea></label>
+<label class="field">Keylol Cookie <textarea id="keylolCookie" placeholder="key=value; key2=value2"></textarea></label>
 </div>
 </div>
 </div>
@@ -911,7 +916,7 @@ function render(){
  $('groupUserWhitelist').value=listText(cfg.group_user_whitelist); $('groupUserBlacklist').value=listText(cfg.group_user_blacklist);
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
- $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||'';
+ $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
  renderSystemSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
@@ -1002,7 +1007,7 @@ function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;',
 async function save(){
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
- cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim();
+ cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;
  cfg.user_whitelist=parseList($('userWhitelist').value); cfg.user_blacklist=parseList($('userBlacklist').value);
  cfg.group_whitelist=parseList($('groupWhitelist').value); cfg.group_blacklist=parseList($('groupBlacklist').value);

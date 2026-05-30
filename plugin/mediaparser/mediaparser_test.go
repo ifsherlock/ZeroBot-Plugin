@@ -122,6 +122,68 @@ func TestExtractLinksRecognizesXianyuMtbShortLinks(t *testing.T) {
 	}
 }
 
+func TestKeylolThreadID(t *testing.T) {
+	cases := map[string]string{
+		"https://keylol.com/t1039281-1-1":                       "1039281",
+		"https://keylol.com/thread-1039281-1-1.html":            "1039281",
+		"https://keylol.com/forum.php?mod=viewthread&tid=12345": "12345",
+	}
+	for raw, want := range cases {
+		if got := keylolThreadID(raw); got != want {
+			t.Fatalf("keylolThreadID(%q)=%q want %q", raw, got, want)
+		}
+	}
+}
+
+func TestParseKeylolFirstPost(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("module") != "viewthread" || r.URL.Query().Get("tid") != "1039281" {
+			t.Fatalf("bad query: %s", r.URL.RawQuery)
+		}
+		if got := r.Header.Get("Cookie"); got != "unit_test_cookie=1" {
+			t.Fatalf("cookie header=%q", got)
+		}
+		_, _ = w.Write([]byte(`{
+			"Variables":{
+				"thread":{"subject":"华硕出了个单独的主板控制软件","author":"楼主","authorid":"1706647","dateline":"1780141700"},
+				"postlist":[{
+					"author":"m4262253402",
+					"authorid":"1706647",
+					"dateline":"1780141700",
+					"message":"找驱动有没有更新<br><img src=\"https:\/\/keylol.com\/static\/image\/common\/fav.gif\"><img zoomfile=\"https:\/\/blob.keylol.com\/forum\/202605\/30\/194721x.png?a=a\"><p>好像是单独的主板控制软件。<\/p>",
+					"attachments":{"1":{"url":"https:\/\/blob.keylol.com\/forum\/202605\/30\/194739i.png?a=a"}}
+				}]
+			}
+		}`))
+	}))
+	defer srv.Close()
+	oldAPI := keylolAPIBase
+	keylolAPIBase = srv.URL
+	defer func() { keylolAPIBase = oldAPI }()
+
+	cfg := defaultConfig()
+	cfg.KeylolCookie = "unit_test_cookie=1"
+	meta, err := parseKeylol(cfg, "https://keylol.com/t1039281-1-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Platform != "keylol" || meta.Title != "华硕出了个单独的主板控制软件" || meta.Author != "m4262253402" {
+		t.Fatalf("bad meta: %#v", meta)
+	}
+	if !strings.Contains(meta.Desc, "找驱动") || !strings.Contains(meta.Desc, "单独的主板控制软件") {
+		t.Fatalf("bad desc: %q", meta.Desc)
+	}
+	if len(meta.ImageURLs) != 2 {
+		t.Fatalf("images len=%d: %#v", len(meta.ImageURLs), meta.ImageURLs)
+	}
+	if strings.Contains(strings.Join([]string{meta.ImageURLs[0][0], meta.ImageURLs[1][0]}, "\n"), "fav.gif") {
+		t.Fatalf("icon image was not filtered: %#v", meta.ImageURLs)
+	}
+	if !strings.Contains(meta.Avatar, "/001/70/66/47_avatar_middle.jpg") {
+		t.Fatalf("avatar=%q", meta.Avatar)
+	}
+}
+
 func TestExtractWeiboMediaUsesPicInfosAndSkipsAvatars(t *testing.T) {
 	raw := `{
 		"pic_ids":["abc123"],

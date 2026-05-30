@@ -117,6 +117,7 @@ type config struct {
 	XiaohongshuCookie  string `json:"xiaohongshu_cookie"`
 	YouTubeCookie      string `json:"youtube_cookie"`
 	InstagramCookie    string `json:"instagram_cookie"`
+	KeylolCookie       string `json:"keylol_cookie"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
 	UseYTDLPFallback     bool   `json:"use_yt_dlp_fallback"`
@@ -193,6 +194,7 @@ var platforms = []platform{
 	{Name: "toutiao", Hosts: []string{"toutiao.com", "toutiaoimg.com", "snssdk.com"}, Aliases: []string{"头条"}},
 	{Name: "xiaoheihe", Hosts: []string{"xiaoheihe.cn", "heybox.cn"}, Aliases: []string{"小黑盒", "heybox"}},
 	{Name: "twitter", Hosts: []string{"twitter.com", "x.com", "fxtwitter.com", "fixupx.com", "vxtwitter.com"}, Aliases: []string{"推特", "x"}},
+	{Name: "keylol", Hosts: []string{"keylol.com", "www.keylol.com"}, Aliases: []string{"Keylol", "keylol"}},
 }
 
 func init() {
@@ -402,6 +404,7 @@ func normalizeConfig(cfg *config) {
 	cfg.XiaohongshuCookie = strings.TrimSpace(cfg.XiaohongshuCookie)
 	cfg.YouTubeCookie = strings.TrimSpace(cfg.YouTubeCookie)
 	cfg.InstagramCookie = strings.TrimSpace(cfg.InstagramCookie)
+	cfg.KeylolCookie = strings.TrimSpace(cfg.KeylolCookie)
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"
 	}
@@ -865,6 +868,8 @@ func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
 		return parseXiaoheihe(cfg, link.URL)
 	case "twitter":
 		return parseTwitter(cfg, link.URL)
+	case "keylol":
+		return parseKeylol(cfg, link.URL)
 	default:
 		return parseOpenGraph(cfg, link)
 	}
