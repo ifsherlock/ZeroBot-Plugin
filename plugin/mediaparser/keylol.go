@@ -75,6 +75,7 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	messageHTML := firstNonEmpty(getString(post, "message"), getString(post, "message_html"))
 	blocks := keylolBuildBlocks(messageHTML, getMap(post, "attachments"), finalURL)
 	blocks = keylolEnrichSteamBlocks(blocks)
+	blocks = keylolEnsureASFSteamCards(blocks)
 	blocks = keylolEnrichVideoBlocks(cfg, blocks)
 	images := keylolImageGroupsFromBlocks(blocks)
 	desc := keylolDescFromBlocks(blocks)
@@ -275,6 +276,20 @@ func keylolAttachmentImageURLs(attachments map[string]any) []string {
 }
 
 func keylolReplaceCollapseBlocks(s string) string {
+	bbOpen := regexp.MustCompile(`(?is)\[collapse(?:=([^\]]+))?\]`)
+	s = bbOpen.ReplaceAllStringFunc(s, func(match string) string {
+		m := bbOpen.FindStringSubmatch(match)
+		title := ""
+		if len(m) > 1 {
+			title = keylolCleanBlockText(m[1])
+		}
+		if title == "" {
+			title = "折叠内容"
+		}
+		return "\n[keylol_collapse]" + title + "\n"
+	})
+	s = regexp.MustCompile(`(?is)\[/collapse\]`).ReplaceAllString(s, "\n")
+
 	re := regexp.MustCompile(`(?is)<div\b[^>]*class=["'][^"']*\bsff_collapse\b[^"']*["'][^>]*>\s*<div\b[^>]*class=["'][^"']*\bsff_collapse_b\b[^"']*["'][^>]*>(.*?)</div>`)
 	s = re.ReplaceAllStringFunc(s, func(match string) string {
 		m := re.FindStringSubmatch(match)
@@ -472,6 +487,9 @@ func keylolSteamAppID(raw string) string {
 		if len(parts) >= 2 && strings.EqualFold(parts[0], "app") && regexp.MustCompile(`^\d+$`).MatchString(parts[1]) {
 			return parts[1]
 		}
+		if len(parts) >= 2 && strings.EqualFold(parts[0], "widget") && regexp.MustCompile(`^\d+$`).MatchString(parts[1]) {
+			return parts[1]
+		}
 	}
 	return ""
 }
@@ -517,6 +535,35 @@ func keylolEnrichSteamBlocks(blocks []keylolBlock) []keylolBlock {
 		}
 	}
 	return blocks
+}
+
+func keylolEnsureASFSteamCards(blocks []keylolBlock) []keylolBlock {
+	known := map[string]bool{}
+	for _, block := range blocks {
+		if block.Kind != "steam_card" {
+			continue
+		}
+		if id := keylolSteamAppID(block.URL); id != "" {
+			known[id] = true
+		}
+	}
+	out := make([]keylolBlock, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Kind == "asf_link" {
+			appID := strings.TrimSpace(block.Title)
+			if appID != "" && !known[appID] {
+				steamURL := "https://store.steampowered.com/app/" + appID + "/"
+				card, err := keylolFetchSteamApp(steamURL)
+				if err != nil || card.URL == "" {
+					card = keylolBlock{Kind: "steam_card", URL: steamURL, Title: "Steam " + appID}
+				}
+				out = append(out, card)
+				known[appID] = true
+			}
+		}
+		out = append(out, block)
+	}
+	return out
 }
 
 func keylolEnrichVideoBlocks(cfg config, blocks []keylolBlock) []keylolBlock {
@@ -804,6 +851,13 @@ func keylolVideoBlockFromIframe(tag, base string) keylolBlock {
 }
 
 func keylolVideoBlockFromURL(raw string) keylolBlock {
+	if appID := keylolSteamAppID(raw); appID != "" {
+		return keylolBlock{
+			Kind:  "steam_card",
+			URL:   "https://store.steampowered.com/app/" + appID + "/",
+			Title: "Steam " + appID,
+		}
+	}
 	if bv := bvRE.FindString(raw); bv != "" {
 		return keylolBlock{
 			Kind:  "video_embed",

@@ -174,6 +174,17 @@ func TestKeylolBuildBlocksKeepsForumWidgets(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksCleansBBCollapse(t *testing.T) {
+	blocks := keylolBuildBlocks(`[collapse=大型限时福利的具体定义]隐藏内容[/collapse]<br>正文`, nil, "https://keylol.com/t1-1-1")
+	if len(blocks) < 2 || blocks[0].Kind != "collapse" || blocks[0].Text != "大型限时福利的具体定义" {
+		t.Fatalf("collapse block not parsed: %#v", blocks)
+	}
+	got := keylolDescFromBlocks(blocks)
+	if strings.Contains(got, "collapse") || !strings.Contains(got, "正文") {
+		t.Fatalf("collapse tag leaked into desc=%q blocks=%#v", got, blocks)
+	}
+}
+
 func TestKeylolBuildBlocksKeepsShowhideImagesWithoutControlText(t *testing.T) {
 	html := `<h2 class="KyloStylisedHeader1">游戏截图</h2>
 <div class="showhide"><p>隐藏内容，<a href="javascript:;" class="showhide-btn">点击显示</a></p><div style="display:none" class="spoiler">
@@ -362,6 +373,19 @@ func TestKeylolBuildBlocksKeepsSteamCard(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("missing steam card: %#v", blocks)
+	}
+}
+
+func TestKeylolBuildBlocksKeepsSteamWidgetCard(t *testing.T) {
+	html := `<iframe src="https://store.steampowered.com/widget/4459100/?utm_source=keylol" style="border:none;height:190px;width:100%;max-width:646px;"></iframe><br><span><a href="https://store.steampowered.com/app/4459100/">Steam商店</a> | <a href="#asf4459100" onclick="setCopy('!addlicense asf a/'+this.href.split('#asf')[1], '代码复制成功');return false;">复制ASF代码</a></span>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1038886-1-1")
+	gotKinds := []string{}
+	for _, block := range blocks {
+		gotKinds = append(gotKinds, block.Kind+":"+block.Title+block.Text)
+	}
+	got := strings.Join(gotKinds, "|")
+	if strings.Count(got, "steam_card:") != 1 || !strings.Contains(got, "asf_link:4459100") {
+		t.Fatalf("steam widget not parsed: %#v", blocks)
 	}
 }
 

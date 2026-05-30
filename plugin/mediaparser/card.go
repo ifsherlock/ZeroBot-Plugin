@@ -453,7 +453,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				height: 208,
 			})
 		case "asf_link":
-			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "asf_link", title: block.Title, height: 44})
+			// ASF commands are delivered in the merged forward message; the card keeps the Steam game card only.
 		case "toolbar":
 			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, toolbarSize, block.Text, float64(contentW))
 			if len(lines) > 0 {
@@ -909,9 +909,6 @@ func drawKeylolOutlinedText(dc *gg.Context, fontBytes []byte, size float64, c co
 func drawKeylolLinkLine(dc *gg.Context, fontBytes []byte, size float64, s string, x, y int) {
 	c := color.RGBA{R: 71, G: 151, B: 218, A: 255}
 	drawInlineEmoji(dc, fontBytes, size, c, s, float64(x), float64(y))
-	mustFont(dc, fontBytes, size)
-	lineW, _ := dc.MeasureString(s)
-	drawDottedLine(dc, float64(x), float64(y+7), float64(x)+lineW, c)
 }
 
 func drawDottedLine(dc *gg.Context, x1, y, x2 float64, c color.Color) {
