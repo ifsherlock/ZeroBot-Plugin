@@ -598,6 +598,9 @@ func fetchEmojiImage(r rune, size int) image.Image {
 }
 
 func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) {
+	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
+		return
+	}
 	if platform == "twitter" {
 		if drawTwitterLogoBadge(dc, right, cy) {
 			return
@@ -609,9 +612,6 @@ func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, 
 	}
 	if platform == "instagram" {
 		drawInstagramTransparentLogo(dc, fontBytes, right, cy)
-		return
-	}
-	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
 		return
 	}
 	if drawWhiteLogoBadge(dc, fontBytes, platform, right, cy) {
@@ -739,7 +739,7 @@ func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy floa
 	x, y := right-w, cy-h/2
 	fit := imaging.Fit(img, int(w)-pad*2, int(h)-pad*2, imaging.Lanczos)
 	b := fit.Bounds()
-	if platform != "youtube" && platform != "instagram" {
+	if !logoHasTransparency(img) {
 		dc.SetRGB255(255, 255, 255)
 		dc.DrawRoundedRectangle(x, y, w, h, 8)
 		dc.Fill()
@@ -852,6 +852,36 @@ func logoHasVisibleContent(img image.Image) bool {
 		return false
 	}
 	return float64(visible)/float64(sampled) > 0.001
+}
+
+func logoHasTransparency(img image.Image) bool {
+	if img == nil {
+		return false
+	}
+	b := img.Bounds()
+	total := b.Dx() * b.Dy()
+	if total <= 0 {
+		return false
+	}
+	step := total / 1600
+	if step < 1 {
+		step = 1
+	}
+	i := 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if i%step != 0 {
+				i++
+				continue
+			}
+			i++
+			_, _, _, a := img.At(x, y).RGBA()
+			if a>>8 < 250 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) bool {
