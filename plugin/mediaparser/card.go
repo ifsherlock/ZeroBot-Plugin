@@ -48,6 +48,9 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if meta.Platform == "keylol" {
 		return renderKeylolThreadCard(meta, fontBytes)
 	}
+	if meta.Platform == "steam" {
+		return renderSteamGameCard(meta, fontBytes)
+	}
 	if shouldConsiderLongImageCard(meta) {
 		return renderLongImageCard(meta, fontBytes)
 	}
@@ -63,6 +66,138 @@ func keylolBodyFontBytes(fallback []byte) []byte {
 		return fallback
 	}
 	return fontBytes
+}
+
+func renderSteamGameCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	w, h := 920, 520
+	dc := gg.NewContext(w, h)
+	dc.SetRGB255(26, 26, 36)
+	dc.Clear()
+
+	bg := fetchCardImage(firstNonEmpty(meta.SteamHeaderImage, meta.Cover), nil)
+	if bg != nil {
+		bg = imaging.Fill(bg, w, h, imaging.Center, imaging.Lanczos)
+		bg = imaging.Blur(bg, 18)
+		dc.DrawImage(bg, 0, 0)
+		dc.SetRGBA255(10, 14, 24, 178)
+		dc.DrawRectangle(0, 0, float64(w), float64(h))
+		dc.Fill()
+	}
+
+	panelX, panelY, panelW, panelH := 54, 54, w-108, h-108
+	for i := 18; i >= 1; i-- {
+		dc.SetRGBA255(0, 0, 0, 5+i*2)
+		dc.DrawRoundedRectangle(float64(panelX), float64(panelY+i), float64(panelW), float64(panelH), 30)
+		dc.Fill()
+	}
+	dc.SetRGBA255(255, 255, 255, 24)
+	dc.DrawRoundedRectangle(float64(panelX), float64(panelY), float64(panelW), float64(panelH), 30)
+	dc.FillPreserve()
+	dc.SetLineWidth(1.5)
+	dc.SetRGBA255(255, 255, 255, 42)
+	dc.Stroke()
+	drawSteamBadge(dc, fontBytes, float64(panelX+panelW-58), float64(panelY+48))
+
+	coverX, coverY, coverW, coverH := panelX+28, panelY+30, 250, panelH-60
+	if cover := fetchCardImage(meta.Cover, nil); cover != nil {
+		cover = imaging.Fill(cover, coverW, coverH, imaging.Center, imaging.Lanczos)
+		dc.DrawRoundedRectangle(float64(coverX), float64(coverY), float64(coverW), float64(coverH), 18)
+		dc.ClipPreserve()
+		dc.DrawImage(cover, coverX, coverY)
+		dc.ResetClip()
+		dc.SetLineWidth(1.5)
+		dc.SetRGBA255(255, 255, 255, 38)
+		dc.Stroke()
+	} else {
+		dc.SetRGBA255(255, 255, 255, 26)
+		dc.DrawRoundedRectangle(float64(coverX), float64(coverY), float64(coverW), float64(coverH), 18)
+		dc.Fill()
+	}
+
+	textX := coverX + coverW + 32
+	textW := panelX + panelW - textX - 78
+	y := float64(coverY + 30)
+	title := firstNonEmpty(meta.Title, "Steam "+meta.SteamAppID)
+	for _, line := range wrapDisplayTextByPixels(fontBytes, 42, title, float64(textW), 2) {
+		drawInlineEmoji(dc, fontBytes, 42, color.RGBA{R: 255, G: 255, B: 255, A: 255}, line, float64(textX), y)
+		y += 50
+	}
+	subtitle := strings.TrimSpace(meta.SteamSubtitle)
+	if subtitle != "" && !strings.EqualFold(strings.ReplaceAll(subtitle, " ", "_"), strings.ReplaceAll(title, " ", "_")) {
+		drawInlineEmoji(dc, fontBytes, 23, color.RGBA{R: 210, G: 220, B: 232, A: 190}, subtitle, float64(textX), y+4)
+		y += 34
+	}
+	if len(meta.SteamGenres) > 0 {
+		genres := strings.Join(meta.SteamGenres, " | ")
+		for _, line := range wrapDisplayTextByPixels(fontBytes, 21, genres, float64(textW), 2) {
+			drawInlineEmoji(dc, fontBytes, 21, color.RGBA{R: 190, G: 206, B: 220, A: 150}, line, float64(textX), y)
+			y += 28
+		}
+	}
+	if meta.Desc != "" {
+		y += 10
+		for _, line := range wrapDisplayTextByPixels(fontBytes, 22, meta.Desc, float64(textW), 3) {
+			drawInlineEmoji(dc, fontBytes, 22, color.RGBA{R: 225, G: 232, B: 238, A: 190}, line, float64(textX), y)
+			y += 31
+		}
+	}
+
+	ratingY := float64(panelY + panelH - 108)
+	if meta.SteamReviewPercent > 0 || meta.SteamReviewSummary != "" {
+		review := strings.TrimSpace(meta.SteamReviewSummary)
+		if meta.SteamReviewPercent > 0 {
+			review = fmt.Sprintf("%d%% %s", meta.SteamReviewPercent, firstNonEmpty(review, "好评"))
+		}
+		drawInlineEmoji(dc, fontBytes, 26, color.RGBA{R: 16, G: 185, B: 129, A: 255}, "★ "+review, float64(textX), ratingY)
+		ratingY += 34
+	}
+
+	priceY := float64(panelY + panelH - 42)
+	current := firstNonEmpty(meta.SteamPriceCurrent, "价格未知")
+	drawInlineEmoji(dc, fontBytes, 36, color.RGBA{R: 255, G: 255, B: 255, A: 255}, current, float64(textX), priceY)
+	cursor := float64(textX) + 18
+	mustFont(dc, fontBytes, 36)
+	if tw, _ := dc.MeasureString(current); tw > 0 {
+		cursor += tw
+	}
+	if meta.SteamPriceOriginal != "" && meta.SteamPriceOriginal != current {
+		mustFont(dc, fontBytes, 19)
+		dc.SetRGBA255(255, 255, 255, 82)
+		dc.DrawStringAnchored(meta.SteamPriceOriginal, cursor, priceY+2, 0, 0.5)
+		ow, _ := dc.MeasureString(meta.SteamPriceOriginal)
+		dc.SetRGBA255(255, 255, 255, 72)
+		dc.SetLineWidth(2)
+		dc.DrawLine(cursor, priceY+2, cursor+ow, priceY+2)
+		dc.Stroke()
+		cursor += ow + 14
+	}
+	if meta.SteamDiscount > 0 {
+		discount := fmt.Sprintf("-%d%%", meta.SteamDiscount)
+		mustFont(dc, fontBytes, 20)
+		dw, _ := dc.MeasureString(discount)
+		dc.SetRGBA255(245, 158, 11, 42)
+		dc.DrawRoundedRectangle(cursor, priceY-18, dw+18, 30, 7)
+		dc.Fill()
+		drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 245, G: 158, B: 11, A: 255}, discount, cursor+9, priceY-2)
+	}
+	return saveCardPNG(dc, meta)
+}
+
+func drawSteamBadge(dc *gg.Context, fontBytes []byte, cx, cy float64) {
+	dc.SetRGBA255(255, 255, 255, 46)
+	dc.DrawCircle(cx, cy, 26)
+	dc.Fill()
+	dc.SetRGBA255(255, 255, 255, 108)
+	dc.SetLineWidth(4)
+	dc.DrawCircle(cx-8, cy+8, 7)
+	dc.Stroke()
+	dc.DrawLine(cx-2, cy+3, cx+13, cy-9)
+	dc.Stroke()
+	dc.DrawCircle(cx+16, cy-12, 9)
+	dc.Stroke()
+	mustFont(dc, fontBytes, 18)
+	dc.SetRGBA255(255, 255, 255, 118)
+	dc.DrawStringAnchored("STEAM", cx-52, cy+41, 0, 0.5)
 }
 
 func shouldRenderAsGalleryCard(meta mediaMeta) bool {

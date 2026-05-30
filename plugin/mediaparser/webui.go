@@ -604,6 +604,8 @@ func platformLabel(name string) string {
 		return "X / Twitter"
 	case "keylol":
 		return "Keylol"
+	case "steam":
+		return "Steam"
 	default:
 		return name
 	}

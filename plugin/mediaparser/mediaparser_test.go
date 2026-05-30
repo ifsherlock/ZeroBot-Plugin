@@ -514,6 +514,82 @@ func TestKeylolFetchSteamAppFallbackFields(t *testing.T) {
 	}
 }
 
+func TestSteamPlatformDetection(t *testing.T) {
+	cfg := defaultConfig()
+	links := extractLinks("看看 https://store.steampowered.com/app/1245620/ELDEN_RING/", cfg)
+	if len(links) != 1 || links[0].Platform != "steam" {
+		t.Fatalf("steam link not detected: %#v", links)
+	}
+}
+
+func TestParseSteamUsesStoreAPIs(t *testing.T) {
+	appSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("appids"); got != "1245620" {
+			t.Fatalf("bad app id: %s", got)
+		}
+		_, _ = w.Write([]byte(`{"1245620":{"success":true,"data":{"name":"ELDEN RING","steam_appid":1245620,"header_image":"https://cdn.example.com/header.jpg","capsule_image":"https://cdn.example.com/capsule.jpg","short_description":"THE NEW FANTASY ACTION RPG.","genres":[{"description":"动作角色扮演"},{"description":"开放世界"}],"price_overview":{"currency":"CNY","initial":39800,"final":29800,"discount_percent":25,"initial_formatted":"¥ 398.00","final_formatted":"¥ 298.00"}}}}`))
+	}))
+	defer appSrv.Close()
+	reviewSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/1245620") {
+			t.Fatalf("bad review path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"success":1,"query_summary":{"total_reviews":1000,"total_positive":950,"review_score_desc":"好评如潮"}}`))
+	}))
+	defer reviewSrv.Close()
+	oldAppAPI := steamAPIBase
+	oldReviewAPI := steamReviewsAPIBase
+	steamAPIBase = appSrv.URL
+	steamReviewsAPIBase = reviewSrv.URL
+	defer func() {
+		steamAPIBase = oldAppAPI
+		steamReviewsAPIBase = oldReviewAPI
+	}()
+
+	meta, err := parseSteam(defaultConfig(), "https://store.steampowered.com/app/1245620/ELDEN_RING/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Platform != "steam" || meta.Title != "ELDEN RING" || meta.Cover == "" {
+		t.Fatalf("bad steam meta: %#v", meta)
+	}
+	if meta.SteamAppID != "1245620" || meta.SteamReviewPercent != 95 || meta.SteamReviewSummary != "好评如潮" {
+		t.Fatalf("bad steam review meta: %#v", meta)
+	}
+	if meta.SteamPriceCurrent != "¥ 298.00" || meta.SteamPriceOriginal != "¥ 398.00" || meta.SteamDiscount != 25 {
+		t.Fatalf("bad steam price meta: %#v", meta)
+	}
+	if got := strings.Join(meta.SteamGenres, "|"); !strings.Contains(got, "动作角色扮演") || !strings.Contains(got, "开放世界") {
+		t.Fatalf("bad steam genres: %#v", meta.SteamGenres)
+	}
+}
+
+func TestRenderSteamGameCardPreview(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
+	out, err := renderInfoCard(mediaMeta{
+		SourceURL:          "steam-preview",
+		Platform:           "steam",
+		Title:              "Elden Ring",
+		Desc:               "艾尔登法环",
+		SteamAppID:         "1245620",
+		SteamGenres:        []string{"Action RPG", "Open World", "Fantasy"},
+		SteamReviewPercent: 95,
+		SteamReviewSummary: "特别好评",
+		SteamPriceCurrent:  "¥298.00",
+		SteamPriceOriginal: "¥398.00",
+		SteamDiscount:      25,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseKeylolFirstPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("module") != "viewthread" || r.URL.Query().Get("tid") != "1039281" {

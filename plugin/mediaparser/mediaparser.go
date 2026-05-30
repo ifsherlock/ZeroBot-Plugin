@@ -160,6 +160,16 @@ type mediaMeta struct {
 	HasAccessDenied  bool
 	ExceedsMaxSize   bool
 	MediaItems       []mediaItem
+
+	SteamAppID         string
+	SteamSubtitle      string
+	SteamGenres        []string
+	SteamReviewPercent int
+	SteamReviewSummary string
+	SteamPriceCurrent  string
+	SteamPriceOriginal string
+	SteamDiscount      int
+	SteamHeaderImage   string
 }
 
 type mediaItem struct {
@@ -199,6 +209,7 @@ var platforms = []platform{
 	{Name: "xiaoheihe", Hosts: []string{"xiaoheihe.cn", "heybox.cn"}, Aliases: []string{"小黑盒", "heybox"}},
 	{Name: "twitter", Hosts: []string{"twitter.com", "x.com", "fxtwitter.com", "fixupx.com", "vxtwitter.com"}, Aliases: []string{"推特", "x"}},
 	{Name: "keylol", Hosts: []string{"keylol.com", "www.keylol.com"}, Aliases: []string{"Keylol", "keylol"}},
+	{Name: "steam", Hosts: []string{"store.steampowered.com"}, Aliases: []string{"Steam", "steam"}},
 }
 
 func init() {
@@ -1070,6 +1081,8 @@ func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
 		return parseTwitter(cfg, link.URL)
 	case "keylol":
 		return parseKeylol(cfg, link.URL)
+	case "steam":
+		return parseSteam(cfg, link.URL)
 	default:
 		return parseOpenGraph(cfg, link)
 	}
