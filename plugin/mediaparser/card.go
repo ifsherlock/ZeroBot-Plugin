@@ -1728,11 +1728,15 @@ func drawCover(dc *gg.Context, img image.Image, x, y, w, h int, showPlay bool) {
 	}
 	cx := float64(x + w/2)
 	cy := float64(y + h/2)
-	dc.SetRGBA255(80, 80, 80, 105)
-	dc.DrawCircle(cx, cy, 70)
+	drawPlayOverlay(dc, cx, cy)
+}
+
+func drawPlayOverlay(dc *gg.Context, cx, cy float64) {
+	dc.SetRGBA255(30, 34, 40, 92)
+	dc.DrawRoundedRectangle(cx-58, cy-58, 116, 116, 16)
 	dc.Fill()
-	dc.SetRGBA255(255, 255, 255, 165)
-	dc.DrawRegularPolygon(3, cx+14, cy, 54, gg.Radians(90))
+	dc.SetRGBA255(185, 190, 198, 155)
+	dc.DrawRegularPolygon(3, cx+13, cy, 46, gg.Radians(90))
 	dc.Fill()
 }
 
@@ -1743,12 +1747,7 @@ func drawFloatingCoverCell(dc *gg.Context, img image.Image, x, y, w, h int, show
 	}
 	cx := float64(x + w/2)
 	cy := float64(y + h/2)
-	dc.SetRGBA255(42, 42, 42, 118)
-	dc.DrawCircle(cx, cy, 70)
-	dc.Fill()
-	dc.SetRGBA255(255, 255, 255, 190)
-	dc.DrawRegularPolygon(3, cx+14, cy, 54, gg.Radians(90))
-	dc.Fill()
+	drawPlayOverlay(dc, cx, cy)
 }
 
 func shouldDrawPlayOverlay(meta mediaMeta) bool {

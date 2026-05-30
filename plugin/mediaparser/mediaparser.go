@@ -1367,6 +1367,9 @@ func downloadHTTPFile(cfg config, raw string, headers map[string]string, out str
 }
 
 func ffmpegMerge(cfg config, video, audio, out string) error {
+	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", video, "-i", audio, "-c", "copy", "-movflags", "+faststart", out)
@@ -1379,6 +1382,9 @@ func ffmpegMerge(cfg config, video, audio, out string) error {
 }
 
 func ffmpegM3U8(cfg config, raw string, headers map[string]string, out string) error {
+	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
 	defer cancel()
 	args := []string{"-y"}
