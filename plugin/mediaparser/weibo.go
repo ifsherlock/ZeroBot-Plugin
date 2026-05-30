@@ -208,7 +208,7 @@ func buildWeiboMeta(raw string, data map[string]any) mediaMeta {
 		cover = firstNestedHTTPURLByKeys(data, 5, "cover", "thumbnail", "page_pic", "pic")
 	}
 	items := mediaItemsFor(videoGroups, imageGroups)
-	if len(videoGroups) > 0 && len(imageGroups) > 0 && cover != "" {
+	if len(videoGroups) > 0 && len(imageGroups) > 0 && isWeiboContentImageURL(strings.ToLower(cover)) && !hasURLGroup(imageGroups, cover) {
 		imageGroups = append(imageGroups, []string{cover})
 	}
 	return mediaMeta{
@@ -334,6 +334,16 @@ func uniqueGroups(groups [][]string) [][]string {
 		out = append(out, group)
 	}
 	return out
+}
+
+func hasURLGroup(groups [][]string, raw string) bool {
+	raw = ensureHTTPS(raw)
+	for _, group := range groups {
+		if len(group) > 0 && ensureHTTPS(group[0]) == raw {
+			return true
+		}
+	}
+	return false
 }
 
 func cleanHTMLText(s string) string {

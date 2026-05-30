@@ -138,8 +138,8 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	images := fetchCardImages(imageURLs, meta.ImageHeads)
 
 	title := firstNonEmpty(meta.Title, "媒体解析")
-	titleLines := wrapDisplayText(title, 32, 2)
-	descLines := wrapDisplayText(meta.Desc, 34, 14)
+	titleLines := wrapDisplayText(title, 56, 2)
+	descLines := wrapDisplayText(meta.Desc, 68, 14)
 	if len(titleLines) == 0 {
 		titleLines = []string{title}
 	}

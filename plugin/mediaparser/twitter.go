@@ -42,7 +42,9 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 	items := mediaItemsFor(videos, images)
 	if len(videos) > 0 && len(images) > 0 {
 		for _, thumb := range videoThumbs {
-			images = append(images, []string{thumb})
+			if !hasURLGroup(images, thumb) {
+				images = append(images, []string{thumb})
+			}
 		}
 	}
 	return mediaMeta{
