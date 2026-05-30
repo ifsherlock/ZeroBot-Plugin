@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -37,11 +38,67 @@ type webGroup struct {
 	Name string `json:"name"`
 }
 
+type webLogEntry struct {
+	Time    string `json:"time"`
+	Level   string `json:"level"`
+	Message string `json:"message"`
+}
+
+type webLogHook struct {
+	mu      sync.Mutex
+	entries []webLogEntry
+	limit   int
+}
+
+var (
+	webLogs     = &webLogHook{limit: 240}
+	webLogsOnce sync.Once
+)
+
+func (h *webLogHook) Levels() []logrus.Level { return logrus.AllLevels }
+
+func (h *webLogHook) Fire(entry *logrus.Entry) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.entries = append(h.entries, webLogEntry{
+		Time:    entry.Time.Format("2006-01-02 15:04:05"),
+		Level:   entry.Level.String(),
+		Message: redactWebLog(entry.Message),
+	})
+	if len(h.entries) > h.limit {
+		h.entries = append([]webLogEntry(nil), h.entries[len(h.entries)-h.limit:]...)
+	}
+	return nil
+}
+
+func (h *webLogHook) Snapshot(limit int) []webLogEntry {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if limit <= 0 || limit > len(h.entries) {
+		limit = len(h.entries)
+	}
+	out := make([]webLogEntry, 0, limit)
+	for i := len(h.entries) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, h.entries[i])
+	}
+	return out
+}
+
+func redactWebLog(s string) string {
+	for _, key := range []string{"Cookie:", "cookie:", "SESSDATA=", "sessionid=", "Authorization:", "Bearer "} {
+		if idx := strings.Index(s, key); idx >= 0 {
+			return strings.TrimSpace(s[:idx]) + key + "[redacted]"
+		}
+	}
+	return s
+}
+
 func StartWebUI(addr string, extra WebStatusProvider) {
 	addr = strings.TrimSpace(addr)
 	if addr == "" || addr == "off" || addr == "0" {
 		return
 	}
+	webLogsOnce.Do(func() { logrus.AddHook(webLogs) })
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveWebIndex)
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
@@ -104,12 +161,27 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 	mux.HandleFunc("/api/mediaparser/logos", serveLogoAPI)
 	mux.HandleFunc("/api/mediaparser/logos/image", serveLogoImageAPI)
 	mux.HandleFunc("/api/onebot/groups", serveGroupListAPI)
+	mux.HandleFunc("/api/logs", serveLogsAPI)
 	go func() {
 		logrus.Infof("[webui] listening on %s", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			logrus.Errorf("[webui] stopped: %v", err)
 		}
 	}()
+}
+
+func serveLogsAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	limit := 120
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 240 {
+			limit = n
+		}
+	}
+	writeJSON(w, map[string]any{"ok": true, "logs": webLogs.Snapshot(limit)})
 }
 
 func serveGroupListAPI(w http.ResponseWriter, r *http.Request) {
@@ -605,9 +677,10 @@ h1{font-size:18px;margin:0;font-weight:760}.app{display:grid;grid-template-colum
 table{width:100%;border-collapse:separate;border-spacing:0;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{background:#f8fafc;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fbfdff}
 button,select,input,textarea{border:1px solid var(--line);border-radius:8px;background:white;color:var(--text);padding:0 10px}button,select,input{height:34px}textarea{width:100%;min-height:110px;padding:9px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff;font-weight:650}button:hover{border-color:#b8c5d6}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#fecdd3;color:var(--red);background:#fff7f7}
 .hidden,.page{display:none!important}.page.active{display:block!important}.page.active.metric{display:flex!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
-.field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
+.field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
 .settingsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}.settingsCard{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:14px;display:flex;flex-direction:column;gap:12px}.settingsCard .sectionTitle{margin-bottom:0}.settingsCard .field{min-width:0}.settingsCard textarea{min-height:132px}.settingsFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsFields.single{grid-template-columns:1fr}
-.groupTools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
+.groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
+.overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
@@ -637,7 +710,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel metric page active" data-page="overview"><span class="muted">解析成功</span><b id="okn">-</b></div>
 <div class="panel metric page active" data-page="overview"><span class="muted">解析失败</span><b id="failn">-</b></div>
 <div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
-<div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>运行信息</b></div><p class="muted" id="runtimeSummary">-</p></div>
+<div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>运行信息</b></div><div class="overviewList" id="runtimeSummary">-</div></div>
+<div class="panel span4 page active" data-page="overview"><div class="sectionTitle"><b>插件概览</b><span class="muted">关键开关和运行路径。</span></div><div class="overviewList" id="overviewDetails">-</div></div>
 <div class="panel span4 page" data-page="system" id="system">
 <div class="sectionTitle"><b>全局设置</b><span class="muted">端口和 WS 地址保存后需要重启服务生效；超级管理员、昵称、命令前缀会立即写入运行时。</span><span class="right msg" id="systemMsg"></span></div>
 <div class="accessGrid">
@@ -652,7 +726,19 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button disabled>待接入</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+</div>
+<div class="panel span4 page" data-page="manager" id="manager">
+<div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">基础群管理、欢迎语、提醒和精华消息能力。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="commandGrid" style="margin-top:12px">
+<div class="commandItem"><b>群管理</b><code>踢出群聊 QQ</code><code>开启全员禁言 / 解除全员禁言</code><code>禁言 @成员 10分钟 / 解除禁言 QQ</code></div>
+<div class="commandItem"><b>成员资料</b><code>修改名片 QQ 名片</code><code>修改头衔 QQ 头衔</code><code>申请头衔 头衔</code></div>
+<div class="commandItem"><b>欢迎与告别</b><code>设置欢迎语 文本</code><code>测试欢迎语</code><code>设置告别辞 文本</code><code>测试告别辞</code></div>
+<div class="commandItem"><b>入群与精华</b><code>开启入群验证 / 关闭入群验证</code><code>开启gist加群自动审批</code><code>精华列表 / 取消精华 消息ID</code></div>
+<div class="commandItem"><b>提醒</b><code>在&quot;cron&quot;时提醒大家 内容</code><code>列出所有提醒</code><code>取消在&quot;cron&quot;的提醒</code></div>
+<div class="commandItem"><b>轻量功能</b><code>翻牌</code><code>赞我</code><code>群签到</code><code>回应表情 表情</code></div>
+</div>
+<p class="muted" style="margin-bottom:0">这些命令沿用聊天内权限判断。WebUI 暂不开放踢人、禁言等直接操作按钮，等 WebUI 鉴权做好后再接入可执行动作。</p>
 </div>
 <div class="panel span4 page" data-page="mediaparser" id="mediaparserHead">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 聚合解析</div><div class="sectionTitle"><b>聚合解析</b><span class="muted">短视频、图文、动态、商品链接解析配置。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -730,7 +816,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 </div>
-<div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">第一阶段先展示运行摘要和最近消息，后续可以接 journal 过滤。</span></div><p class="muted lastMsg expanded" id="logSummary">-</p></div>
+<div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">显示当前进程捕获到的程序日志，敏感 Cookie 会做基础脱敏。</span><button class="right" onclick="loadLogs()">刷新日志</button></div><div class="logList" id="logSummary">-</div></div>
 <div class="panel span4 page" data-page="maintenance" id="maintenance"><div class="sectionTitle"><b>数据维护</b><span class="muted">缓存、Logo、本地配置文件维护。</span></div><div class="row"><button class="danger" onclick="clearCache()">清理媒体缓存</button><span class="muted" id="maintenanceMsg">配置文件只保存在本机 data 目录，不会上传到 GitHub。</span></div></div>
 </section>
 </main>
@@ -741,7 +827,7 @@ const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
- const sidePage=page==='mediaparser'?'plugins':page;
+ const sidePage=(page==='mediaparser'||page==='manager')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
  const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
@@ -779,8 +865,30 @@ async function refreshStatus(){
  $('self').textContent=rt.last_self_id||bot.self_id||'-'; $('okn').textContent=rt.parse_success||0; $('failn').textContent=rt.parse_failed||0;
  $('okn2').textContent=rt.parse_success||0; $('failn2').textContent=rt.parse_failed||0;
  $('lastMsg').textContent=rt.last_message||'暂无消息';
- $('runtimeSummary').textContent='Go '+(st.go||'-')+' / WebUI '+((sys&&sys.webui_addr)||'-')+' / WS '+((sys&&sys.ws_url)||'-');
- $('logSummary').textContent='最近消息：'+(rt.last_message||'暂无')+'\n成功：'+(rt.parse_success||0)+'，失败：'+(rt.parse_failed||0);
+ const enabled=platforms.filter(p=>cfg&&cfg.platform_enabled&&cfg.platform_enabled[p.name]).length;
+ $('runtimeSummary').innerHTML=[
+  infoLine('Go 版本', st.go||'-'),
+  infoLine('WebUI 地址', (sys&&sys.webui_addr)||'-'),
+  infoLine('OneBot WS', (sys&&sys.ws_url)||'-'),
+  infoLine('命令前缀', (sys&&sys.command_prefix)||'/')
+ ].join('');
+ $('overviewDetails').innerHTML=[
+  infoLine('聚合解析', (cfg&&cfg.auto_parse?'已开启':'已关闭')+'，启用平台 '+enabled+'/'+platforms.length),
+  infoLine('发送策略', '信息图 '+onText(cfg&&cfg.send_info_card)+' / 媒体 '+onText(cfg&&cfg.send_media)+' / 下载 '+onText(cfg&&cfg.download_video)),
+  infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
+  infoLine('路径', '配置 '+(st.config_path||'-')+' / 缓存 '+(st.cache_dir||'-'))
+ ].join('');
+ loadLogs();
+}
+function infoLine(k,v){return '<div class="infoLine"><b>'+escapeHTML(k)+'</b><span class="muted">'+escapeHTML(v)+'</span></div>'}
+function onText(v){return v?'开启':'关闭'}
+function qualityText(v){return Number(v)>0 ? String(v)+'p' : '不限'}
+async function loadLogs(){
+ try{
+  const data=await (await fetch('/api/logs?limit=80')).json();
+  const logs=data.logs||[];
+  $('logSummary').innerHTML=logs.map(l=>'<div class="logLine"><b>'+escapeHTML(l.time+' '+String(l.level||'').toUpperCase())+'</b>'+escapeHTML(l.message||'')+'</div>').join('')||'<div class="muted">暂无程序日志</div>';
+ }catch(e){$('logSummary').innerHTML='<div class="bad">日志读取失败：'+escapeHTML(e)+'</div>'}
 }
 async function load(){
  const data=await (await fetch('/api/mediaparser/config')).json();

@@ -701,9 +701,6 @@ func handleAutoParse(ctx *zero.Ctx) {
 		if err := processLink(ctx, cfg, link); err != nil {
 			addRuntimeParse(false)
 			sendFailReaction(ctx, cfg)
-			if cfg.Debug {
-				ctx.SendChain(message.Text("解析失败: ", err))
-			}
 			logrus.Warnf("[mediaparser] parse_failed platform=%s url=%s error=%v", link.Platform, link.URL, err)
 		} else {
 			addRuntimeParse(true)
