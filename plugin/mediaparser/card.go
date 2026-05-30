@@ -607,13 +607,12 @@ func fetchEmojiImage(r rune, size int) image.Image {
 }
 
 func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) {
-	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
+	if platform == "twitter" {
+		drawTwitterTransparentLogo(dc, right, cy)
 		return
 	}
-	if platform == "twitter" {
-		if drawTwitterLogoBadge(dc, right, cy) {
-			return
-		}
+	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
+		return
 	}
 	if platform == "youtube" {
 		drawYouTubeTransparentLogo(dc, fontBytes, right, cy)
@@ -671,6 +670,21 @@ func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, 
 		dc.SetColor(p.LogoText)
 		dc.DrawStringAnchored(name, right, cy, 1, 0.5)
 	}
+}
+
+func drawTwitterTransparentLogo(dc *gg.Context, right, cy float64) {
+	x := right - 60
+	y := cy - 30
+	dc.SetRGBA255(0, 0, 0, 80)
+	dc.SetLineWidth(9)
+	dc.DrawLine(x+11, y+8, x+51, y+52)
+	dc.DrawLine(x+49, y+8, x+9, y+52)
+	dc.Stroke()
+	dc.SetRGB255(255, 255, 255)
+	dc.SetLineWidth(7)
+	dc.DrawLine(x+11, y+8, x+51, y+52)
+	dc.DrawLine(x+49, y+8, x+9, y+52)
+	dc.Stroke()
 }
 
 func drawTwitterLogoBadge(dc *gg.Context, right, cy float64) bool {
