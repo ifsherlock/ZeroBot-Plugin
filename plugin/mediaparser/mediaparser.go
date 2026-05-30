@@ -154,6 +154,12 @@ type mediaMeta struct {
 	HasValidMedia    bool
 	HasAccessDenied  bool
 	ExceedsMaxSize   bool
+	MediaItems       []mediaItem
+}
+
+type mediaItem struct {
+	Kind  string
+	Index int
 }
 
 type platform struct {
@@ -873,36 +879,22 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 	if meta.ExceedsMaxSize {
 		logrus.Infof("[mediaparser] oversized_video_preview_only platform=%s title=%q max_mb=%d", meta.Platform, meta.Title, cfg.MaxVideoMB)
 	}
+	if shouldForwardCombinedMedia(meta) {
+		return sendCombinedMediaForward(ctx, meta)
+	}
 	if len(meta.VideoURLs) == 0 && len(meta.ImageURLs) > 0 {
 		return sendImageGalleryForward(ctx, meta)
 	}
-	for i, mode := range meta.VideoModes {
-		if mode == "skip" {
-			continue
-		}
-		var target string
-		if mode == "local" && i < len(meta.FilePaths) && meta.FilePaths[i] != "" {
-			target = fileURI(meta.FilePaths[i])
-		} else if i < len(meta.VideoURLs) && len(meta.VideoURLs[i]) > 0 {
-			target = stripMediaPrefix(meta.VideoURLs[i][0])
-		}
+	for i := range meta.VideoURLs {
+		target := mediaVideoTarget(meta, i)
 		if target == "" {
 			continue
 		}
 		ctx.SendChain(message.Video(target))
 		logrus.Infof("[mediaparser] sent_video platform=%s title=%q target=%s", meta.Platform, meta.Title, target)
 	}
-	offset := len(meta.VideoURLs)
-	for i, mode := range meta.ImageModes {
-		if mode == "skip" {
-			continue
-		}
-		var target string
-		if mode == "local" && offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
-			target = fileURI(meta.FilePaths[offset+i])
-		} else if i < len(meta.ImageURLs) && len(meta.ImageURLs[i]) > 0 {
-			target = stripMediaPrefix(meta.ImageURLs[i][0])
-		}
+	for i := range meta.ImageURLs {
+		target := mediaImageTarget(meta, i)
 		if target == "" {
 			continue
 		}
@@ -912,22 +904,109 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 	return nil
 }
 
+func shouldForwardCombinedMedia(meta *mediaMeta) bool {
+	if meta == nil || meta.Platform != "instagram" {
+		return false
+	}
+	return len(meta.VideoURLs)+len(meta.ImageURLs) > 1
+}
+
+func mediaVideoTarget(meta *mediaMeta, i int) string {
+	if i < 0 || i >= len(meta.VideoURLs) {
+		return ""
+	}
+	mode := ""
+	if i < len(meta.VideoModes) {
+		mode = meta.VideoModes[i]
+	}
+	if mode == "skip" {
+		return ""
+	}
+	if mode == "local" && i < len(meta.FilePaths) && meta.FilePaths[i] != "" {
+		return fileURI(meta.FilePaths[i])
+	}
+	if len(meta.VideoURLs[i]) > 0 {
+		return stripMediaPrefix(meta.VideoURLs[i][0])
+	}
+	return ""
+}
+
+func mediaImageTarget(meta *mediaMeta, i int) string {
+	if i < 0 || i >= len(meta.ImageURLs) {
+		return ""
+	}
+	mode := ""
+	if i < len(meta.ImageModes) {
+		mode = meta.ImageModes[i]
+	}
+	if mode == "skip" {
+		return ""
+	}
+	offset := len(meta.VideoURLs)
+	if mode == "local" && offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
+		return fileURI(meta.FilePaths[offset+i])
+	}
+	if len(meta.ImageURLs[i]) > 0 {
+		return stripMediaPrefix(meta.ImageURLs[i][0])
+	}
+	return ""
+}
+
+func sendCombinedMediaForward(ctx *zero.Ctx, meta *mediaMeta) error {
+	nodes := message.Message{}
+	botName := "瑙嗛瑙ｆ瀽bot"
+	botID := ctx.Event.SelfID
+	mediaNode := message.Message{}
+	items := meta.MediaItems
+	if len(items) == 0 {
+		for i := range meta.VideoURLs {
+			items = append(items, mediaItem{Kind: "video", Index: i})
+		}
+		for i := range meta.ImageURLs {
+			items = append(items, mediaItem{Kind: "image", Index: i})
+		}
+	}
+	videoCount, imageCount := 0, 0
+	for _, item := range items {
+		switch item.Kind {
+		case "video":
+			if target := mediaVideoTarget(meta, item.Index); target != "" {
+				mediaNode = append(mediaNode, message.Video(target))
+				videoCount++
+			}
+		case "image":
+			if target := mediaImageTarget(meta, item.Index); target != "" {
+				mediaNode = append(mediaNode, message.Image(target))
+				imageCount++
+			}
+		}
+	}
+	if len(mediaNode) > 0 {
+		nodes = append(nodes, message.CustomNode(botName, botID, mediaNode))
+	}
+	if text := galleryForwardText(meta); text != "" {
+		nodes = append(nodes, message.CustomNode(botName, botID, message.Message{message.Text(text)}))
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+	var resID int64
+	if ctx.Event.GroupID != 0 {
+		resID = ctx.SendGroupForwardMessage(ctx.Event.GroupID, nodes).Get("message_id").Int()
+	} else {
+		resID = ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes).Get("message_id").Int()
+	}
+	logrus.Infof("[mediaparser] sent_combined_media_forward platform=%s title=%q nodes=%d videos=%d images=%d sender=%s(%d) message_id=%d", meta.Platform, meta.Title, len(nodes), videoCount, imageCount, botName, botID, resID)
+	return nil
+}
+
 func sendImageGalleryForward(ctx *zero.Ctx, meta *mediaMeta) error {
 	nodes := message.Message{}
 	botName := "视频解析bot"
 	botID := ctx.Event.SelfID
 	imageNode := message.Message{}
-	offset := len(meta.VideoURLs)
-	for i, group := range meta.ImageURLs {
-		target := ""
-		if i < len(meta.ImageModes) && meta.ImageModes[i] == "skip" {
-			continue
-		}
-		if i < len(meta.ImageModes) && meta.ImageModes[i] == "local" && offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
-			target = fileURI(meta.FilePaths[offset+i])
-		} else if len(group) > 0 {
-			target = stripMediaPrefix(group[0])
-		}
+	for i := range meta.ImageURLs {
+		target := mediaImageTarget(meta, i)
 		if target == "" {
 			continue
 		}

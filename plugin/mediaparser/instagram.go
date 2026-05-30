@@ -164,10 +164,21 @@ func addInstagramMedia(meta *mediaMeta, item map[string]any) {
 
 func addInstagramOneMedia(meta *mediaMeta, item map[string]any) {
 	if video := instagramBestVideo(item); video != "" {
+		idx := len(meta.VideoURLs)
 		meta.VideoURLs = append(meta.VideoURLs, []string{ensureHTTPS(video)})
+		meta.MediaItems = append(meta.MediaItems, mediaItem{Kind: "video", Index: idx})
+		if img := instagramBestImage(item); img != "" {
+			meta.ImageURLs = append(meta.ImageURLs, []string{ensureHTTPS(img)})
+			if meta.Cover == "" {
+				meta.Cover = ensureHTTPS(img)
+			}
+		}
+		return
 	}
 	if img := instagramBestImage(item); img != "" {
+		idx := len(meta.ImageURLs)
 		meta.ImageURLs = append(meta.ImageURLs, []string{ensureHTTPS(img)})
+		meta.MediaItems = append(meta.MediaItems, mediaItem{Kind: "image", Index: idx})
 		if meta.Cover == "" {
 			meta.Cover = ensureHTTPS(img)
 		}

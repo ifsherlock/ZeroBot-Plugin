@@ -44,10 +44,20 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(meta.VideoURLs) == 0 && len(meta.ImageURLs) > 0 {
+	if shouldRenderAsGalleryCard(meta) {
 		return renderGalleryCard(meta, fontBytes)
 	}
 	return renderVideoCard(meta, fontBytes)
+}
+
+func shouldRenderAsGalleryCard(meta mediaMeta) bool {
+	if len(meta.ImageURLs) == 0 {
+		return false
+	}
+	if len(meta.VideoURLs) == 0 {
+		return true
+	}
+	return meta.Platform == "instagram" && len(meta.VideoURLs)+len(meta.ImageURLs) > 1
 }
 
 func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
@@ -102,7 +112,7 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		y += 58
 	}
 
-	drawFloatingCoverCell(dc, coverImg, contentX, int(coverY), contentW, coverH, len(meta.VideoURLs) > 0)
+	drawFloatingCoverCell(dc, coverImg, contentX, int(coverY), contentW, coverH, shouldDrawPlayOverlay(meta))
 
 	y = summaryY
 	for _, line := range summaryLines {
@@ -1034,6 +1044,10 @@ func drawFloatingCoverCell(dc *gg.Context, img image.Image, x, y, w, h int, show
 	dc.SetRGBA255(255, 255, 255, 190)
 	dc.DrawRegularPolygon(3, cx+14, cy, 54, gg.Radians(90))
 	dc.Fill()
+}
+
+func shouldDrawPlayOverlay(meta mediaMeta) bool {
+	return len(meta.VideoURLs) > 0 && !(meta.Platform == "instagram" && len(meta.VideoURLs)+len(meta.ImageURLs) > 1)
 }
 
 func galleryGridHeightForImages(imgs []image.Image, w int) int {
