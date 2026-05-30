@@ -377,7 +377,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				cover:  block.Cover,
 				img:    img,
 				lines:  descLines,
-				height: 132,
+				height: 166,
 			})
 		case "text":
 			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, bodySize, block.Text, float64(contentW))
@@ -401,7 +401,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		contentH = 120
 	}
 	headerH := 86 + len(titleLines)*titleLH + 72
-	footerH := 72
+	footerH := 112
 	panelH := panelPad + headerH + contentH + footerH
 	height := panelH + outerPad*2
 
@@ -486,7 +486,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 	mustFont(dc, fontBytes, 20)
 	dc.SetRGB255(176, 184, 194)
-	dc.DrawStringAnchored(keylolFooterLine(meta), float64(w)/2, float64(height-outerPad-24), 0.5, 0.5)
+	dc.DrawStringAnchored(keylolFooterLine(meta), float64(w)/2, float64(height-outerPad-34), 0.5, 0.5)
 	return saveCardPNG(dc, meta)
 }
 
@@ -571,23 +571,14 @@ func drawKeylolPanel(dc *gg.Context, x, y, w, h int) {
 
 func drawKeylolBadge(dc *gg.Context, fontBytes []byte, x, y float64) {
 	dc.SetRGB255(74, 137, 218)
-	dc.DrawRoundedRectangle(x, y, 86, 40, 16)
+	dc.DrawRoundedRectangle(x, y, 132, 40, 16)
 	dc.Fill()
-	if logo := loadPlatformLogo("keylol"); logo != nil {
-		mark := imaging.Fit(logo, 62, 28, imaging.Lanczos)
-		dc.DrawImageAnchored(mark, int(x+43), int(y+20), 0.5, 0.5)
-		return
-	}
-	mustFont(dc, fontBytes, 22)
-	dc.SetRGB255(255, 255, 255)
-	dc.DrawStringAnchored("K", x+43, y+21, 0.5, 0.5)
+	drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255}, "🎮 Keylol", x+16, y+21)
 }
 
 func drawKeylolAuthorLine(dc *gg.Context, fontBytes []byte, author string, x, y int) {
-	mustFont(dc, fontBytes, 25)
-	dc.SetRGB255(96, 126, 170)
-	dc.DrawStringAnchored("✎", float64(x+12), float64(y-5), 0.5, 0.5)
-	drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 50, G: 124, B: 214, A: 255}, author, float64(x+34), float64(y))
+	cursor := drawInlineEmoji(dc, fontBytes, 23, color.RGBA{R: 50, G: 124, B: 214, A: 255}, "✍️", float64(x), float64(y))
+	drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 50, G: 124, B: 214, A: 255}, author, float64(x)+cursor+10, float64(y))
 }
 
 func drawKeylolFullImage(dc *gg.Context, img image.Image, x, y, w, h int) {
@@ -681,15 +672,15 @@ func drawKeylolSteamCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 
 	textX := x + 246
 	title := truncate(firstNonEmpty(block.title, "Steam 游戏"), 34)
-	drawInlineEmoji(dc, fontBytes, 25, color.RGBA{R: 237, G: 244, B: 255, A: 255}, "Steam 上的 "+title, float64(textX), float64(y+40))
-	yy := y + 72
+	drawInlineEmoji(dc, fontBytes, 25, color.RGBA{R: 237, G: 244, B: 255, A: 255}, "Steam 上的 "+title, float64(textX), float64(y+42))
+	yy := y + 78
 	for _, line := range block.lines {
 		drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 166, G: 188, B: 214, A: 255}, truncate(line, 56), float64(textX), float64(yy))
-		yy += 27
+		yy += 28
 	}
 	mustFont(dc, fontBytes, 19)
 	dc.SetRGB255(95, 177, 235)
-	dc.DrawStringAnchored("在 Steam 上查看 →", float64(textX), float64(y+h-20), 0, 0.5)
+	dc.DrawStringAnchored("在 Steam 上查看 →", float64(textX), float64(y+h-28), 0, 0.5)
 }
 
 func keylolPrepareImage(img image.Image) image.Image {
