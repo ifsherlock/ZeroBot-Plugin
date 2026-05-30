@@ -76,7 +76,7 @@ func fetchSteamAppDetails(appID string) (map[string]any, error) {
 	q := api.Query()
 	q.Set("appids", appID)
 	q.Set("cc", "cn")
-	q.Set("l", "zh")
+	q.Set("l", "schinese")
 	api.RawQuery = q.Encode()
 	body, _, status, err := fetchText(api.String(), map[string]string{"Accept": "application/json"}, true)
 	if err != nil {

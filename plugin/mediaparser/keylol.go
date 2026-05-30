@@ -77,9 +77,10 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	blocks = keylolEnrichSteamBlocks(blocks)
 	blocks = keylolEnsureASFSteamCards(blocks)
 	blocks = keylolEnrichVideoBlocks(cfg, blocks)
+	blocks = keylolLimitSteamCards(blocks, raw, 20)
 	images := keylolImageGroupsFromBlocks(blocks)
 	desc := keylolDescFromBlocks(blocks)
-	title := firstNonEmpty(getString(thread, "subject"), getString(post, "subject"))
+	title := keylolCleanTitle(firstNonEmpty(getString(thread, "subject"), getString(post, "subject")))
 	author := cardDisplayAuthor(firstNonEmpty(getString(post, "author"), getString(thread, "author")))
 	authorID := firstNonEmpty(getString(post, "authorid"), getString(thread, "authorid"))
 	timestamp := keylolTime(firstNonEmpty(getString(post, "dateline"), getString(thread, "dateline")))
@@ -412,6 +413,11 @@ func keylolTextBlocks(text string) []keylolBlock {
 			flush()
 			out = append(out, keylolBlock{Kind: "heading2", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_h3]"))})
 		default:
+			if block := keylolVideoBlockFromURL(line); block.URL != "" {
+				flush()
+				out = append(out, block)
+				continue
+			}
 			if keylolLooksLikeSteamToolbar(line) {
 				flush()
 				out = append(out, keylolBlock{Kind: "toolbar", Text: keylolCleanSteamToolbar(line)})
@@ -590,6 +596,32 @@ func keylolEnrichVideoBlocks(cfg config, blocks []keylolBlock) []keylolBlock {
 	return blocks
 }
 
+func keylolLimitSteamCards(blocks []keylolBlock, sourceURL string, limit int) []keylolBlock {
+	if limit <= 0 {
+		return blocks
+	}
+	count := 0
+	trimmed := false
+	out := make([]keylolBlock, 0, len(blocks)+1)
+	for _, block := range blocks {
+		if block.Kind == "steam_card" {
+			count++
+			if count > limit {
+				trimmed = true
+				continue
+			}
+		}
+		if trimmed && block.Kind == "asf_link" {
+			continue
+		}
+		out = append(out, block)
+	}
+	if trimmed {
+		out = append(out, keylolBlock{Kind: "link", Text: "游戏链接较多，已仅展示前 20 个。详情请访问：" + sourceURL})
+	}
+	return out
+}
+
 func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
 	appID := keylolSteamAppID(rawURL)
 	if appID == "" {
@@ -601,7 +633,7 @@ func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
 	}
 	q := api.Query()
 	q.Set("appids", appID)
-	q.Set("l", "zh")
+	q.Set("l", "schinese")
 	q.Set("cc", "cn")
 	api.RawQuery = q.Encode()
 	body, _, status, err := fetchText(api.String(), map[string]string{"Accept": "application/json"}, true)
@@ -711,7 +743,8 @@ func keylolSmileyText(raw string) string {
 }
 
 func keylolReplaceSpoilers(s string) string {
-	s = regexp.MustCompile(`(?is)\[/?spoil\]`).ReplaceAllString(s, "\n")
+	s = regexp.MustCompile(`(?is)\[spoil(?:=[^\]]*)?\]`).ReplaceAllString(s, "\n[keylol_hidden]已显示隐藏内容\n")
+	s = regexp.MustCompile(`(?is)\[/spoil\]`).ReplaceAllString(s, "\n")
 	re := regexp.MustCompile(`(?is)<span\b[^>]*class=["'][^"']*\bbbcode_spoiler\b[^"']*["'][^>]*>\s*<span\b[^>]*class=["'][^"']*\bbbcode_spoiler_content\b[^"']*["'][^>]*>(.*?)</span>\s*</span>`)
 	return re.ReplaceAllStringFunc(s, func(match string) string {
 		m := re.FindStringSubmatch(match)
@@ -724,6 +757,10 @@ func keylolReplaceSpoilers(s string) string {
 		}
 		return "\n[keylol_spoiler]" + keylolOneLine(text) + "\n"
 	})
+}
+
+func keylolCleanTitle(s string) string {
+	return strings.TrimSpace(html.UnescapeString(htmlUnescape(keylolCleanBlockText(s))))
 }
 
 func keylolReplaceCodeBlocks(s string) string {
@@ -833,6 +870,9 @@ func keylolReplaceTextLinks(s, base string) string {
 		if keylolToolbarLinkText(text) {
 			return " " + text + " "
 		}
+		if block := keylolVideoBlockFromURL(href); block.URL != "" {
+			return "\n[keylol_video]" + href + "\n"
+		}
 		if strings.Contains(href, "://") || strings.Contains(text, "://") {
 			return "\n[keylol_link]" + keylolOneLine(text) + "\n"
 		}
@@ -851,6 +891,10 @@ func keylolVideoBlockFromIframe(tag, base string) keylolBlock {
 }
 
 func keylolVideoBlockFromURL(raw string) keylolBlock {
+	raw = strings.TrimSpace(html.UnescapeString(htmlUnescape(raw)))
+	if !strings.Contains(strings.ToLower(raw), "://") {
+		return keylolBlock{}
+	}
 	if appID := keylolSteamAppID(raw); appID != "" {
 		return keylolBlock{
 			Kind:  "steam_card",
@@ -865,7 +909,43 @@ func keylolVideoBlockFromURL(raw string) keylolBlock {
 			Title: "Bilibili 视频 " + bv,
 		}
 	}
+	if keylolSteamMediaURL(raw) {
+		block := keylolBlock{
+			Kind:  "video_embed",
+			URL:   raw,
+			Title: "Steam 宣传视频",
+			Desc:  "来自 Steam 商店的媒体资源",
+		}
+		if appID := keylolSteamMediaAppID(raw); appID != "" {
+			if info, err := keylolFetchSteamApp("https://store.steampowered.com/app/" + appID + "/"); err == nil {
+				block.Title = firstNonEmpty(info.Title+" 宣传视频", block.Title)
+				block.Cover = info.Cover
+				block.Desc = firstNonEmpty(info.Desc, block.Desc)
+			}
+		}
+		return block
+	}
 	return keylolBlock{}
+}
+
+func keylolSteamMediaURL(raw string) bool {
+	lower := strings.ToLower(raw)
+	if !(strings.Contains(lower, "steamstatic.com") || strings.Contains(lower, "akamai.steamstatic.com")) {
+		return false
+	}
+	return strings.Contains(lower, ".webm") || strings.Contains(lower, ".mp4") || strings.Contains(lower, ".m3u8")
+}
+
+func keylolSteamMediaAppID(raw string) string {
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`(?i)/steam/apps/(\d+)/`),
+		regexp.MustCompile(`(?i)/store_trailers/(\d+)/`),
+	} {
+		if m := re.FindStringSubmatch(raw); len(m) > 1 {
+			return m[1]
+		}
+	}
+	return ""
 }
 
 func keylolASFAppID(raw string) string {

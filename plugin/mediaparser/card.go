@@ -96,7 +96,7 @@ func renderSteamGameCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	dc.SetLineWidth(1.5)
 	dc.SetRGBA255(255, 255, 255, 42)
 	dc.Stroke()
-	drawSteamBadge(dc, fontBytes, float64(panelX+panelW-58), float64(panelY+48))
+	drawOfficialSteamLogo(dc, fontBytes, float64(panelX+panelW-58), float64(panelY+48), 54)
 
 	coverX, coverY, coverW, coverH := panelX+28, panelY+30, 250, panelH-60
 	if cover := fetchCardImage(meta.Cover, nil); cover != nil {
@@ -184,20 +184,25 @@ func renderSteamGameCard(meta mediaMeta, fontBytes []byte) (string, error) {
 }
 
 func drawSteamBadge(dc *gg.Context, fontBytes []byte, cx, cy float64) {
-	dc.SetRGBA255(255, 255, 255, 46)
-	dc.DrawCircle(cx, cy, 26)
+	drawOfficialSteamLogo(dc, fontBytes, cx, cy, 54)
+}
+
+func drawOfficialSteamLogo(dc *gg.Context, fontBytes []byte, cx, cy float64, size int) {
+	img := loadPlatformLogo("steam")
+	if img == nil {
+		img = fetchCachedCardImage("official-steam-logo", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/256px-Steam_icon_logo.svg.png", nil)
+	}
+	if img != nil {
+		fit := imaging.Fit(img, size, size, imaging.Lanczos)
+		dc.DrawImageAnchored(fit, int(cx), int(cy), 0.5, 0.5)
+		return
+	}
+	dc.SetRGBA255(255, 255, 255, 50)
+	dc.DrawCircle(cx, cy, float64(size)/2)
 	dc.Fill()
-	dc.SetRGBA255(255, 255, 255, 108)
-	dc.SetLineWidth(4)
-	dc.DrawCircle(cx-8, cy+8, 7)
-	dc.Stroke()
-	dc.DrawLine(cx-2, cy+3, cx+13, cy-9)
-	dc.Stroke()
-	dc.DrawCircle(cx+16, cy-12, 9)
-	dc.Stroke()
-	mustFont(dc, fontBytes, 18)
-	dc.SetRGBA255(255, 255, 255, 118)
-	dc.DrawStringAnchored("STEAM", cx-52, cy+41, 0, 0.5)
+	mustFont(dc, fontBytes, float64(size)*0.28)
+	dc.SetRGBA255(255, 255, 255, 150)
+	dc.DrawStringAnchored("STEAM", cx, cy+float64(size)*0.04, 0.5, 0.5)
 }
 
 func shouldRenderAsGalleryCard(meta mediaMeta) bool {
@@ -840,7 +845,11 @@ type keylolCardTheme struct {
 }
 
 func keylolCardThemeNow() keylolCardTheme {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("MEDIAPARSER_KEYLOL_THEME"))) {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("MEDIAPARSER_KEYLOL_THEME")))
+	if mode == "" {
+		mode = strings.ToLower(strings.TrimSpace(snapshotConfig().KeylolTheme))
+	}
+	switch mode {
 	case "dark", "night", "black":
 		return keylolDarkTheme()
 	case "light", "day", "white":
@@ -1115,7 +1124,7 @@ func drawKeylolASFLink(dc *gg.Context, fontBytes []byte, appID string, x, y int)
 
 func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlock, x, y, w, h int, theme keylolCardTheme) {
 	fx, fy := float64(x), float64(y)
-	dark := keylolThemeDark(theme)
+	dark := true
 	for i := 8; i >= 1; i-- {
 		dc.SetRGBA255(12, 20, 32, 7+i*3)
 		dc.DrawRoundedRectangle(fx, fy+float64(i), float64(w), float64(h), 16)
@@ -1652,6 +1661,17 @@ func cardDisplayAuthor(author string) string {
 
 var emojiImageCache sync.Map
 var platformLogoCache sync.Map
+var cardImageCache sync.Map
+
+func fetchCachedCardImage(key, raw string, headers map[string]string) image.Image {
+	if v, ok := cardImageCache.Load(key); ok {
+		img, _ := v.(image.Image)
+		return img
+	}
+	img := fetchCardImage(raw, headers)
+	cardImageCache.Store(key, img)
+	return img
+}
 
 func renderDefaultPlatformLogoImage(platform string) (image.Image, error) {
 	fontBytes, err := file.GetLazyData(text.GlowSansFontFile, control.Md5File, true)

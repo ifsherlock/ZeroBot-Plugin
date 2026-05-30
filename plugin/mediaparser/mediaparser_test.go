@@ -289,6 +289,46 @@ func TestKeylolBuildBlocksKeepsSpoilerStyled(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksHandlesNamedSpoilAndSteamMediaLinks(t *testing.T) {
+	html := `[spoil=隐藏内容]https://video.akamai.steamstatic.com/store_trailers/1875580/3231/hls_264_master.m3u8?t=1778085[/spoil]`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1033463-1-1")
+	if len(blocks) < 2 || blocks[0].Kind != "hidden_label" || blocks[1].Kind != "video_embed" {
+		t.Fatalf("bad blocks: %#v", blocks)
+	}
+	for _, block := range blocks {
+		if strings.Contains(block.Text, "spoil") {
+			t.Fatalf("spoil tag leaked: %#v", blocks)
+		}
+	}
+}
+
+func TestKeylolLimitSteamCards(t *testing.T) {
+	blocks := make([]keylolBlock, 0, 22)
+	for i := 0; i < 22; i++ {
+		blocks = append(blocks, keylolBlock{Kind: "steam_card", URL: fmt.Sprintf("https://store.steampowered.com/app/%d/", 1000+i)})
+	}
+	got := keylolLimitSteamCards(blocks, "https://keylol.com/t1-1-1", 20)
+	steamCount := 0
+	hasLink := false
+	for _, block := range got {
+		if block.Kind == "steam_card" {
+			steamCount++
+		}
+		if block.Kind == "link" && strings.Contains(block.Text, "https://keylol.com/t1-1-1") {
+			hasLink = true
+		}
+	}
+	if steamCount != 20 || !hasLink {
+		t.Fatalf("bad limited blocks count=%d link=%v %#v", steamCount, hasLink, got)
+	}
+}
+
+func TestKeylolCleanTitleUnescapesQuotes(t *testing.T) {
+	if got := keylolCleanTitle(`steam自动化&quot;倒余额&quot;工具`); got != `steam自动化"倒余额"工具` {
+		t.Fatalf("bad title: %q", got)
+	}
+}
+
 func TestKeylolBuildBlocksKeepsColorAndLinkBlocks(t *testing.T) {
 	html := `<strong><span style="color:Red">论坛信息</span></strong><br><strong><span style="color:Green">Steam购买</span></strong><br><a href="https://keylol.com/t1039189-1-1">2026年6月发售游戏汇总</a>`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039283-1-1")
@@ -484,7 +524,7 @@ func TestKeylolBuildBlocksUsesSplitAttachmentURL(t *testing.T) {
 
 func TestKeylolFetchSteamAppFallbackFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("appids") != "2680010" || r.URL.Query().Get("cc") != "cn" || r.URL.Query().Get("l") != "zh" {
+		if r.URL.Query().Get("appids") != "2680010" || r.URL.Query().Get("cc") != "cn" || r.URL.Query().Get("l") != "schinese" {
 			t.Fatalf("bad steam query: %s", r.URL.RawQuery)
 		}
 		_, _ = w.Write([]byte(`{

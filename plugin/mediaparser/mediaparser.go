@@ -120,6 +120,7 @@ type config struct {
 	InstagramCookie    string `json:"instagram_cookie"`
 	KeylolCookie       string `json:"keylol_cookie"`
 	KeylolFooter       string `json:"keylol_footer"`
+	KeylolTheme        string `json:"keylol_theme"`
 	KeylolASFForward   bool   `json:"keylol_asf_forward"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
@@ -282,6 +283,7 @@ func defaultConfig() config {
 		YTDLPPath:            "yt-dlp",
 		YouTubeExtractorArgs: "youtube:player_client=default,android;formats=missing_pot",
 		KeylolFooter:         "Keylol 帖子截图 · 浏览器渲染 · {time}",
+		KeylolTheme:          "auto",
 		KeylolASFForward:     true,
 	}
 }
@@ -438,6 +440,15 @@ func normalizeConfig(cfg *config) {
 	cfg.KeylolFooter = strings.TrimSpace(cfg.KeylolFooter)
 	if cfg.KeylolFooter == "" {
 		cfg.KeylolFooter = "Keylol 帖子截图 · 浏览器渲染 · {time}"
+	}
+	cfg.KeylolTheme = strings.ToLower(strings.TrimSpace(cfg.KeylolTheme))
+	switch cfg.KeylolTheme {
+	case "", "auto", "light", "day", "white", "dark", "night", "black":
+		if cfg.KeylolTheme == "" {
+			cfg.KeylolTheme = "auto"
+		}
+	default:
+		cfg.KeylolTheme = "auto"
 	}
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"

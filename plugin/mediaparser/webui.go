@@ -825,6 +825,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="sectionTitle"><b>Keylol 卡片</b><span class="muted">底部文案支持 {time}、{title}、{author} 占位符。</span></div>
 <div class="settingsFields single">
 <label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
+<label class="field">日夜主题 <select id="keylolTheme"><option value="auto">按北京时间自动</option><option value="light">白天浅色</option><option value="dark">夜间深色</option></select></label>
 </div>
 <div class="controlPills"><label class="row">ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">开启后，帖子含“复制ASF代码”时会在卡片后追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
 </div>
@@ -934,6 +935,7 @@ function render(){
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
  $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
+ $('keylolTheme').value=cfg.keylol_theme||'auto';
  $('keylolASFForwardSwitch').innerHTML=switchHTML('cfg.keylol_asf_forward', cfg.keylol_asf_forward!==false);
  renderSystemSettings();
  updateAccessVisibility();
@@ -1027,6 +1029,7 @@ async function save(){
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
  cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
+ cfg.keylol_theme=String($('keylolTheme').value||'auto').trim()||'auto';
  cfg.keylol_asf_forward=cfg.keylol_asf_forward!==false;
  cfg.send_info_card=!!cfg.auto_parse; cfg.send_media=!!cfg.download_video; platforms.forEach(p=>{cfg.platform_info_card[p.name]=!!cfg.platform_enabled[p.name]; cfg.platform_send_media[p.name]=!!cfg.platform_download_video[p.name]});
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;
