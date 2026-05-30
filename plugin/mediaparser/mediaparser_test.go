@@ -174,6 +174,44 @@ func TestKeylolBuildBlocksKeepsForumWidgets(t *testing.T) {
 	}
 }
 
+func TestKeylolBuildBlocksKeepsShowhideImagesWithoutControlText(t *testing.T) {
+	html := `<h2 class="KyloStylisedHeader1">游戏截图</h2>
+<div class="showhide"><p>隐藏内容，<a href="javascript:;" class="showhide-btn">点击显示</a></p><div style="display:none" class="spoiler">
+<img class="zoom" file="https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/4435490/shot1.jpg?t=1"><br>
+<img class="zoom" file="https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/4435490/shot2.jpg?t=1"><div><a href="javascript:;">点击隐藏</a></div>
+</div></div>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039073-1-1")
+	imageCount := 0
+	for _, block := range blocks {
+		if block.Kind == "image" {
+			imageCount++
+		}
+		if block.Kind == "text" && (strings.Contains(block.Text, "点击显示") || strings.Contains(block.Text, "点击隐藏")) {
+			t.Fatalf("showhide control text leaked: %#v", blocks)
+		}
+	}
+	if imageCount != 2 {
+		t.Fatalf("hidden screenshot count=%d blocks=%#v", imageCount, blocks)
+	}
+}
+
+func TestKeylolBuildBlocksKeepsBilibiliIframePreview(t *testing.T) {
+	html := `<h2 class="KyloStylisedHeader1">宣传视频</h2><iframe class="html5video" src="https://keylol.com/source/plugin/onexin_html5player/open/bilibili/html5player.html?bvid=BV16AGQ6LEQJ&page="></iframe><p>正文</p>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039073-1-1")
+	found := false
+	for _, block := range blocks {
+		if block.Kind == "video_embed" {
+			found = true
+			if block.URL != "https://www.bilibili.com/video/BV16AGQ6LEQJ" || !strings.Contains(block.Title, "BV16AGQ6LEQJ") {
+				t.Fatalf("bad video block: %#v", block)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing video block: %#v", blocks)
+	}
+}
+
 func TestKeylolInlineImageKeepsTextOrder(t *testing.T) {
 	html := `<img width="72" height="39" src="https://blob.keylol.com/forum/new.png">《Bunny Guys》【现已可领取】`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")

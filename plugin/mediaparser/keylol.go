@@ -75,6 +75,7 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	messageHTML := firstNonEmpty(getString(post, "message"), getString(post, "message_html"))
 	blocks := keylolBuildBlocks(messageHTML, getMap(post, "attachments"), finalURL)
 	blocks = keylolEnrichSteamBlocks(blocks)
+	blocks = keylolEnrichVideoBlocks(cfg, blocks)
 	images := keylolImageGroupsFromBlocks(blocks)
 	desc := keylolDescFromBlocks(blocks)
 	title := firstNonEmpty(getString(thread, "subject"), getString(post, "subject"))
@@ -157,6 +158,7 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 
 func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
 	messageHTML = keylolStripHiddenTips(messageHTML)
+	messageHTML = keylolStripShowhideControls(messageHTML)
 	messageHTML = keylolReplaceSteamLinks(messageHTML, base)
 	messageHTML = keylolReplaceTextLinks(messageHTML, base)
 	messageHTML = keylolReplaceCollapseBlocks(messageHTML)
@@ -199,13 +201,24 @@ func keylolBuildBlocks(messageHTML string, attachments map[string]any, base stri
 		}
 		blocks = append(blocks, keylolBlock{Kind: kind, URL: raw})
 	}
-	tokenRE := regexp.MustCompile(`(?is)<img\b[^>]*>|<br\s*/?>|</p>|</div>|</li>|</tr>|</h[1-6]>`)
+	addVideo := func(tag string) {
+		block := keylolVideoBlockFromIframe(tag, base)
+		if block.URL == "" {
+			return
+		}
+		flushText()
+		blocks = append(blocks, block)
+	}
+	tokenRE := regexp.MustCompile(`(?is)<iframe\b[^>]*>.*?</iframe>|<img\b[^>]*>|<br\s*/?>|</p>|</div>|</li>|</tr>|</h[1-6]>`)
 	last := 0
 	for _, loc := range tokenRE.FindAllStringIndex(messageHTML, -1) {
 		textBuf.WriteString(messageHTML[last:loc[0]])
 		token := messageHTML[loc[0]:loc[1]]
-		if strings.HasPrefix(strings.ToLower(token), "<img") {
+		lowToken := strings.ToLower(token)
+		if strings.HasPrefix(lowToken, "<img") {
 			addImage(keylolImageURLFromTag(token), keylolInlineImageTag(token))
+		} else if strings.HasPrefix(lowToken, "<iframe") {
+			addVideo(token)
 		} else {
 			textBuf.WriteString("\n")
 		}
@@ -441,6 +454,30 @@ func keylolEnrichSteamBlocks(blocks []keylolBlock) []keylolBlock {
 	return blocks
 }
 
+func keylolEnrichVideoBlocks(cfg config, blocks []keylolBlock) []keylolBlock {
+	for i := range blocks {
+		if blocks[i].Kind != "video_embed" || blocks[i].URL == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(blocks[i].URL), "bilibili.com/video/") {
+			view, err := fetchBiliView(cfg, blocks[i].URL)
+			if err != nil {
+				continue
+			}
+			if view.Title != "" {
+				blocks[i].Title = view.Title
+			}
+			if view.Desc != "" {
+				blocks[i].Desc = truncate(keylolCleanBlockText(view.Desc), 160)
+			}
+			if view.Pic != "" {
+				blocks[i].Cover = ensureHTTPS(view.Pic)
+			}
+		}
+	}
+	return blocks
+}
+
 func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
 	appID := keylolSteamAppID(rawURL)
 	if appID == "" {
@@ -488,6 +525,13 @@ func keylolStripHiddenTips(s string) string {
 	return s
 }
 
+func keylolStripShowhideControls(s string) string {
+	s = regexp.MustCompile(`(?is)<p>\s*隐藏内容[^<]*<a\b[^>]*class=["'][^"']*\bshowhide-btn\b[^"']*["'][^>]*>.*?</a>\s*</p>`).ReplaceAllString(s, "")
+	s = regexp.MustCompile(`(?is)<a\b[^>]*class=["'][^"']*\bshowhide-btn\b[^"']*["'][^>]*>.*?</a>`).ReplaceAllString(s, "")
+	s = regexp.MustCompile(`(?is)<div>\s*<a\b[^>]*>\s*点击隐藏\s*</a>\s*</div>`).ReplaceAllString(s, "")
+	return s
+}
+
 func keylolReplaceTextLinks(s, base string) string {
 	re := regexp.MustCompile(`(?is)<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>`)
 	return re.ReplaceAllStringFunc(s, func(match string) string {
@@ -508,6 +552,23 @@ func keylolReplaceTextLinks(s, base string) string {
 		}
 		return " " + text + " "
 	})
+}
+
+func keylolVideoBlockFromIframe(tag, base string) keylolBlock {
+	re := regexp.MustCompile(`(?is)\bsrc\s*=\s*["']([^"']+)["']`)
+	m := re.FindStringSubmatch(tag)
+	if len(m) < 2 {
+		return keylolBlock{}
+	}
+	src := absolutize(base, html.UnescapeString(htmlUnescape(m[1])))
+	if bv := bvRE.FindString(src); bv != "" {
+		return keylolBlock{
+			Kind:  "video_embed",
+			URL:   "https://www.bilibili.com/video/" + bv,
+			Title: "Bilibili 视频 " + bv,
+		}
+	}
+	return keylolBlock{}
 }
 
 func keylolASFAppID(raw string) string {
@@ -627,7 +688,7 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 				continue
 			}
 		}
-		if (block.Kind == "image" || block.Kind == "inline_image" || block.Kind == "steam_card") && block.URL == "" {
+		if (block.Kind == "image" || block.Kind == "inline_image" || block.Kind == "steam_card" || block.Kind == "video_embed") && block.URL == "" {
 			continue
 		}
 		if block.Kind == "steam_card" {
@@ -709,6 +770,7 @@ func keylolNoiseLine(line string) bool {
 	for _, needle := range []string{
 		"转载或引用本网站内容", "不代表本社区立场", "本网站保留追究",
 		"下载附件", "点击文件名下载附件", "查看全部评分", "评分参与人数",
+		"隐藏内容", "点击显示", "点击隐藏",
 	} {
 		if strings.Contains(line, needle) {
 			return true

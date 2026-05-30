@@ -404,6 +404,22 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				lines:  descLines,
 				height: 166,
 			})
+		case "video_embed":
+			img := keylolPrepareImage(fetchCardImage(block.Cover, nil))
+			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-330))
+			if len(descLines) > 2 {
+				descLines = descLines[:2]
+			}
+			renderBlocks = append(renderBlocks, keylolRenderBlock{
+				kind:   "video_embed",
+				url:    block.URL,
+				title:  firstNonEmpty(block.Title, "Bilibili 视频"),
+				desc:   block.Desc,
+				cover:  block.Cover,
+				img:    img,
+				lines:  descLines,
+				height: 166,
+			})
 		case "asf_link":
 			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "asf_link", title: block.Title, height: 38})
 		case "toolbar":
@@ -512,6 +528,9 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			y += block.height
 		case "steam_card":
 			drawKeylolSteamCard(dc, fontBytes, block, x, y, contentW, block.height)
+			y += block.height
+		case "video_embed":
+			drawKeylolVideoCard(dc, fontBytes, block, x, y, contentW, block.height)
 			y += block.height
 		case "asf_link":
 			drawKeylolASFLink(dc, fontBytes, block.title, x, y)
@@ -766,6 +785,52 @@ func drawKeylolSteamCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 
 func drawKeylolASFLink(dc *gg.Context, fontBytes []byte, appID string, x, y int) {
 	drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 58, G: 166, B: 230, A: 255}, "🎮 Steam "+strings.TrimSpace(appID)+" →", float64(x), float64(y+24))
+}
+
+func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlock, x, y, w, h int) {
+	fx, fy := float64(x), float64(y)
+	for i := 8; i >= 1; i-- {
+		dc.SetRGBA255(12, 20, 32, 7+i*3)
+		dc.DrawRoundedRectangle(fx, fy+float64(i), float64(w), float64(h), 16)
+		dc.Fill()
+	}
+	dc.SetRGB255(245, 249, 255)
+	dc.DrawRoundedRectangle(fx, fy, float64(w), float64(h), 16)
+	dc.Fill()
+	dc.SetRGBA255(92, 136, 184, 70)
+	dc.SetLineWidth(1)
+	dc.DrawRoundedRectangle(fx+0.5, fy+0.5, float64(w)-1, float64(h)-1, 16)
+	dc.Stroke()
+
+	coverW := 248
+	coverH := h - 28
+	coverX := x + 16
+	coverY := y + 14
+	dc.DrawRoundedRectangle(float64(coverX), float64(coverY), float64(coverW), float64(coverH), 10)
+	dc.ClipPreserve()
+	if block.img == nil {
+		dc.SetRGB255(221, 234, 248)
+		dc.Fill()
+		mustFont(dc, fontBytes, 26)
+		dc.SetRGB255(72, 126, 186)
+		dc.DrawStringAnchored("Bilibili", float64(coverX+coverW/2), float64(coverY+coverH/2+9), 0.5, 0.5)
+	} else {
+		dc.DrawImage(imaging.Fill(block.img, coverW, coverH, imaging.Center, imaging.Lanczos), coverX, coverY)
+	}
+	dc.ResetClip()
+	drawPlayOverlay(dc, float64(coverX+coverW/2), float64(coverY+coverH/2))
+
+	textX := x + 288
+	title := truncate(firstNonEmpty(block.title, "Bilibili 视频"), 34)
+	drawInlineEmoji(dc, fontBytes, 25, color.RGBA{R: 28, G: 49, B: 72, A: 255}, title, float64(textX), float64(y+42))
+	yy := y + 78
+	for _, line := range block.lines {
+		drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, color.RGBA{R: 78, G: 98, B: 122, A: 255}, truncate(line, 56), float64(textX), float64(yy))
+		yy += 28
+	}
+	mustFont(dc, fontBytes, 19)
+	dc.SetRGB255(58, 166, 230)
+	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(textX), float64(y+h-28), 0, 0.5)
 }
 
 func keylolPrepareImage(img image.Image) image.Image {
