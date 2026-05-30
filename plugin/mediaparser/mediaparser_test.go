@@ -173,6 +173,39 @@ func TestKeylolBuildBlocksKeepsForumWidgets(t *testing.T) {
 	}
 }
 
+func TestKeylolSteamAppID(t *testing.T) {
+	cases := map[string]string{
+		`https://store.steampowered.com/app/2680010/The_Evil_Within_2/`: "2680010",
+		`//store.steampowered.com/app/2333500/?utm_source=keylol`:       "2333500",
+		`https://example.com/app/123`:                                   "",
+	}
+	for raw, want := range cases {
+		if got := keylolSteamAppID(raw); got != want {
+			t.Fatalf("keylolSteamAppID(%q)=%q want %q", raw, got, want)
+		}
+	}
+}
+
+func TestKeylolBuildBlocksKeepsSteamCard(t *testing.T) {
+	html := `<p>领取方式</p><a href="https://store.steampowered.com/app/2680010/The_Evil_Within_2/">Steam 上的 The Evil Within 2</a><p>正文继续</p>`
+	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t572814-1-1")
+	found := false
+	for _, block := range blocks {
+		if block.Kind == "steam_card" {
+			found = true
+			if block.URL != "https://store.steampowered.com/app/2680010/The_Evil_Within_2/" || block.Title != "The Evil Within 2" {
+				t.Fatalf("bad steam block: %#v", block)
+			}
+		}
+		if block.Kind == "text" && strings.Contains(block.Text, "Steam 上的 The Evil Within 2") {
+			t.Fatalf("steam link text leaked into normal text: %#v", blocks)
+		}
+	}
+	if !found {
+		t.Fatalf("missing steam card: %#v", blocks)
+	}
+}
+
 func TestParseKeylolFirstPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("module") != "viewthread" || r.URL.Query().Get("tid") != "1039281" {

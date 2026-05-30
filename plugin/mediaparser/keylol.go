@@ -15,13 +15,17 @@ const keylolUA = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Mobile"
 
 var (
 	keylolAPIBase  = "https://keylol.com/api/mobile/index.php"
+	steamAPIBase   = "https://store.steampowered.com/api/appdetails"
 	keylolImageExt = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|webp|gif)(?:\?|$)`)
 )
 
 type keylolBlock struct {
-	Kind string
-	Text string
-	URL  string
+	Kind  string
+	Text  string
+	URL   string
+	Title string
+	Desc  string
+	Cover string
 }
 
 func parseKeylol(cfg config, raw string) (mediaMeta, error) {
@@ -70,6 +74,7 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 
 	messageHTML := firstNonEmpty(getString(post, "message"), getString(post, "message_html"))
 	blocks := keylolBuildBlocks(messageHTML, getMap(post, "attachments"), finalURL)
+	blocks = keylolEnrichSteamBlocks(blocks)
 	images := keylolImageGroupsFromBlocks(blocks)
 	desc := keylolDescFromBlocks(blocks)
 	title := firstNonEmpty(getString(thread, "subject"), getString(post, "subject"))
@@ -149,6 +154,7 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 
 func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
 	messageHTML = keylolStripHiddenTips(messageHTML)
+	messageHTML = keylolReplaceSteamLinks(messageHTML, base)
 	messageHTML = keylolReplaceTextLinks(messageHTML, base)
 	messageHTML = keylolReplaceCollapseBlocks(messageHTML)
 	messageHTML = keylolReplaceHeadings(messageHTML)
@@ -266,6 +272,12 @@ func keylolTextBlocks(text string) []keylolBlock {
 			continue
 		}
 		switch {
+		case strings.HasPrefix(line, "[keylol_steam]"):
+			flush()
+			block := keylolSteamBlockFromMarker(line)
+			if block.URL != "" {
+				out = append(out, block)
+			}
 		case strings.HasPrefix(line, "[keylol_collapse]"):
 			flush()
 			out = append(out, keylolBlock{Kind: "collapse", Text: strings.TrimSpace(strings.TrimPrefix(line, "[keylol_collapse]"))})
@@ -281,6 +293,141 @@ func keylolTextBlocks(text string) []keylolBlock {
 	}
 	flush()
 	return out
+}
+
+func keylolReplaceSteamLinks(s, base string) string {
+	re := regexp.MustCompile(`(?is)<a\b[^>]*href=["']([^"']*store\.steampowered\.com/app/\d+[^"']*)["'][^>]*>(.*?)</a>`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 3 {
+			return match
+		}
+		href := absolutize(base, html.UnescapeString(htmlUnescape(m[1])))
+		if keylolSteamAppID(href) == "" {
+			return match
+		}
+		title := keylolSteamTitleFromText(keylolCleanBlockText(m[2]), href)
+		return "\n[keylol_steam]" + url.QueryEscape(href) + "|" + url.QueryEscape(title) + "\n"
+	})
+}
+
+func keylolSteamBlockFromMarker(line string) keylolBlock {
+	payload := strings.TrimSpace(strings.TrimPrefix(line, "[keylol_steam]"))
+	parts := strings.SplitN(payload, "|", 2)
+	rawURL, _ := url.QueryUnescape(parts[0])
+	title := ""
+	if len(parts) > 1 {
+		title, _ = url.QueryUnescape(parts[1])
+	}
+	rawURL = strings.TrimSpace(rawURL)
+	if keylolSteamAppID(rawURL) == "" {
+		return keylolBlock{}
+	}
+	return keylolBlock{
+		Kind:  "steam_card",
+		URL:   rawURL,
+		Title: keylolSteamTitleFromText(title, rawURL),
+	}
+}
+
+func keylolSteamAppID(raw string) string {
+	raw = strings.TrimSpace(html.UnescapeString(htmlUnescape(raw)))
+	if strings.HasPrefix(raw, "//") {
+		raw = "https:" + raw
+	}
+	if u, err := url.Parse(raw); err == nil {
+		if !strings.Contains(strings.ToLower(u.Host), "store.steampowered.com") {
+			return ""
+		}
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) >= 2 && strings.EqualFold(parts[0], "app") && regexp.MustCompile(`^\d+$`).MatchString(parts[1]) {
+			return parts[1]
+		}
+	}
+	return ""
+}
+
+func keylolSteamTitleFromText(text, rawURL string) string {
+	text = strings.TrimSpace(text)
+	for _, prefix := range []string{"Steam 上的", "Steam上的"} {
+		text = strings.TrimSpace(strings.TrimPrefix(text, prefix))
+	}
+	if text != "" && !strings.Contains(strings.ToLower(text), "store.steampowered.com") {
+		return text
+	}
+	if u, err := url.Parse(rawURL); err == nil {
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) >= 3 {
+			name := strings.ReplaceAll(parts[2], "_", " ")
+			name = strings.ReplaceAll(name, "-", " ")
+			if name = strings.TrimSpace(name); name != "" {
+				return name
+			}
+		}
+	}
+	return "Steam 游戏"
+}
+
+func keylolEnrichSteamBlocks(blocks []keylolBlock) []keylolBlock {
+	for i := range blocks {
+		if blocks[i].Kind != "steam_card" || blocks[i].URL == "" {
+			continue
+		}
+		info, err := keylolFetchSteamApp(blocks[i].URL)
+		if err != nil {
+			continue
+		}
+		if info.Title != "" {
+			blocks[i].Title = info.Title
+		}
+		if info.Desc != "" {
+			blocks[i].Desc = info.Desc
+		}
+		if info.Cover != "" {
+			blocks[i].Cover = info.Cover
+		}
+	}
+	return blocks
+}
+
+func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {
+	appID := keylolSteamAppID(rawURL)
+	if appID == "" {
+		return keylolBlock{}, fmt.Errorf("steam app id not found")
+	}
+	api, err := url.Parse(steamAPIBase)
+	if err != nil {
+		return keylolBlock{}, err
+	}
+	q := api.Query()
+	q.Set("appids", appID)
+	q.Set("l", "schinese")
+	q.Set("cc", "cn")
+	api.RawQuery = q.Encode()
+	body, _, status, err := fetchText(api.String(), map[string]string{"Accept": "application/json"}, true)
+	if err != nil {
+		return keylolBlock{}, err
+	}
+	if status >= 400 {
+		return keylolBlock{}, fmt.Errorf("steam API HTTP %d", status)
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		return keylolBlock{}, err
+	}
+	app := getMap(data, appID)
+	success, _ := app["success"].(bool)
+	if !success {
+		return keylolBlock{}, fmt.Errorf("steam appdetails failed")
+	}
+	detail := getMap(app, "data")
+	return keylolBlock{
+		Kind:  "steam_card",
+		URL:   rawURL,
+		Title: getString(detail, "name"),
+		Desc:  getString(detail, "short_description"),
+		Cover: getString(detail, "header_image"),
+	}, nil
 }
 
 func keylolStripHiddenTips(s string) string {
@@ -387,7 +534,7 @@ func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
 				continue
 			}
 		}
-		if (block.Kind == "image" || block.Kind == "inline_image") && block.URL == "" {
+		if (block.Kind == "image" || block.Kind == "inline_image" || block.Kind == "steam_card") && block.URL == "" {
 			continue
 		}
 		out = append(out, block)
