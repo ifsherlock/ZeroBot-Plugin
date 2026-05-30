@@ -1,6 +1,7 @@
 package mediaparser
 
 import (
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -52,6 +53,15 @@ func TestLiveUserLinks(t *testing.T) {
 		{"bilibili_opus", func() (mediaMeta, error) {
 			return parseBilibili(cfg, "https://m.bilibili.com/opus/1207735356902866977")
 		}},
+		{"weibo_single_image", func() (mediaMeta, error) {
+			return parseWeibo(cfg, "https://weibo.com/1642632024/QF2Gpe3Ww")
+		}},
+		{"xianyu_mtb_short", func() (mediaMeta, error) {
+			return parseXianyu(cfg, "https://m.tb.cn/h.RT9Lh91?tk=i31S5yHWj6i")
+		}},
+		{"acfun_video", func() (mediaMeta, error) {
+			return parseAcfun(cfg, "https://www.acfun.cn/v/ac11348130")
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -97,6 +107,78 @@ func TestExtractLinksUnescapesHTMLAmpersands(t *testing.T) {
 	}
 	if !strings.Contains(links[0].URL, "link_id=975771f1d3a9") {
 		t.Fatalf("link_id was lost: %s", links[0].URL)
+	}
+}
+
+func TestExtractLinksRecognizesXianyuMtbShortLinks(t *testing.T) {
+	cfg := defaultConfig()
+	raw := `【闲鱼】https://m.tb.cn/h.RT9Lh91?tk=i31S5yHWj6i tG-#22&gt;lD 「快来捡漏」`
+	links := extractLinks(raw, cfg)
+	if len(links) != 1 {
+		t.Fatalf("links len=%d", len(links))
+	}
+	if links[0].Platform != "xianyu" {
+		t.Fatalf("platform=%s", links[0].Platform)
+	}
+}
+
+func TestExtractWeiboMediaUsesPicInfosAndSkipsAvatars(t *testing.T) {
+	raw := `{
+		"pic_ids":["abc123"],
+		"pic_infos":{
+			"abc123":{
+				"large":{"url":"https://wx1.sinaimg.cn/large/abc123.jpg"},
+				"thumbnail":{"url":"https://wx1.sinaimg.cn/thumbnail/abc123.jpg"}
+			}
+		},
+		"user":{
+			"profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/avatar.jpg",
+			"avatar_hd":"https://tvax1.sinaimg.cn/crop.0.0.1024.1024.1024/avatar_hd.jpg"
+		},
+		"page_info":{
+			"page_pic":{"url":"https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_movie_default.png"}
+		}
+	}`
+	var data map[string]any
+	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+		t.Fatal(err)
+	}
+
+	_, images := extractWeiboMedia(data)
+	if len(images) != 1 {
+		t.Fatalf("images len=%d, want 1: %#v", len(images), images)
+	}
+	if got := images[0][0]; got != "https://wx1.sinaimg.cn/large/abc123.jpg" {
+		t.Fatalf("image url=%s", got)
+	}
+}
+
+func TestParseAcfunVideoInfoHTML(t *testing.T) {
+	html := `<script class="videoInfo">
+window.pageInfo = window.videoInfo ={
+  "title":"测试 A 站视频",
+  "description":"简介文本",
+  "createTimeMillis":1700000000000,
+  "coverUrl":"https://imgs.aixifan.com/cover.jpg",
+  "user":{"name":"AcFun UP","headUrl":"https://imgs.aixifan.com/avatar.jpg"},
+		"currentVideoInfo":{
+    "durationMillis":67000,
+    "ksPlayJson":{"adaptationSet":[{"representation":[{"url":"https://video.acfun.cn/720.m3u8","qualityType":"720p"},{"url":"https://video.acfun.cn/360.m3u8","qualityType":"360p"}]}]}
+  }
+}</script>`
+
+	meta, err := parseAcfunVideoInfoHTML(defaultConfig(), "https://www.acfun.cn/v/ac123", html)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Platform != "acfun" || meta.Title != "测试 A 站视频" || meta.Author != "AcFun UP" {
+		t.Fatalf("bad meta: %#v", meta)
+	}
+	if meta.Cover != "https://imgs.aixifan.com/cover.jpg" || meta.Avatar != "https://imgs.aixifan.com/avatar.jpg" {
+		t.Fatalf("bad images: cover=%q avatar=%q", meta.Cover, meta.Avatar)
+	}
+	if len(meta.VideoURLs) != 1 || meta.VideoURLs[0][0] != "m3u8:https://video.acfun.cn/720.m3u8" {
+		t.Fatalf("bad video urls: %#v", meta.VideoURLs)
 	}
 }
 

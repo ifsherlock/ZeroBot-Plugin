@@ -172,7 +172,10 @@ var platforms = []platform{
 	{Name: "kuaishou", Hosts: []string{"kuaishou.com", "gifshow.com", "chenzhongtech.com", "v.kuaishou.com"}, Aliases: []string{"快手", "ks"}},
 	{Name: "weibo", Hosts: []string{"weibo.com", "weibo.cn", "m.weibo.cn", "video.weibo.com"}, Aliases: []string{"微博"}},
 	{Name: "xiaohongshu", Hosts: []string{"xiaohongshu.com", "xhslink.com"}, Aliases: []string{"小红书", "xhs"}},
-	{Name: "xianyu", Hosts: []string{"goofish.com", "2.taobao.com", "market.m.taobao.com"}, Aliases: []string{"闲鱼"}},
+	{Name: "xianyu", Hosts: []string{"goofish.com", "2.taobao.com", "market.m.taobao.com", "m.tb.cn"}, Aliases: []string{"闲鱼"}},
+	{Name: "acfun", Hosts: []string{"acfun.cn", "m.acfun.cn"}, Aliases: []string{"A站", "ac"}},
+	{Name: "youtube", Hosts: []string{"youtube.com", "youtu.be", "m.youtube.com", "music.youtube.com"}, Aliases: []string{"YouTube", "yt"}},
+	{Name: "instagram", Hosts: []string{"instagram.com", "www.instagram.com"}, Aliases: []string{"Instagram", "ig"}},
 	{Name: "toutiao", Hosts: []string{"toutiao.com", "toutiaoimg.com", "snssdk.com"}, Aliases: []string{"头条"}},
 	{Name: "xiaoheihe", Hosts: []string{"xiaoheihe.cn", "heybox.cn"}, Aliases: []string{"小黑盒", "heybox"}},
 	{Name: "twitter", Hosts: []string{"twitter.com", "x.com", "fxtwitter.com", "fixupx.com", "vxtwitter.com"}, Aliases: []string{"推特", "x"}},
@@ -781,24 +784,33 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	meta.Author = cardDisplayAuthor(meta.Author)
 	applyOutputFlags(cfg, &meta)
 
+	infoCardSent := false
 	if cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform) {
-		card, err := renderInfoCard(meta)
-		if err != nil {
-			logrus.Warnf("[mediaparser] render_card_failed platform=%s error=%v", meta.Platform, err)
-			ctx.SendChain(message.Text(buildText(meta)))
-		} else {
-			ctx.SendChain(message.Image(fileURI(card)))
-			logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s", meta.Platform, meta.Title, card)
-			scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-		}
+		infoCardSent = sendInfoCard(ctx, cfg, meta)
 	}
 	if cfg.SendMedia && cfg.PlatformSendMedia[meta.Platform] && wantsRich(cfg, meta.Platform) {
 		if err := sendMediaNodes(ctx, cfg, &meta); err != nil {
 			return err
 		}
+		if meta.ExceedsMaxSize && !infoCardSent && cfg.PlatformInfoCard[meta.Platform] {
+			infoCardSent = sendInfoCard(ctx, cfg, meta)
+		}
 	}
 	logrus.Infof("[mediaparser] success platform=%s url=%s elapsed=%s", link.Platform, link.URL, time.Since(started).Round(time.Millisecond))
 	return nil
+}
+
+func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
+	card, err := renderInfoCard(meta)
+	if err != nil {
+		logrus.Warnf("[mediaparser] render_card_failed platform=%s error=%v", meta.Platform, err)
+		ctx.SendChain(message.Text(buildText(meta)))
+		return false
+	}
+	ctx.SendChain(message.Image(fileURI(card)))
+	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s", meta.Platform, meta.Title, card)
+	scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
+	return true
 }
 
 func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
@@ -817,6 +829,10 @@ func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
 		return parseXiaohongshu(cfg, link.URL)
 	case "xianyu":
 		return parseXianyu(cfg, link.URL)
+	case "acfun":
+		return parseAcfun(cfg, link.URL)
+	case "youtube", "instagram":
+		return parseWithYTDLP(cfg, link)
 	case "toutiao":
 		return parseToutiao(cfg, link.URL)
 	case "xiaoheihe":
@@ -833,6 +849,9 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 		if err := processDownloads(cfg, meta); err != nil {
 			logrus.Warnf("[mediaparser] download_process_failed platform=%s error=%v", meta.Platform, err)
 		}
+	}
+	if meta.ExceedsMaxSize {
+		logrus.Infof("[mediaparser] oversized_video_preview_only platform=%s title=%q max_mb=%d", meta.Platform, meta.Title, cfg.MaxVideoMB)
 	}
 	if len(meta.VideoURLs) == 0 && len(meta.ImageURLs) > 0 {
 		return sendImageGalleryForward(ctx, meta)

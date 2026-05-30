@@ -822,6 +822,24 @@ func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right
 		mustFont(dc, fontBytes, 40)
 		dc.SetRGB255(64, 64, 64)
 		dc.DrawStringAnchored("快手", right-4, cy+2, 1, 0.5)
+	case "acfun":
+		mustFont(dc, fontBytes, 42)
+		dc.SetRGB255(253, 76, 93)
+		dc.DrawStringAnchored("AcFun", right-4, cy+2, 1, 0.5)
+	case "youtube":
+		dc.SetRGB255(255, 0, 0)
+		dc.DrawRoundedRectangle(x+20, y+24, 62, 40, 8)
+		dc.Fill()
+		dc.SetRGB255(255, 255, 255)
+		dc.DrawRegularPolygon(3, x+54, y+44, 14, gg.Radians(90))
+		dc.Fill()
+		mustFont(dc, fontBytes, 34)
+		dc.SetRGB255(33, 33, 33)
+		dc.DrawStringAnchored("YouTube", right-4, cy+2, 1, 0.5)
+	case "instagram":
+		mustFont(dc, fontBytes, 34)
+		dc.SetRGB255(193, 53, 132)
+		dc.DrawStringAnchored("Instagram", right-4, cy+2, 1, 0.5)
 	default:
 		return false
 	}
@@ -854,6 +872,12 @@ func platformLogoText(platform string) string {
 		return "bilibili"
 	case "twitter":
 		return "X"
+	case "acfun":
+		return "AcFun"
+	case "youtube":
+		return "YouTube"
+	case "instagram":
+		return "Instagram"
 	default:
 		return strings.ToUpper(firstNonEmpty(platform, "media"))
 	}
@@ -871,6 +895,12 @@ func platformPalette(platform string) cardPalette {
 		return cardPalette{LogoText: color.RGBA{R: 230, G: 65, B: 54, A: 255}, Title: color.RGBA{R: 109, G: 49, B: 159, A: 255}}
 	case "kuaishou":
 		return cardPalette{LogoText: color.RGBA{R: 255, G: 86, B: 0, A: 255}, Title: color.RGBA{R: 109, G: 49, B: 159, A: 255}}
+	case "acfun":
+		return cardPalette{LogoText: color.RGBA{R: 253, G: 76, B: 93, A: 255}, Title: color.RGBA{R: 109, G: 49, B: 159, A: 255}}
+	case "youtube":
+		return cardPalette{LogoText: color.RGBA{R: 255, G: 0, B: 0, A: 255}, Title: color.RGBA{R: 109, G: 49, B: 159, A: 255}}
+	case "instagram":
+		return cardPalette{LogoText: color.RGBA{R: 193, G: 53, B: 132, A: 255}, Title: color.RGBA{R: 109, G: 49, B: 159, A: 255}}
 	default:
 		return cardPalette{LogoText: color.RGBA{R: 70, G: 90, B: 120, A: 255}, Title: color.RGBA{R: 109, G: 49, B: 159, A: 255}}
 	}

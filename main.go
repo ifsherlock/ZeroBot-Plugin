@@ -134,7 +134,13 @@ func main() {
 	}
 	message.SetForceBase64File(config.ForceBase64File)
 	mediaparser.StartWebUI(os.Getenv("ZBP_BUILTIN_WEBUI"), func() map[string]any {
+		var selfID int64
+		zero.RangeBot(func(id int64, ctx *zero.Ctx) bool {
+			selfID = id
+			return false
+		})
 		return map[string]any{
+			"self_id":        selfID,
 			"nickname":       zero.BotConfig.NickName,
 			"super_users":    zero.BotConfig.SuperUsers,
 			"drivers":        len(zero.BotConfig.Driver),

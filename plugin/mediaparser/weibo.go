@@ -15,8 +15,8 @@ const weiboUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 func parseWeibo(cfg config, raw string) (mediaMeta, error) {
 	cookies := getWeiboVisitorCookies()
 	switch {
-	case regexp.MustCompile(`m\.weibo\.cn/detail/\d+`).MatchString(raw):
-		return parseMobileWeibo(raw, cookies)
+	case regexp.MustCompile(`m\.weibo\.cn/(?:status|detail|\d+/)[0-9A-Za-z]+`).MatchString(raw):
+		return parseMobileWeibo(raw)
 	case regexp.MustCompile(`weibo\.com/\d+/[A-Za-z0-9]+`).MatchString(raw) || regexp.MustCompile(`weibo\.cn/status/\d+`).MatchString(raw):
 		return parseWebWeibo(raw, cookies)
 	default:
@@ -51,6 +51,9 @@ func parseWebWeibo(raw, cookies string) (mediaMeta, error) {
 	if id == "" {
 		return mediaMeta{}, fmt.Errorf("无法提取微博ID")
 	}
+	if meta, err := parseWeiboIDMobile(raw, id); err == nil {
+		return meta, nil
+	}
 	api := "https://weibo.com/ajax/statuses/show?id=" + id + "&locale=zh-CN&isGetLongText=true"
 	var data map[string]any
 	if err := weiboJSON(api, raw, cookies, &data); err != nil {
@@ -62,17 +65,21 @@ func parseWebWeibo(raw, cookies string) (mediaMeta, error) {
 	return buildWeiboMeta(raw, data), nil
 }
 
-func parseMobileWeibo(raw, cookies string) (mediaMeta, error) {
+func parseMobileWeibo(raw string) (mediaMeta, error) {
 	id := ""
-	if m := regexp.MustCompile(`/detail/(\d+)`).FindStringSubmatch(raw); len(m) > 1 {
+	if m := regexp.MustCompile(`/(?:status|detail|\d+/)([0-9A-Za-z]+)`).FindStringSubmatch(raw); len(m) > 1 {
 		id = m[1]
 	}
 	if id == "" {
 		return mediaMeta{}, fmt.Errorf("无法提取 m.weibo.cn ID")
 	}
-	api := "https://m.weibo.cn/statuses/show?id=" + id
+	return parseWeiboIDMobile(raw, id)
+}
+
+func parseWeiboIDMobile(raw, id string) (mediaMeta, error) {
+	api := "https://m.weibo.cn/statuses/show?id=" + id + "&_=" + timestampMS()
 	var data map[string]any
-	if err := weiboJSON(api, raw, cookies, &data); err != nil {
+	if err := weiboJSONWithHeaders(api, weiboMobileHeaders(raw), &data); err != nil {
 		return mediaMeta{}, err
 	}
 	if d := getMap(data, "data"); d != nil {
@@ -123,6 +130,21 @@ func weiboJSON(api, referer, cookies string, out any) error {
 	for k, v := range weiboHeaders(referer, cookies) {
 		req.Header.Set(k, v)
 	}
+	return doWeiboJSON(req, out)
+}
+
+func weiboJSONWithHeaders(api string, headers map[string]string, out any) error {
+	req, err := http.NewRequest(http.MethodGet, api, nil)
+	if err != nil {
+		return err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return doWeiboJSON(req, out)
+}
+
+func doWeiboJSON(req *http.Request, out any) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -136,6 +158,21 @@ func weiboJSON(api, referer, cookies string, out any) error {
 		return fmt.Errorf("微博 API HTTP %d: %s", resp.StatusCode, truncate(string(body), 200))
 	}
 	return json.Unmarshal(body, out)
+}
+
+func weiboMobileHeaders(referer string) map[string]string {
+	return map[string]string{
+		"User-Agent":       weiboUA,
+		"Referer":          firstNonEmpty(referer, "https://m.weibo.cn/"),
+		"Origin":           "https://m.weibo.cn",
+		"Accept":           "application/json, text/plain, */*",
+		"X-Requested-With": "XMLHttpRequest",
+		"MWeibo-Pwa":       "1",
+		"Sec-Fetch-Site":   "same-origin",
+		"Sec-Fetch-Mode":   "cors",
+		"Sec-Fetch-Dest":   "empty",
+		"Accept-Language":  "zh-CN,zh;q=0.9",
+	}
 }
 
 func weiboHeaders(referer, cookies string) map[string]string {
@@ -205,12 +242,22 @@ func extractWeiboMedia(data map[string]any) ([][]string, [][]string) {
 		}
 	}
 	if len(images) == 0 {
+		infos := getMap(data, "pic_infos")
+		for _, id := range getStringList(data, "pic_ids") {
+			if m := getMap(infos, id); m != nil {
+				if u := weiboPicURL(m); u != "" {
+					images = append(images, []string{ensureHTTPS(u)})
+				}
+			}
+		}
+	}
+	if len(images) == 0 {
 		for _, u := range nestedHTTPURLs(data, 5) {
 			l := strings.ToLower(u)
 			switch {
 			case strings.Contains(l, ".mp4") || strings.Contains(l, "stream"):
 				videos = append(videos, []string{ensureHTTPS(u)})
-			case strings.Contains(l, ".jpg") || strings.Contains(l, ".png") || strings.Contains(l, ".webp"):
+			case isWeiboContentImageURL(l):
 				images = append(images, []string{ensureHTTPS(u)})
 			}
 		}
@@ -232,12 +279,43 @@ func videoURLFromMediaInfo(m map[string]any) string {
 }
 
 func weiboPicURL(m map[string]any) string {
-	for _, key := range []string{"largest", "original", "large"} {
+	for _, key := range []string{"largest", "original", "large", "mw2000", "mw1024", "bmiddle"} {
 		if u := getString(m, key, "url"); u != "" {
 			return u
 		}
 	}
 	return getString(m, "url")
+}
+
+func getStringList(v any, keys ...string) []string {
+	raw := getSlice(v, keys...)
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		switch x := item.(type) {
+		case string:
+			if x != "" {
+				out = append(out, x)
+			}
+		case float64:
+			out = append(out, fmt.Sprintf("%.0f", x))
+		case json.Number:
+			out = append(out, x.String())
+		}
+	}
+	return out
+}
+
+func isWeiboContentImageURL(lowerURL string) bool {
+	if !(strings.Contains(lowerURL, ".jpg") || strings.Contains(lowerURL, ".jpeg") || strings.Contains(lowerURL, ".png") || strings.Contains(lowerURL, ".webp")) {
+		return false
+	}
+	if strings.Contains(lowerURL, "avatar") || strings.Contains(lowerURL, "profile") || strings.Contains(lowerURL, "face") || strings.Contains(lowerURL, "logo") || strings.Contains(lowerURL, "icon") {
+		return false
+	}
+	return strings.Contains(lowerURL, "sinaimg.cn/large/") ||
+		strings.Contains(lowerURL, "sinaimg.cn/mw2000/") ||
+		strings.Contains(lowerURL, "sinaimg.cn/mw1024/") ||
+		strings.Contains(lowerURL, "sinaimg.cn/orj")
 }
 
 func uniqueGroups(groups [][]string) [][]string {

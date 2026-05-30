@@ -388,6 +388,12 @@ func platformLabel(name string) string {
 		return "Xiaohongshu"
 	case "xianyu":
 		return "Xianyu"
+	case "acfun":
+		return "AcFun"
+	case "youtube":
+		return "YouTube"
+	case "instagram":
+		return "Instagram"
 	case "toutiao":
 		return "Toutiao"
 	case "xiaoheihe":
@@ -415,6 +421,12 @@ func platformLocalName(name string) string {
 		return "小红书"
 	case "xianyu":
 		return "闲鱼"
+	case "acfun":
+		return "AcFun"
+	case "youtube":
+		return "YouTube"
+	case "instagram":
+		return "Instagram"
 	case "toutiao":
 		return "今日头条"
 	case "xiaoheihe":
@@ -451,40 +463,56 @@ const webIndexHTML = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ZeroBot 控制台</title>
 <style>
-:root{--bg:#f6f7f9;--panel:#fff;--text:#1f2328;--muted:#687076;--line:#d9dde3;--blue:#1677ff;--green:#18a058;--red:#d03050}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#101418;color:white}
-h1{font-size:18px;margin:0;font-weight:700}.wrap{max-width:1180px;margin:0 auto;padding:18px}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.span4{grid-column:span 4}.span2{grid-column:span 2}
-.metric{display:flex;flex-direction:column;gap:4px}.metric b{font-size:22px}.muted{color:var(--muted)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}
-table{width:100%;border-collapse:collapse;background:white;border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{background:#f0f2f5;font-weight:650}tr:last-child td{border-bottom:0}
-button,select,input,textarea{border:1px solid var(--line);border-radius:6px;background:white;color:var(--text);padding:0 10px}button,select,input{height:32px}textarea{width:100%;min-height:96px;padding:8px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#ffb8c4;color:var(--red)}
-.hidden{display:none!important}
-.field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}.accessGrid .field{min-width:0}
-.groupTools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:8px;padding:10px;background:#fafbfc}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:5px 2px;border-bottom:1px solid #eef0f2}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
-.logoWrap{display:grid;grid-template-columns:96px minmax(260px,1fr);gap:10px;align-items:center}.logoPreview{width:96px;height:40px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff}.logoEmpty{width:96px;height:40px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:6px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(180px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
-.lastMsg{max-height:72px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0}
-.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
-.switch{position:relative;display:inline-block;width:42px;height:24px}.switch input{display:none}.slider{position:absolute;inset:0;background:#ccd1d8;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
-.ok{color:var(--green);font-weight:650}.bad{color:var(--red);font-weight:650}.msg{min-height:20px;color:var(--muted)}
-@media(max-width:850px){.grid,.accessGrid,.groupTools,.logoWrap,.logoTools{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}table{font-size:12px}th,td{padding:8px}.wrap{padding:10px}}
+:root{--bg:#eef3f8;--shell:#101827;--panel:#fff;--soft:#f7f9fc;--text:#1f2937;--muted:#6b7280;--line:#dde5ef;--blue:#2563eb;--blue2:#dceafe;--green:#16a34a;--red:#dc2626;--amber:#d97706;--shadow:0 16px 36px rgba(15,23,42,.08)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+body:before{content:"";position:fixed;inset:0 0 auto 0;height:220px;background:linear-gradient(135deg,#dbeafe,#f8fafc 58%,#e0f2fe);z-index:-1}
+header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:rgba(255,255,255,.78);backdrop-filter:blur(16px);border-bottom:1px solid rgba(148,163,184,.28);position:sticky;top:0;z-index:20}
+h1{font-size:18px;margin:0;font-weight:760}.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 64px)}.sidebar{padding:20px 14px;border-right:1px solid rgba(148,163,184,.25);background:rgba(255,255,255,.45)}.brand{font-weight:800;font-size:20px;margin:0 0 18px}.nav{display:flex;flex-direction:column;gap:6px}.nav a{color:#334155;text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover,.nav a.active{background:#fff;color:var(--blue);box-shadow:0 1px 0 rgba(15,23,42,.04)}
+.wrap{max-width:1240px;width:100%;padding:22px 24px 40px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.hero h2{font-size:28px;line-height:1.1;margin:0}.hero p{margin:8px 0 0;color:var(--muted)}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.panel{background:rgba(255,255,255,.94);border:1px solid rgba(203,213,225,.9);border-radius:10px;padding:16px;box-shadow:var(--shadow)}.sectionTitle{display:flex;gap:10px;align-items:center;margin-bottom:12px}.sectionTitle b{font-size:16px}.span4{grid-column:span 4}.span2{grid-column:span 2}
+.metric{display:flex;flex-direction:column;gap:6px;min-height:94px}.metric span:first-child{font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric b{font-size:26px}.muted{color:var(--muted)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}
+table{width:100%;border-collapse:separate;border-spacing:0;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{background:#f8fafc;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fbfdff}
+button,select,input,textarea{border:1px solid var(--line);border-radius:8px;background:white;color:var(--text);padding:0 10px}button,select,input{height:34px}textarea{width:100%;min-height:110px;padding:9px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff;font-weight:650}button:hover{border-color:#b8c5d6}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#fecdd3;color:var(--red);background:#fff7f7}
+.hidden{display:none!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
+.groupTools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
+.logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
+.lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
+.switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
+.ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.msg{min-height:20px;color:var(--muted)}.statusDot{display:inline-flex;align-items:center;gap:6px}.statusDot:before{content:"";width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px #dcfce7}
+@media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{display:none}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}table{font-size:12px}th,td{padding:8px}}
 </style>
 </head>
 <body>
-<header><h1>ZeroBot 控制台</h1><div id="topState">加载中</div></header>
+<header><h1>ZeroBot 控制台</h1><div class="toolbar"><span class="statusDot" id="topState">加载中</span><button class="primary" onclick="save()">保存配置</button></div></header>
+<div class="app">
+<aside class="sidebar">
+<div class="brand">ZBP Console</div>
+<nav class="nav">
+<a class="active" href="#overview">总览</a>
+<a href="#global">全局开关</a>
+<a href="#platforms">平台</a>
+<a href="#access">访问控制</a>
+<a href="#group-platform">群平台</a>
+<a href="#runtime">下载与调试</a>
+</nav>
+</aside>
 <main class="wrap">
+<div class="hero"><div><h2>机器人控制台</h2><p>查看运行状态，调整媒体解析与插件配置。</p></div><div class="toolbar"><button onclick="refreshStatus()">刷新状态</button><button class="danger" onclick="clearCache()">清理缓存</button></div></div>
 <section class="grid">
+<div class="span4" id="overview"></div>
 <div class="panel metric"><span class="muted">服务状态</span><b id="svc">-</b></div>
 <div class="panel metric"><span class="muted">机器人 QQ</span><b id="self">-</b></div>
 <div class="panel metric"><span class="muted">解析成功</span><b id="okn">-</b></div>
 <div class="panel metric"><span class="muted">解析失败</span><b id="failn">-</b></div>
-<div class="panel span2"><div class="row"><b>全局开关</b><span class="right msg" id="saveMsg"></span></div><div class="row" style="margin-top:12px" id="globalControls"></div></div>
-<div class="panel span2"><div class="row"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
-<div class="span4">
+<div class="panel span2" id="global"><div class="sectionTitle"><b>全局开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
+<div class="panel span2"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
+<div class="span4" id="platforms">
+<div class="sectionTitle"><b>平台开关与 Logo</b><span class="muted">每个平台可独立控制解析、卡片、媒体和下载。</span></div>
 <table><thead><tr><th>平台</th><th>解析</th><th>卡片</th><th>媒体</th><th>下载</th><th>Logo</th></tr></thead><tbody id="platformRows"></tbody></table>
 </div>
-<div class="panel span4">
-<div class="row"><b>访问控制</b><span class="muted">先判断私聊/群号是否允许，再判断群聊发言人；三套名单互不影响。</span></div>
+<div class="panel span4" id="access">
+<div class="sectionTitle"><b>访问控制</b><span class="muted">先判断私聊/群号是否允许，再判断群聊发言人；三套名单互不影响。</span></div>
 <div class="row" style="margin-top:12px">
 <label>私聊模式 <select id="pmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
 <label>群聊模式 <select id="gmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
@@ -506,8 +534,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:6px;back
 <div class="groupBox accessField" data-mode="gmode" data-kind="blacklist"><div class="row"><b>勾选到群黑名单</b><input id="groupBlackSearch" placeholder="搜索群名或群号" oninput="renderGroupPickers()"></div><div class="groupList" id="groupBlackPicker"></div></div>
 </div>
 </div>
-<div class="panel span4">
-<div class="row"><b>群平台开关</b><span class="muted">先选群，再选择这个群里要屏蔽哪些平台；不影响其他群。</span></div>
+<div class="panel span4" id="group-platform">
+<div class="sectionTitle"><b>群平台开关</b><span class="muted">先选群，再选择这个群里要屏蔽哪些平台；不影响其他群。</span></div>
 <div class="row" style="margin-top:12px">
 <label>群 <select id="platformBlockGroupSelect" onchange="renderPlatformGroupBlock()"></select></label>
 <button class="danger" onclick="clearGroupPlatformBlock()">清空当前群屏蔽</button>
@@ -515,7 +543,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:6px;back
 </div>
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
-<div class="panel span4">
+<div class="panel span4" id="runtime">
 <div class="row">
 <b>下载与调试</b>
 <label>分辨率 <select id="res"><option value="0">不限</option><option value="360">360p</option><option value="720">720p</option><option value="1080">1080p</option></select></label>
@@ -529,6 +557,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:6px;back
 </div>
 </section>
 </main>
+</div>
 <script>
 let cfg=null, platforms=[], logos={}, groups=[], dirty=false;
 const $=id=>document.getElementById(id);
