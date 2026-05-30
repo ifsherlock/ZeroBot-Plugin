@@ -582,7 +582,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			height := 208
 			if keylolShortVideoDesc(block.Desc) {
 				kind = "video_embed_compact"
-				height = 118
+				height = keylolCompactVideoCardHeight(contentW, img != nil)
 			}
 			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-keylolVideoCardCoverW-86))
 			if len(descLines) > 3 {
@@ -854,10 +854,16 @@ func keylolShortVideoDesc(desc string) bool {
 }
 
 func keylolVideoRenderWidth(kind string, contentW int) int {
-	if kind != "video_embed_compact" {
-		return contentW
+	return contentW
+}
+
+func keylolCompactVideoCardHeight(contentW int, hasCover bool) int {
+	if !hasCover {
+		return 290
 	}
-	return minInt(contentW, 780)
+	innerW := contentW - 64
+	coverH := innerW * 9 / 16
+	return 34 + 44 + 22 + coverH + 30 + 34
 }
 
 type keylolCardTheme struct {
@@ -1149,6 +1155,10 @@ func drawKeylolASFLink(dc *gg.Context, fontBytes []byte, appID string, x, y int)
 }
 
 func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlock, x, y, w, h int, theme keylolCardTheme) {
+	if block.kind == "video_embed_compact" {
+		drawKeylolNativeVideoCard(dc, fontBytes, block, x, y, w, h)
+		return
+	}
 	fx, fy := float64(x), float64(y)
 	dark := true
 	for i := 8; i >= 1; i-- {
@@ -1168,11 +1178,7 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	dc.DrawRoundedRectangle(fx+0.5, fy+0.5, float64(w)-1, float64(h)-1, 16)
 	dc.Stroke()
 
-	compact := block.kind == "video_embed_compact"
 	coverW := keylolVideoCardCoverW
-	if compact {
-		coverW = 190
-	}
 	coverH := h - 28
 	coverX := x + 16
 	coverY := y + 14
@@ -1214,28 +1220,69 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 		bodyColor = color.RGBA{R: 166, G: 188, B: 214, A: 255}
 	}
 	titleY := y + 42
-	if compact {
-		title = truncate(firstNonEmpty(block.title, "Bilibili 视频"), 34)
-		titleY = y + 42
-	}
 	drawInlineEmoji(dc, fontBytes, 25, titleColor, title, float64(textX), float64(titleY))
-	if !compact {
-		yy := y + 78
-		for _, line := range block.lines {
-			drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, bodyColor, line, float64(textX), float64(yy))
-			yy += 28
-		}
+	yy := y + 78
+	for _, line := range block.lines {
+		drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, bodyColor, line, float64(textX), float64(yy))
+		yy += 28
 	}
 	mustFont(dc, fontBytes, 19)
 	dc.SetRGB255(58, 166, 230)
 	linkY := y + h - 28
-	if compact {
-		linkY = y + h - 30
-	}
 	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(textX), float64(linkY), 0, 0.5)
 }
 
 const keylolVideoCardCoverW = 350
+
+func drawKeylolNativeVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlock, x, y, w, h int) {
+	fx, fy := float64(x), float64(y)
+	for i := 10; i >= 1; i-- {
+		dc.SetRGBA255(0, 0, 0, 5+i*3)
+		dc.DrawRoundedRectangle(fx, fy+float64(i), float64(w), float64(h), 18)
+		dc.Fill()
+	}
+	dc.SetRGB255(16, 30, 50)
+	dc.DrawRoundedRectangle(fx, fy, float64(w), float64(h), 18)
+	dc.FillPreserve()
+	dc.SetRGBA255(79, 145, 202, 95)
+	dc.SetLineWidth(1.5)
+	dc.Stroke()
+
+	title := firstNonEmpty(block.title, "Bilibili 视频")
+	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(w-64), 2)
+	yy := float64(y + 42)
+	for _, line := range titleLines {
+		drawInlineEmoji(dc, fontBytes, 31, color.RGBA{R: 236, G: 244, B: 255, A: 255}, line, float64(x+32), yy)
+		yy += 42
+	}
+	coverX := x + 32
+	coverY := int(yy) + 18
+	coverW := w - 64
+	coverH := coverW * 9 / 16
+	if block.img == nil {
+		coverH = minInt(coverH, 150)
+	}
+	dc.DrawRoundedRectangle(float64(coverX), float64(coverY), float64(coverW), float64(coverH), 12)
+	dc.ClipPreserve()
+	if block.img == nil {
+		dc.SetRGB255(29, 47, 70)
+		dc.Fill()
+		drawBilibiliTransparentLogo(dc, fontBytes, float64(coverX+coverW/2+96), float64(coverY+coverH/2), 0.72)
+	} else {
+		cover := imaging.Fill(block.img, coverW, coverH, imaging.Center, imaging.Lanczos)
+		dc.DrawImage(cover, coverX, coverY)
+	}
+	dc.ResetClip()
+	drawPlayOverlay(dc, float64(coverX+coverW/2), float64(coverY+coverH/2))
+	dc.SetRGBA255(255, 255, 255, 70)
+	dc.SetLineWidth(2)
+	dc.DrawRoundedRectangle(float64(coverX)+1, float64(coverY)+1, float64(coverW)-2, float64(coverH)-2, 12)
+	dc.Stroke()
+
+	mustFont(dc, fontBytes, 22)
+	dc.SetRGB255(58, 166, 230)
+	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(x+32), float64(coverY+coverH+42), 0, 0.5)
+}
 
 func keylolPrepareImage(img image.Image) image.Image {
 	if img == nil {
@@ -1720,7 +1767,7 @@ func renderDefaultPlatformLogoImage(platform string) (image.Image, error) {
 		return nil, err
 	}
 	dc := gg.NewContext(238, 88)
-	dc.SetRGB255(255, 255, 255)
+	dc.SetRGBA255(0, 0, 0, 0)
 	dc.Clear()
 	if !drawWhiteLogoBadge(dc, fontBytes, platform, 238, 44) {
 		drawPlatformLogo(dc, fontBytes, platform, 214, 44)
@@ -1845,6 +1892,10 @@ func fetchEmojiImage(r rune, size int) image.Image {
 func drawPlatformLogo(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) {
 	if platform == "twitter" {
 		drawTwitterTransparentLogo(dc, right, cy)
+		return
+	}
+	if platform == "bilibili" {
+		drawBilibiliTransparentLogo(dc, fontBytes, right, cy, 1)
 		return
 	}
 	if drawCustomPlatformLogoBadge(dc, platform, right, cy) {
@@ -1978,6 +2029,32 @@ func drawInstagramTransparentLogo(dc *gg.Context, fontBytes []byte, right, cy fl
 	dc.DrawStringAnchored("Instagram", right+2, cy+3, 1, 0.5)
 	dc.SetRGB255(255, 255, 255)
 	dc.DrawStringAnchored("Instagram", right, cy+1, 1, 0.5)
+}
+
+func drawBilibiliTransparentLogo(dc *gg.Context, fontBytes []byte, right, cy float64, scale float64) {
+	if scale <= 0 {
+		scale = 1
+	}
+	iconW, iconH := 70.0*scale, 52.0*scale
+	x := right - 206*scale
+	y := cy - iconH/2
+	dc.SetRGB255(0, 174, 236)
+	dc.SetLineWidth(5 * scale)
+	dc.DrawRoundedRectangle(x, y, iconW, iconH, 9*scale)
+	dc.Stroke()
+	dc.SetLineWidth(4 * scale)
+	dc.DrawLine(x+18*scale, y-8*scale, x+28*scale, y+6*scale)
+	dc.DrawLine(x+52*scale, y-8*scale, x+42*scale, y+6*scale)
+	dc.Stroke()
+	dc.DrawCircle(x+24*scale, y+28*scale, 3.8*scale)
+	dc.Fill()
+	dc.DrawCircle(x+46*scale, y+28*scale, 3.8*scale)
+	dc.Fill()
+	mustFont(dc, fontBytes, 40*scale)
+	dc.SetRGBA255(255, 255, 255, 90)
+	dc.DrawStringAnchored("bilibili", right+2*scale, cy+3*scale, 1, 0.5)
+	dc.SetRGB255(0, 174, 236)
+	dc.DrawStringAnchored("bilibili", right, cy+1*scale, 1, 0.5)
 }
 
 func drawCustomPlatformLogoBadge(dc *gg.Context, platform string, right, cy float64) bool {
@@ -2144,6 +2221,10 @@ func logoHasTransparency(img image.Image) bool {
 }
 
 func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) bool {
+	if platform == "bilibili" {
+		drawBilibiliTransparentLogo(dc, fontBytes, right, cy, 1)
+		return true
+	}
 	w, h := 238.0, 88.0
 	x, y := right-w, cy-h/2
 	dc.SetRGB255(255, 255, 255)
@@ -2161,10 +2242,6 @@ func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right
 		dc.DrawStringAnchored("小黑盒", right-4, cy-10, 1, 0.5)
 		mustFont(dc, fontBytes, 15)
 		dc.DrawStringAnchored("HEYBOX", right-8, cy+24, 1, 0.5)
-	case "bilibili":
-		mustFont(dc, fontBytes, 40)
-		dc.SetRGB255(35, 174, 229)
-		dc.DrawStringAnchored("bilibili", right-4, cy+2, 1, 0.5)
 	case "twitter":
 		mustFont(dc, fontBytes, 68)
 		dc.SetRGB255(5, 5, 5)

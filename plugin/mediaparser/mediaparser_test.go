@@ -1137,10 +1137,20 @@ func TestRenderKeylolCompactVideoPreview(t *testing.T) {
 	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-video-preview")
 	defer func() { cacheDir = oldCacheDir }()
 
+	coverSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		img := image.NewRGBA(image.Rect(0, 0, 960, 540))
+		draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 32, G: 58, B: 88, A: 255}}, image.Point{}, draw.Src)
+		for x := 0; x < 960; x += 24 {
+			draw.Draw(img, image.Rect(x, 0, minInt(x+12, 960), 540), &image.Uniform{C: color.RGBA{R: 52, G: 112, B: 156, A: 255}}, image.Point{}, draw.Src)
+		}
+		_ = png.Encode(w, img)
+	}))
+	defer coverSrv.Close()
+
 	blocks := []keylolBlock{
 		{Kind: "heading1", Text: "宣传视频"},
-		{Kind: "video_embed", URL: "https://www.bilibili.com/video/BV16AGQ6LEQJ", Title: "《使命召唤：现代战争4》中文预告", Cover: "https://i0.hdslb.com/bfs/archive/1f7500e22a0a9207318bdfd43e7ff723e1213d53.jpg"},
-		{Kind: "video_embed", URL: "https://www.bilibili.com/video/BV16AGQ6LEQJ", Title: "长简介视频卡片", Desc: "这是一段超过二十个字的视频简介，用来展示长卡片正文区域在帖子中的阅读效果。", Cover: "https://i0.hdslb.com/bfs/archive/1f7500e22a0a9207318bdfd43e7ff723e1213d53.jpg"},
+		{Kind: "video_embed", URL: "https://www.bilibili.com/video/BV16AGQ6LEQJ", Title: "《使命召唤：现代战争4》中文预告", Cover: coverSrv.URL + "/cover.png"},
+		{Kind: "video_embed", URL: "https://www.bilibili.com/video/BV16AGQ6LEQJ", Title: "长简介视频卡片", Desc: "这是一段超过二十个字的视频简介，用来展示长卡片正文区域在帖子中的阅读效果。", Cover: coverSrv.URL + "/cover.png"},
 	}
 	out, err := renderInfoCard(mediaMeta{
 		URL:          "https://keylol.com/t-video-preview",
