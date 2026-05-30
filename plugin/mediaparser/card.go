@@ -521,11 +521,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				y += bodyLH
 			}
 		case "image":
-			ix := x
-			if block.width < contentW {
-				ix = x + (contentW-block.width)/2
-			}
-			drawKeylolFullImage(dc, block.img, ix, y, block.width, block.height)
+			drawKeylolFullImage(dc, block.img, x, y, block.width, block.height)
 			y += block.height
 		case "inline_image":
 			drawKeylolInlineImage(dc, block.img, x, y, block.width, block.height)
