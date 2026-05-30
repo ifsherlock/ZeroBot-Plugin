@@ -582,7 +582,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			height := 208
 			if keylolShortVideoDesc(block.Desc) {
 				kind = "video_embed_compact"
-				height = 176
+				height = 132
 			}
 			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-keylolVideoCardCoverW-86))
 			if len(descLines) > 3 {
@@ -1159,7 +1159,7 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	compact := block.kind == "video_embed_compact"
 	coverW := keylolVideoCardCoverW
 	if compact {
-		coverW = 300
+		coverW = 210
 	}
 	coverH := h - 28
 	coverX := x + 16
@@ -1201,7 +1201,11 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 		titleColor = color.RGBA{R: 237, G: 244, B: 255, A: 255}
 		bodyColor = color.RGBA{R: 166, G: 188, B: 214, A: 255}
 	}
-	drawInlineEmoji(dc, fontBytes, 25, titleColor, title, float64(textX), float64(y+42))
+	titleY := y + 42
+	if compact {
+		titleY = y + 47
+	}
+	drawInlineEmoji(dc, fontBytes, 25, titleColor, title, float64(textX), float64(titleY))
 	if !compact {
 		yy := y + 78
 		for _, line := range block.lines {
@@ -1211,7 +1215,11 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	}
 	mustFont(dc, fontBytes, 19)
 	dc.SetRGB255(58, 166, 230)
-	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(textX), float64(y+h-28), 0, 0.5)
+	linkY := y + h - 28
+	if compact {
+		linkY = y + h - 34
+	}
+	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(textX), float64(linkY), 0, 0.5)
 }
 
 const keylolVideoCardCoverW = 350
