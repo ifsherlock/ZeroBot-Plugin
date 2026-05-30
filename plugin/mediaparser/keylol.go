@@ -221,6 +221,7 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
 	messageHTML = keylolStripHiddenTips(messageHTML)
 	messageHTML = keylolMarkShowhideContent(messageHTML)
+	messageHTML = keylolReplaceCountdown(messageHTML)
 	messageHTML = keylolReplaceSmileyImages(messageHTML)
 	messageHTML = keylolReplaceSpoilers(messageHTML)
 	messageHTML = keylolReplaceCodeBlocks(messageHTML)
@@ -835,6 +836,21 @@ func keylolReplaceMediaTags(s, base string) string {
 	})
 }
 
+func keylolReplaceCountdown(s string) string {
+	re := regexp.MustCompile(`(?is)\[micxp_countdown\](.*?)\[/micxp_countdown\]`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 2 {
+			return match
+		}
+		text := keylolOneLine(keylolCleanBlockText(m[1]))
+		if text == "" {
+			return ""
+		}
+		return "\n截止时间：" + text + "\n"
+	})
+}
+
 func keylolReplaceSmileyImages(s string) string {
 	re := regexp.MustCompile(`(?is)<img\b[^>]*>`)
 	return re.ReplaceAllStringFunc(s, func(tag string) string {
@@ -1167,6 +1183,7 @@ func keylolCleanBlockText(s string) string {
 		}
 		cleaned = append(cleaned, line)
 	}
+	cleaned = keylolMergeShortPromoLines(cleaned)
 	return strings.Join(collapseDuplicateLines(keylolMergeIsolatedPunctuationLines(cleaned)), "\n")
 }
 
@@ -1256,6 +1273,7 @@ func keylolCleanMessage(messageHTML string) string {
 		}
 		cleaned = append(cleaned, line)
 	}
+	cleaned = keylolMergeShortPromoLines(cleaned)
 	return strings.Join(collapseDuplicateLines(keylolMergeIsolatedPunctuationLines(cleaned)), "\n")
 }
 
@@ -1319,6 +1337,42 @@ func keylolMergeIsolatedPunctuationLines(lines []string) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+func keylolMergeShortPromoLines(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if strings.EqualFold(line, "支付") && i+2 < len(lines) && keylolLooksLikePromoPrice(lines[i+1]) && keylolLooksLikePromoReceive(lines[i+2]) {
+			out = append(out, strings.TrimSpace("支付 "+lines[i+1]+" "+lines[i+2]))
+			i += 2
+			continue
+		}
+		if keylolLooksLikePromoPrice(line) && i+1 < len(lines) && keylolLooksLikePromoReceive(lines[i+1]) {
+			out = append(out, strings.TrimSpace(line+" "+lines[i+1]))
+			i++
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+func keylolLooksLikePromoPrice(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	re := regexp.MustCompile(`^(?:[¥￥$]\s*)?\d[\d,]*(?:\.\d+)?(?:\s*[（(].*[)）])?$`)
+	return re.MatchString(line)
+}
+
+func keylolLooksLikePromoReceive(line string) bool {
+	line = strings.TrimSpace(strings.TrimSuffix(line, ":"))
+	return strings.Contains(line, "可获得") || strings.Contains(line, "获得")
 }
 
 func keylolTime(raw string) string {
