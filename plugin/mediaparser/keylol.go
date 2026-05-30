@@ -3,6 +3,7 @@ package mediaparser
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -16,6 +17,12 @@ var (
 	keylolAPIBase  = "https://keylol.com/api/mobile/index.php"
 	keylolImageExt = regexp.MustCompile(`(?i)\.(jpg|jpeg|png|webp|gif)(?:\?|$)`)
 )
+
+type keylolBlock struct {
+	Kind string
+	Text string
+	URL  string
+}
 
 func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	tid := keylolThreadID(raw)
@@ -62,8 +69,9 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	}
 
 	messageHTML := firstNonEmpty(getString(post, "message"), getString(post, "message_html"))
-	images := keylolExtractImages(messageHTML, getMap(post, "attachments"), finalURL)
-	desc := keylolCleanMessage(messageHTML)
+	blocks := keylolBuildBlocks(messageHTML, getMap(post, "attachments"), finalURL)
+	images := keylolImageGroupsFromBlocks(blocks)
+	desc := keylolDescFromBlocks(blocks)
 	title := firstNonEmpty(getString(thread, "subject"), getString(post, "subject"))
 	author := cardDisplayAuthor(firstNonEmpty(getString(post, "author"), getString(thread, "author")))
 	authorID := firstNonEmpty(getString(post, "authorid"), getString(thread, "authorid"))
@@ -71,16 +79,17 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	avatar := keylolAvatarURL(authorID)
 
 	return mediaMeta{
-		URL:        raw,
-		SourceURL:  raw,
-		Platform:   "keylol",
-		Title:      title,
-		Author:     author,
-		Avatar:     avatar,
-		Timestamp:  timestamp,
-		Desc:       desc,
-		ImageURLs:  images,
-		ImageHeads: keylolHeaders(cfg, raw),
+		URL:          raw,
+		SourceURL:    raw,
+		Platform:     "keylol",
+		Title:        title,
+		Author:       author,
+		Avatar:       avatar,
+		Timestamp:    timestamp,
+		Desc:         desc,
+		ImageURLs:    images,
+		ImageHeads:   keylolHeaders(cfg, raw),
+		KeylolBlocks: blocks,
 	}, nil
 }
 
@@ -136,6 +145,175 @@ func keylolExtractImages(messageHTML string, attachments map[string]any, base st
 		add(raw)
 	}
 	return dedupeMediaGroups(out)
+}
+
+func keylolBuildBlocks(messageHTML string, attachments map[string]any, base string) []keylolBlock {
+	messageHTML = keylolStripHiddenTips(messageHTML)
+	messageHTML = keylolReplaceTextLinks(messageHTML, base)
+	blocks := []keylolBlock{}
+	seenImages := map[string]bool{}
+	var textBuf strings.Builder
+	flushText := func() {
+		text := keylolCleanBlockText(textBuf.String())
+		textBuf.Reset()
+		if text == "" || keylolNoiseLine(text) {
+			return
+		}
+		if len(blocks) > 0 && blocks[len(blocks)-1].Kind == "text" {
+			blocks[len(blocks)-1].Text = strings.TrimSpace(blocks[len(blocks)-1].Text + "\n" + text)
+			return
+		}
+		blocks = append(blocks, keylolBlock{Kind: "text", Text: text})
+	}
+	addImage := func(raw string) {
+		raw = strings.TrimSpace(html.UnescapeString(htmlUnescape(raw)))
+		raw = strings.Trim(raw, ` "'`)
+		if raw == "" {
+			return
+		}
+		raw = absolutize(base, ensureHTTPS(raw))
+		if !keylolContentImageOK(raw) || seenImages[raw] {
+			return
+		}
+		flushText()
+		seenImages[raw] = true
+		blocks = append(blocks, keylolBlock{Kind: "image", URL: raw})
+	}
+	tokenRE := regexp.MustCompile(`(?is)<img\b[^>]*>|<br\s*/?>|</p>|</div>|</li>|</tr>|</h[1-6]>`)
+	last := 0
+	for _, loc := range tokenRE.FindAllStringIndex(messageHTML, -1) {
+		textBuf.WriteString(messageHTML[last:loc[0]])
+		token := messageHTML[loc[0]:loc[1]]
+		if strings.HasPrefix(strings.ToLower(token), "<img") {
+			addImage(keylolImageURLFromTag(token))
+		} else {
+			textBuf.WriteString("\n")
+		}
+		last = loc[1]
+	}
+	textBuf.WriteString(messageHTML[last:])
+	flushText()
+	for _, raw := range nestedHTTPURLs(attachments, 6) {
+		raw = absolutize(base, ensureHTTPS(raw))
+		if keylolContentImageOK(raw) && !seenImages[raw] {
+			seenImages[raw] = true
+			blocks = append(blocks, keylolBlock{Kind: "image", URL: raw})
+		}
+	}
+	return keylolCompactBlocks(blocks)
+}
+
+func keylolStripHiddenTips(s string) string {
+	s = regexp.MustCompile(`(?is)<div\b[^>]*class=["'][^"']*\baimg_tip\b[^"']*["'][^>]*>.*?</div>\s*</div>`).ReplaceAllString(s, "")
+	s = regexp.MustCompile(`(?is)<div\b[^>]*class=["'][^"']*\brnd_ai_pr\b[^"']*["'][^>]*>.*?</div>`).ReplaceAllString(s, "")
+	s = regexp.MustCompile(`(?is)</?ignore_js_op[^>]*>`).ReplaceAllString(s, "")
+	return s
+}
+
+func keylolReplaceTextLinks(s, base string) string {
+	re := regexp.MustCompile(`(?is)<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>`)
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		m := re.FindStringSubmatch(match)
+		if len(m) < 3 {
+			return match
+		}
+		if regexp.MustCompile(`(?is)<img\b`).MatchString(m[2]) {
+			return m[2]
+		}
+		text := keylolCleanBlockText(m[2])
+		href := absolutize(base, html.UnescapeString(htmlUnescape(m[1])))
+		if text == "" || strings.EqualFold(text, "链接") || strings.EqualFold(text, "link") {
+			text = href
+		}
+		return " " + text + " "
+	})
+}
+
+func keylolImageURLFromTag(tag string) string {
+	for _, attr := range []string{"zoomfile", "file", "src"} {
+		re := regexp.MustCompile(`(?is)\b` + regexp.QuoteMeta(attr) + `\s*=\s*["']([^"']+)["']`)
+		if m := re.FindStringSubmatch(tag); len(m) > 1 {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+func keylolContentImageOK(raw string) bool {
+	low := strings.ToLower(raw)
+	if !keylolImageExt.MatchString(low) {
+		return false
+	}
+	for _, bad := range []string{
+		"/uc_server/data/avatar/", "/common/usergroup/", "userinfo.gif", "qq_share.png",
+		"fav.gif", "agree.gif", "collection.png", "rec_add.gif", "fj_btn.png",
+		"roster-rank-icon", "magic/",
+	} {
+		if strings.Contains(low, bad) {
+			return false
+		}
+	}
+	return true
+}
+
+func keylolCleanBlockText(s string) string {
+	s = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>|<script[^>]*>.*?</script>`).ReplaceAllString(s, "")
+	s = regexp.MustCompile(`(?i)<br\s*/?>|</p>|</div>|</li>|</tr>|</h[1-6]>`).ReplaceAllString(s, "\n")
+	s = regexp.MustCompile(`(?is)<[^>]+>`).ReplaceAllString(s, "")
+	s = html.UnescapeString(htmlUnescape(s))
+	s = regexp.MustCompile(`(?i)\[/?(?:attach|img|url|quote|size|color|font|align|b|i|u|list|\*)(?:=[^\]]*)?\]`).ReplaceAllString(s, "")
+	lines := strings.Split(s, "\n")
+	cleaned := make([]string, 0, len(lines))
+	spaceRE := regexp.MustCompile(`[ \t]+`)
+	for _, line := range lines {
+		line = strings.TrimSpace(spaceRE.ReplaceAllString(line, " "))
+		if line == "" || keylolNoiseLine(line) {
+			continue
+		}
+		cleaned = append(cleaned, line)
+	}
+	return strings.Join(collapseDuplicateLines(cleaned), "\n")
+}
+
+func keylolCompactBlocks(blocks []keylolBlock) []keylolBlock {
+	out := make([]keylolBlock, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Kind == "text" {
+			block.Text = strings.TrimSpace(block.Text)
+			if block.Text == "" {
+				continue
+			}
+			if len(out) > 0 && out[len(out)-1].Kind == "text" {
+				out[len(out)-1].Text += "\n" + block.Text
+				continue
+			}
+		}
+		if block.Kind == "image" && block.URL == "" {
+			continue
+		}
+		out = append(out, block)
+	}
+	return out
+}
+
+func keylolImageGroupsFromBlocks(blocks []keylolBlock) [][]string {
+	out := [][]string{}
+	for _, block := range blocks {
+		if block.Kind == "image" && block.URL != "" {
+			out = append(out, []string{block.URL})
+		}
+	}
+	return dedupeMediaGroups(out)
+}
+
+func keylolDescFromBlocks(blocks []keylolBlock) string {
+	parts := []string{}
+	for _, block := range blocks {
+		if block.Kind == "text" && strings.TrimSpace(block.Text) != "" {
+			parts = append(parts, strings.TrimSpace(block.Text))
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 func keylolUsableImage(raw string) bool {

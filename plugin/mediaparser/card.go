@@ -44,6 +44,9 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if meta.Platform == "keylol" {
+		return renderKeylolThreadCard(meta, fontBytes)
+	}
 	if shouldConsiderLongImageCard(meta) {
 		return renderLongImageCard(meta, fontBytes)
 	}
@@ -274,6 +277,225 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 
 	return saveCardPNG(dc, meta)
+}
+
+type keylolRenderBlock struct {
+	kind   string
+	text   string
+	url    string
+	img    image.Image
+	width  int
+	height int
+	lines  []string
+}
+
+func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	const (
+		w         = 1320
+		outerPad  = 32
+		panelPad  = 50
+		contentW  = w - outerPad*2 - panelPad*2
+		titleSize = 38.0
+		bodySize  = 27.0
+		titleLH   = 56
+		bodyLH    = 42
+		imageGap  = 28
+		blockGap  = 22
+	)
+	blocks := keylolBlocksForRender(meta)
+	dcMeasure := gg.NewContext(w, 100)
+	mustFont(dcMeasure, fontBytes, bodySize)
+	renderBlocks := make([]keylolRenderBlock, 0, len(blocks))
+	for _, block := range blocks {
+		switch block.Kind {
+		case "image":
+			img := fetchCardImage(block.URL, meta.ImageHeads)
+			iw, ih := keylolImageDrawSize(img, contentW)
+			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "image", url: block.URL, img: img, width: iw, height: ih})
+		case "text":
+			lines := wrapTextByPixels(dcMeasure, fontBytes, bodySize, block.Text, float64(contentW))
+			if len(lines) > 0 {
+				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "text", text: block.Text, lines: lines, height: len(lines) * bodyLH})
+			}
+		}
+	}
+	titleLines := wrapTextByPixels(dcMeasure, fontBytes, titleSize, firstNonEmpty(meta.Title, "Keylol 帖子"), float64(contentW-150))
+	contentH := 0
+	for _, block := range renderBlocks {
+		if contentH > 0 {
+			contentH += blockGap
+		}
+		contentH += block.height
+		if block.kind == "image" {
+			contentH += imageGap
+		}
+	}
+	if contentH < 120 {
+		contentH = 120
+	}
+	headerH := 86 + len(titleLines)*titleLH + 72
+	footerH := 72
+	panelH := panelPad + headerH + contentH + footerH
+	height := panelH + outerPad*2
+
+	dc := gg.NewContext(w, height)
+	dc.SetRGB255(234, 238, 244)
+	dc.Clear()
+	drawKeylolPanel(dc, outerPad, outerPad, w-outerPad*2, panelH)
+	x := outerPad + panelPad
+	y := outerPad + panelPad
+	drawKeylolBadge(dc, fontBytes, float64(x), float64(y+10))
+	if meta.Timestamp != "" {
+		mustFont(dc, fontBytes, 22)
+		dc.SetRGB255(145, 150, 160)
+		dc.DrawStringAnchored(meta.Timestamp, float64(w-outerPad-panelPad), float64(y+28), 1, 0.5)
+	}
+	y += 74
+	for _, line := range titleLines {
+		drawInlineEmoji(dc, fontBytes, titleSize, color.RGBA{R: 26, G: 31, B: 48, A: 255}, line, float64(x), float64(y))
+		y += titleLH
+	}
+	authorLine := firstNonEmpty(meta.Author, "Keylol 用户")
+	drawInlineEmoji(dc, fontBytes, 24, color.RGBA{R: 50, G: 124, B: 214, A: 255}, authorLine, float64(x), float64(y+6))
+	y += 48
+	dc.SetRGB255(224, 228, 235)
+	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 2)
+	dc.Fill()
+	y += 44
+	for _, block := range renderBlocks {
+		switch block.kind {
+		case "text":
+			for _, line := range block.lines {
+				c := color.RGBA{R: 45, G: 48, B: 56, A: 255}
+				if keylolLooksLikeLink(line) {
+					c = color.RGBA{R: 0, G: 102, B: 204, A: 255}
+				}
+				drawInlineEmoji(dc, fontBytes, bodySize, c, line, float64(x), float64(y))
+				y += bodyLH
+			}
+		case "image":
+			ix := x
+			if block.width < contentW {
+				ix = x + (contentW-block.width)/2
+			}
+			drawKeylolFullImage(dc, block.img, ix, y, block.width, block.height)
+			y += block.height + imageGap
+		}
+		y += blockGap
+	}
+	mustFont(dc, fontBytes, 20)
+	dc.SetRGB255(176, 184, 194)
+	dc.DrawStringAnchored("Keylol 帖子截图 · 浏览器渲染 · "+time.Now().Format("2006-01-02 15:04"), float64(w)/2, float64(height-outerPad-24), 0.5, 0.5)
+	return saveCardPNG(dc, meta)
+}
+
+func keylolBlocksForRender(meta mediaMeta) []keylolBlock {
+	if len(meta.KeylolBlocks) > 0 {
+		return meta.KeylolBlocks
+	}
+	blocks := []keylolBlock{}
+	if strings.TrimSpace(meta.Desc) != "" {
+		blocks = append(blocks, keylolBlock{Kind: "text", Text: strings.TrimSpace(meta.Desc)})
+	}
+	for _, group := range meta.ImageURLs {
+		if len(group) > 0 && group[0] != "" {
+			blocks = append(blocks, keylolBlock{Kind: "image", URL: group[0]})
+		}
+	}
+	return blocks
+}
+
+func keylolImageDrawSize(img image.Image, maxW int) (int, int) {
+	if img == nil {
+		return maxW, maxW * 9 / 16
+	}
+	b := img.Bounds()
+	iw, ih := b.Dx(), b.Dy()
+	if iw <= 0 || ih <= 0 {
+		return maxW, maxW * 9 / 16
+	}
+	if iw <= maxW {
+		return iw, ih
+	}
+	h := int(float64(ih) * float64(maxW) / float64(iw))
+	return maxW, maxInt(h, 1)
+}
+
+func drawKeylolPanel(dc *gg.Context, x, y, w, h int) {
+	for i := 14; i >= 1; i-- {
+		dc.SetRGBA255(0, 0, 0, 3+i*2)
+		dc.DrawRoundedRectangle(float64(x), float64(y+i), float64(w), float64(h), 18)
+		dc.Fill()
+	}
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 18)
+	dc.Fill()
+}
+
+func drawKeylolBadge(dc *gg.Context, fontBytes []byte, x, y float64) {
+	dc.SetRGB255(74, 137, 218)
+	dc.DrawRoundedRectangle(x, y, 126, 34, 14)
+	dc.Fill()
+	if logo := loadPlatformLogo("keylol"); logo != nil {
+		mark := imaging.Fit(logo, 28, 20, imaging.Lanczos)
+		dc.DrawImage(mark, int(x+13), int(y+7))
+	}
+	mustFont(dc, fontBytes, 20)
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawStringAnchored("Keylol", x+82, y+18, 0.5, 0.5)
+}
+
+func drawKeylolFullImage(dc *gg.Context, img image.Image, x, y, w, h int) {
+	for i := 8; i >= 1; i-- {
+		dc.SetRGBA255(0, 0, 0, 5+i*3)
+		dc.DrawRoundedRectangle(float64(x), float64(y+i), float64(w), float64(h), 10)
+		dc.Fill()
+	}
+	dc.SetRGB255(255, 255, 255)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 10)
+	dc.Fill()
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 10)
+	dc.ClipPreserve()
+	if img == nil {
+		dc.SetRGB255(238, 241, 245)
+		dc.Fill()
+	} else {
+		dc.DrawImage(imaging.Resize(img, w, h, imaging.Lanczos), x, y)
+	}
+	dc.ResetClip()
+}
+
+func wrapTextByPixels(dc *gg.Context, fontBytes []byte, size float64, s string, maxW float64) []string {
+	mustFont(dc, fontBytes, size)
+	out := []string{}
+	for _, para := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
+		para = strings.TrimSpace(para)
+		if para == "" {
+			if len(out) > 0 && out[len(out)-1] != "" {
+				out = append(out, "")
+			}
+			continue
+		}
+		line := ""
+		for _, r := range []rune(para) {
+			next := line + string(r)
+			if ww, _ := dc.MeasureString(next); ww > maxW && line != "" {
+				out = append(out, line)
+				line = string(r)
+			} else {
+				line = next
+			}
+		}
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+func keylolLooksLikeLink(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.Contains(lower, "store.steampowered.com")
 }
 
 func saveCardPNG(dc *gg.Context, meta mediaMeta) (string, error) {
