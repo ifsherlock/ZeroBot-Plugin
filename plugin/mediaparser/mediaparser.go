@@ -849,8 +849,10 @@ func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
 		return parseXianyu(cfg, link.URL)
 	case "acfun":
 		return parseAcfun(cfg, link.URL)
-	case "youtube", "instagram":
+	case "youtube":
 		return parseWithYTDLP(cfg, link)
+	case "instagram":
+		return parseInstagram(cfg, link.URL)
 	case "toutiao":
 		return parseToutiao(cfg, link.URL)
 	case "xiaoheihe":
@@ -1371,7 +1373,7 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 		Platform:   link.Platform,
 		Title:      info.Title,
 		Author:     firstNonEmpty(info.Uploader, info.Channel),
-		Avatar:     resolveYTDLPAvatar(cfg, link.Platform, info.WebpageURL, info.ChannelURL, info.UploaderURL, info.UploaderID, info.ChannelID),
+		Avatar:     resolveYTDLPAvatar(cfg, link.Platform, info.Title, info.WebpageURL, info.ChannelURL, info.UploaderURL, info.UploaderID, info.ChannelID),
 		Desc:       info.Description,
 		Cover:      info.Thumbnail,
 		VideoURLs:  [][]string{{"ytdlp:" + link.URL}},
@@ -1381,12 +1383,12 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 	}, nil
 }
 
-func resolveYTDLPAvatar(cfg config, platform, webpageURL, channelURL, uploaderURL, uploaderID, channelID string) string {
+func resolveYTDLPAvatar(cfg config, platform, title, webpageURL, channelURL, uploaderURL, uploaderID, channelID string) string {
 	switch platform {
 	case "youtube":
 		return resolveYouTubeAvatar(firstNonEmpty(channelURL, uploaderURL, youtubeChannelURL(uploaderID), youtubeChannelURL(channelID)))
 	case "instagram":
-		return resolveInstagramAvatar(cfg, firstNonEmpty(webpageURL, uploaderURL), uploaderID)
+		return resolveInstagramAvatar(cfg, instagramUsernameFromYTDLP(title, uploaderURL, uploaderID))
 	default:
 		return ""
 	}
@@ -1426,31 +1428,47 @@ func resolveYouTubeAvatar(raw string) string {
 	)
 }
 
-func resolveInstagramAvatar(cfg config, raw, username string) string {
-	candidates := []string{strings.TrimSpace(raw)}
-	if username = strings.Trim(strings.TrimSpace(username), "@"); username != "" {
-		candidates = append(candidates, "https://www.instagram.com/"+username+"/")
+func instagramUsernameFromYTDLP(title, uploaderURL, uploaderID string) string {
+	for _, raw := range []string{uploaderURL, uploaderID} {
+		raw = strings.TrimSpace(raw)
+		if raw == "" || regexp.MustCompile(`^\d+$`).MatchString(raw) {
+			continue
+		}
+		if u, err := url.Parse(raw); err == nil && strings.Contains(strings.ToLower(u.Hostname()), "instagram.com") {
+			parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+			if len(parts) > 0 && parts[0] != "" {
+				return strings.TrimPrefix(parts[0], "@")
+			}
+		}
+		return strings.TrimPrefix(raw, "@")
+	}
+	if m := regexp.MustCompile(`(?i)^(?:post|video|reel) by ([A-Za-z0-9._]+)`).FindStringSubmatch(strings.TrimSpace(title)); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
+func resolveInstagramAvatar(cfg config, username string) string {
+	username = strings.Trim(strings.TrimSpace(username), "@")
+	if username == "" {
+		return ""
 	}
 	headers := map[string]string{
-		"User-Agent":      defaultUA,
-		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"User-Agent":      instagramWebUA,
+		"Accept":          "application/json,text/plain,*/*",
 		"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+		"X-IG-App-ID":     "936619743392459",
+		"Referer":         "https://www.instagram.com/" + username + "/",
 	}
 	if cfg.InstagramCookie != "" {
 		headers["Cookie"] = cfg.InstagramCookie
 	}
-	for _, u := range candidates {
-		if u == "" {
-			continue
-		}
-		body, _, _, err := fetchText(u, headers, true)
-		if err != nil {
-			continue
-		}
+	api := "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + url.QueryEscape(username)
+	body, _, status, err := fetchText(api, headers, true)
+	if err == nil && status < 400 {
 		if avatar := firstNonEmpty(
 			firstRegexGroup(body, `"profile_pic_url_hd"\s*:\s*"([^"]+)`),
 			firstRegexGroup(body, `"profile_pic_url"\s*:\s*"([^"]+)`),
-			firstRegexGroup(body, `"profilePicUrl"\s*:\s*"([^"]+)`),
 		); avatar != "" {
 			return avatar
 		}

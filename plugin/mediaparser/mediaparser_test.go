@@ -240,6 +240,53 @@ func TestYTDLPAvatarExtractionHelpers(t *testing.T) {
 	if got := firstRegexGroup(igHTML, `"profile_pic_url_hd"\s*:\s*"([^"]+)`); got != "https://instagram.fabc1-1.fna.fbcdn.net/avatar.jpg?_nc_ht=x" {
 		t.Fatalf("instagram avatar=%q", got)
 	}
+	if got := instagramUsernameFromYTDLP("Post by jaychou", "", "5951385086"); got != "jaychou" {
+		t.Fatalf("instagram username=%q", got)
+	}
+}
+
+func TestInstagramBuildMetaUsesOwnerAvatarAndCarousel(t *testing.T) {
+	if got := instagramShortcode("https://www.instagram.com/p/DYyvSw5D1wi/?utm_source=ig_web_copy_link"); got != "DYyvSw5D1wi" {
+		t.Fatalf("shortcode=%q", got)
+	}
+	if got := instagramShortcodePK("DYyvSw5D1wi"); got != "3905391824517159970" {
+		t.Fatalf("pk=%q", got)
+	}
+	raw := `{
+	  "taken_at": 1780000000,
+	  "caption": {"text": "第一行标题\n#topic 正文"},
+	  "user": {
+	    "username": "jaychou",
+	    "full_name": "Jay Chou 周杰倫",
+	    "profile_pic_url": "https://scontent.cdninstagram.com/v/t51.2885-19/292049853_avatar.jpg"
+	  },
+	  "carousel_media": [
+	    {"image_versions2": {"candidates": [
+	      {"url": "https://img/small.jpg", "width": 320, "height": 320},
+	      {"url": "https://img/large.jpg", "width": 1080, "height": 1080}
+	    ]}},
+	    {"video_versions": [
+	      {"url": "https://video/low.mp4", "width": 360, "height": 640},
+	      {"url": "https://video/high.mp4", "width": 1080, "height": 1920}
+	    ], "image_versions2": {"candidates": [
+	      {"url": "https://img/cover.jpg", "width": 720, "height": 1280}
+	    ]}}
+	  ]
+	}`
+	var item map[string]any
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		t.Fatal(err)
+	}
+	meta := buildInstagramMeta("https://www.instagram.com/p/DYyvSw5D1wi/", "DYyvSw5D1wi", item)
+	if meta.Author != "Jay Chou 周杰倫" || !strings.Contains(meta.Avatar, "292049853") {
+		t.Fatalf("bad owner fields author=%q avatar=%q", meta.Author, meta.Avatar)
+	}
+	if len(meta.ImageURLs) != 2 || meta.ImageURLs[0][0] != "https://img/large.jpg" || meta.ImageURLs[1][0] != "https://img/cover.jpg" {
+		t.Fatalf("bad images=%#v", meta.ImageURLs)
+	}
+	if len(meta.VideoURLs) != 1 || meta.VideoURLs[0][0] != "https://video/high.mp4" {
+		t.Fatalf("bad videos=%#v", meta.VideoURLs)
+	}
 }
 
 func containsArgPair(args []string, key, value string) bool {
