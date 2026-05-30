@@ -582,7 +582,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			height := 208
 			if keylolShortVideoDesc(block.Desc) {
 				kind = "video_embed_compact"
-				height = 132
+				height = 118
 			}
 			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-keylolVideoCardCoverW-86))
 			if len(descLines) > 3 {
@@ -596,6 +596,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				cover:  block.Cover,
 				img:    img,
 				lines:  descLines,
+				width:  keylolVideoRenderWidth(kind, contentW),
 				height: height,
 			})
 		case "asf_link":
@@ -728,7 +729,11 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			drawKeylolSteamCard(dc, fontBytes, block, x, y, contentW, block.height)
 			y += block.height
 		case "video_embed", "video_embed_compact":
-			drawKeylolVideoCard(dc, fontBytes, block, x, y, contentW, block.height, theme)
+			drawW := contentW
+			if block.width > 0 {
+				drawW = minInt(contentW, block.width)
+			}
+			drawKeylolVideoCard(dc, fontBytes, block, x, y, drawW, block.height, theme)
 			y += block.height
 		case "asf_link":
 			drawKeylolASFLink(dc, fontBytes, block.title, x, y)
@@ -846,6 +851,13 @@ func keylolShortVideoDesc(desc string) bool {
 		return true
 	}
 	return len([]rune(desc)) <= 20
+}
+
+func keylolVideoRenderWidth(kind string, contentW int) int {
+	if kind != "video_embed_compact" {
+		return contentW
+	}
+	return minInt(contentW, 780)
 }
 
 type keylolCardTheme struct {
@@ -1159,7 +1171,7 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	compact := block.kind == "video_embed_compact"
 	coverW := keylolVideoCardCoverW
 	if compact {
-		coverW = 210
+		coverW = 190
 	}
 	coverH := h - 28
 	coverX := x + 16
@@ -1203,7 +1215,8 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	}
 	titleY := y + 42
 	if compact {
-		titleY = y + 47
+		title = truncate(firstNonEmpty(block.title, "Bilibili 视频"), 34)
+		titleY = y + 42
 	}
 	drawInlineEmoji(dc, fontBytes, 25, titleColor, title, float64(textX), float64(titleY))
 	if !compact {
@@ -1217,7 +1230,7 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	dc.SetRGB255(58, 166, 230)
 	linkY := y + h - 28
 	if compact {
-		linkY = y + h - 34
+		linkY = y + h - 30
 	}
 	dc.DrawStringAnchored("在 Bilibili 查看 →", float64(textX), float64(linkY), 0, 0.5)
 }
