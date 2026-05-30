@@ -345,7 +345,11 @@ func normalizeConfig(cfg *config) {
 		if _, ok := cfg.OutputMode[p.Name]; !ok {
 			cfg.OutputMode[p.Name] = outputAll
 		}
+		cfg.PlatformInfoCard[p.Name] = cfg.PlatformEnabled[p.Name]
+		cfg.PlatformSendMedia[p.Name] = cfg.PlatformDownload[p.Name]
 	}
+	cfg.SendInfoCard = cfg.AutoParse
+	cfg.SendMedia = cfg.DownloadVideo
 	if cfg.AccessMode == "" {
 		if cfg.WhitelistMode {
 			cfg.AccessMode = accessWhitelist
@@ -544,6 +548,7 @@ func handleCommand(ctx *zero.Ctx) {
 			return
 		}
 		currentConf.PlatformEnabled[name] = isOn(args[2])
+		currentConf.PlatformInfoCard[name] = currentConf.PlatformEnabled[name]
 	case "card", "info_card":
 		if len(args) < 3 {
 			ctx.SendChain(message.Text("usage: /媒体解析 card bilibili on|off"))
@@ -554,7 +559,8 @@ func handleCommand(ctx *zero.Ctx) {
 			ctx.SendChain(message.Text("未知平台: ", args[1]))
 			return
 		}
-		currentConf.PlatformInfoCard[name] = isOn(args[2])
+		currentConf.PlatformEnabled[name] = isOn(args[2])
+		currentConf.PlatformInfoCard[name] = currentConf.PlatformEnabled[name]
 	case "media_send", "send_media":
 		if len(args) < 3 {
 			ctx.SendChain(message.Text("usage: /媒体解析 media_send bilibili on|off"))
@@ -565,7 +571,8 @@ func handleCommand(ctx *zero.Ctx) {
 			ctx.SendChain(message.Text("未知平台: ", args[1]))
 			return
 		}
-		currentConf.PlatformSendMedia[name] = isOn(args[2])
+		currentConf.PlatformDownload[name] = isOn(args[2])
+		currentConf.PlatformSendMedia[name] = currentConf.PlatformDownload[name]
 	case "download_platform", "platform_download":
 		if len(args) < 3 {
 			ctx.SendChain(message.Text("usage: /媒体解析 download_platform bilibili on|off"))
@@ -577,6 +584,7 @@ func handleCommand(ctx *zero.Ctx) {
 			return
 		}
 		currentConf.PlatformDownload[name] = isOn(args[2])
+		currentConf.PlatformSendMedia[name] = currentConf.PlatformDownload[name]
 	case "输出":
 		if len(args) < 3 {
 			ctx.SendChain(message.Text("用法: /媒体解析 输出 bilibili 全部|文本|媒体|关闭"))
@@ -594,24 +602,28 @@ func handleCommand(ctx *zero.Ctx) {
 		}
 		currentConf.OutputMode[name] = mode
 		currentConf.PlatformEnabled[name] = mode != outputOff
+		currentConf.PlatformInfoCard[name] = currentConf.PlatformEnabled[name]
 	case "信息图":
 		if len(args) < 2 {
 			ctx.SendChain(message.Text("用法: /媒体解析 信息图 开启|关闭"))
 			return
 		}
 		currentConf.SendInfoCard = isOn(args[1])
+		currentConf.AutoParse = currentConf.SendInfoCard
 	case "媒体":
 		if len(args) < 2 {
 			ctx.SendChain(message.Text("用法: /媒体解析 媒体 开启|关闭"))
 			return
 		}
 		currentConf.SendMedia = isOn(args[1])
+		currentConf.DownloadVideo = currentConf.SendMedia
 	case "下载":
 		if len(args) < 2 {
 			ctx.SendChain(message.Text("用法: /媒体解析 下载 开启|关闭"))
 			return
 		}
 		currentConf.DownloadVideo = isOn(args[1])
+		currentConf.SendMedia = currentConf.DownloadVideo
 	case "备用ytdlp", "ytdlp":
 		if len(args) < 2 {
 			ctx.SendChain(message.Text("用法: /媒体解析 备用ytdlp 开启|关闭"))
@@ -816,7 +828,7 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	if cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform) {
 		infoCardSent = sendInfoCard(ctx, cfg, meta)
 	}
-	if cfg.SendMedia && cfg.PlatformSendMedia[meta.Platform] && wantsRich(cfg, meta.Platform) {
+	if cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform) {
 		if err := sendMediaNodes(ctx, cfg, &meta); err != nil {
 			return err
 		}
