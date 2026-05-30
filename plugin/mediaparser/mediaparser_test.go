@@ -329,6 +329,15 @@ func TestKeylolCleanTitleUnescapesQuotes(t *testing.T) {
 	}
 }
 
+func TestKeylolShortVideoDesc(t *testing.T) {
+	if !keylolShortVideoDesc("") || !keylolShortVideoDesc("短简介") {
+		t.Fatal("empty and short video descriptions should use compact card")
+	}
+	if keylolShortVideoDesc("这是一段超过二十个字的视频简介，用来展示长卡片正文区域") {
+		t.Fatal("long video descriptions should use full card")
+	}
+}
+
 func TestKeylolBuildBlocksKeepsColorAndLinkBlocks(t *testing.T) {
 	html := `<strong><span style="color:Red">论坛信息</span></strong><br><strong><span style="color:Green">Steam购买</span></strong><br><a href="https://keylol.com/t1039189-1-1">2026年6月发售游戏汇总</a>`
 	blocks := keylolBuildBlocks(html, nil, "https://keylol.com/t1039283-1-1")
@@ -1112,6 +1121,34 @@ func TestRenderKeylolSteamToolbarPreview(t *testing.T) {
 		Author:       "万猫飞仙",
 		Timestamp:    "昨天 02:13",
 		Desc:         keylolDescFromBlocks(blocks),
+		KeylolBlocks: blocks,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(out)
+}
+
+func TestRenderKeylolCompactVideoPreview(t *testing.T) {
+	if os.Getenv("MEDIAPARSER_KEYLOL_VIDEO_PREVIEW") == "" {
+		t.Skip("set MEDIAPARSER_KEYLOL_VIDEO_PREVIEW=1 to render keylol video preview")
+	}
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join("..", "..", "build", "mediaparser-keylol-video-preview")
+	defer func() { cacheDir = oldCacheDir }()
+
+	blocks := []keylolBlock{
+		{Kind: "heading1", Text: "宣传视频"},
+		{Kind: "video_embed", URL: "https://www.bilibili.com/video/BV16AGQ6LEQJ", Title: "《使命召唤：现代战争4》中文预告", Cover: "https://i0.hdslb.com/bfs/archive/1f7500e22a0a9207318bdfd43e7ff723e1213d53.jpg"},
+		{Kind: "video_embed", URL: "https://www.bilibili.com/video/BV16AGQ6LEQJ", Title: "长简介视频卡片", Desc: "这是一段超过二十个字的视频简介，用来展示长卡片正文区域在帖子中的阅读效果。", Cover: "https://i0.hdslb.com/bfs/archive/1f7500e22a0a9207318bdfd43e7ff723e1213d53.jpg"},
+	}
+	out, err := renderInfoCard(mediaMeta{
+		URL:          "https://keylol.com/t-video-preview",
+		SourceURL:    "keylol-video-preview",
+		Platform:     "keylol",
+		Title:        "Keylol 视频卡片预览",
+		Author:       "Codex",
+		Timestamp:    "刚刚",
 		KeylolBlocks: blocks,
 	})
 	if err != nil {

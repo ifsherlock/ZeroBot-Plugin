@@ -578,19 +578,25 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			if isBlankCardImage(img) {
 				img = nil
 			}
+			kind := "video_embed"
+			height := 208
+			if keylolShortVideoDesc(block.Desc) {
+				kind = "video_embed_compact"
+				height = 176
+			}
 			descLines := wrapTextByPixels(dcMeasure, bodyFontBytes, 20, block.Desc, float64(contentW-keylolVideoCardCoverW-86))
 			if len(descLines) > 3 {
 				descLines = descLines[:3]
 			}
 			renderBlocks = append(renderBlocks, keylolRenderBlock{
-				kind:   "video_embed",
+				kind:   kind,
 				url:    block.URL,
 				title:  firstNonEmpty(block.Title, "Bilibili 视频"),
 				desc:   block.Desc,
 				cover:  block.Cover,
 				img:    img,
 				lines:  descLines,
-				height: 208,
+				height: height,
 			})
 		case "asf_link":
 			// ASF commands are delivered in the merged forward message; the card keeps the Steam game card only.
@@ -721,7 +727,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		case "steam_card":
 			drawKeylolSteamCard(dc, fontBytes, block, x, y, contentW, block.height)
 			y += block.height
-		case "video_embed":
+		case "video_embed", "video_embed_compact":
 			drawKeylolVideoCard(dc, fontBytes, block, x, y, contentW, block.height, theme)
 			y += block.height
 		case "asf_link":
@@ -776,7 +782,7 @@ func keylolBlockGap(prev, cur keylolRenderBlock, base, imageGap int) int {
 	if prev.kind == "image" || cur.kind == "image" {
 		gap = maxInt(gap, imageGap)
 	}
-	if prev.kind == "video_embed" || cur.kind == "video_embed" || prev.kind == "steam_card" || cur.kind == "steam_card" {
+	if strings.HasPrefix(prev.kind, "video_embed") || strings.HasPrefix(cur.kind, "video_embed") || prev.kind == "steam_card" || cur.kind == "steam_card" {
 		gap = maxInt(gap, 30)
 	}
 	if cur.kind == "heading1" || cur.kind == "heading2" {
@@ -785,7 +791,7 @@ func keylolBlockGap(prev, cur keylolRenderBlock, base, imageGap int) int {
 	if prev.kind == "asf_link" && (cur.kind == "heading1" || cur.kind == "heading2" || cur.kind == "text") {
 		gap = maxInt(gap, 48)
 	}
-	if prev.kind == "video_embed" && (cur.kind == "heading1" || cur.kind == "heading2" || cur.kind == "image") {
+	if strings.HasPrefix(prev.kind, "video_embed") && (cur.kind == "heading1" || cur.kind == "heading2" || cur.kind == "image") {
 		gap = maxInt(gap, 56)
 	}
 	if prev.kind == "spoiler" {
@@ -832,6 +838,14 @@ func keylolInlineImageDrawSize(img image.Image) (int, int) {
 		iw = 160
 	}
 	return maxInt(iw, 1), maxInt(ih, 1)
+}
+
+func keylolShortVideoDesc(desc string) bool {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return true
+	}
+	return len([]rune(desc)) <= 20
 }
 
 type keylolCardTheme struct {
@@ -1142,7 +1156,11 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 	dc.DrawRoundedRectangle(fx+0.5, fy+0.5, float64(w)-1, float64(h)-1, 16)
 	dc.Stroke()
 
+	compact := block.kind == "video_embed_compact"
 	coverW := keylolVideoCardCoverW
+	if compact {
+		coverW = 300
+	}
 	coverH := h - 28
 	coverX := x + 16
 	coverY := y + 14
@@ -1184,10 +1202,12 @@ func drawKeylolVideoCard(dc *gg.Context, fontBytes []byte, block keylolRenderBlo
 		bodyColor = color.RGBA{R: 166, G: 188, B: 214, A: 255}
 	}
 	drawInlineEmoji(dc, fontBytes, 25, titleColor, title, float64(textX), float64(y+42))
-	yy := y + 78
-	for _, line := range block.lines {
-		drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, bodyColor, line, float64(textX), float64(yy))
-		yy += 28
+	if !compact {
+		yy := y + 78
+		for _, line := range block.lines {
+			drawInlineEmoji(dc, keylolBodyFontBytes(fontBytes), 20, bodyColor, line, float64(textX), float64(yy))
+			yy += 28
+		}
 	}
 	mustFont(dc, fontBytes, 19)
 	dc.SetRGB255(58, 166, 230)
