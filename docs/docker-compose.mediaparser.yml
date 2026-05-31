@@ -1,11 +1,11 @@
-# Media Parser Docker Compose for prebuilt DockerHub image
+# mediaparser 预构建 DockerHub 镜像部署示例
 #
-# This compose file is for the slim media parser runtime published by GitHub Actions.
-# Image: jaysherlock/zerobot-plugin:latest
+# 这个 compose 文件用于启动 GitHub Actions 发布的轻量运行时镜像。
+# 镜像：jaysherlock/zerobot-plugin:latest
 #
-# Start:
+# 启动：
 #   docker compose -f docs/docker-compose.mediaparser.yml up -d
-# Upgrade:
+# 更新：
 #   docker compose -f docs/docker-compose.mediaparser.yml pull
 #   docker compose -f docs/docker-compose.mediaparser.yml up -d
 
@@ -21,16 +21,23 @@ services:
     # nginx 会把 /app/data/mediaparser/cache 暴露为 /cache/。
     network_mode: host
     environment:
+      # 容器时区，影响日志时间和定时任务时间。
       TZ: Asia/Shanghai
+      # WebUI 监听地址。host 网络下会直接监听宿主机 3000 端口。
       WEBUI_ADDR: 0.0.0.0:3000
-      # If you only use the built-in WebUI/parser and do not connect llbot/OneBot,
-      # keep ONEBOT_WS_URL empty. Set it to ws://127.0.0.1:3001 when llbot runs on
-      # the same Linux host.
+      # OneBot 反向 WebSocket 地址。
+      # 只使用内置 WebUI/解析能力时留空；llbot 和本容器在同一台 Linux 主机时填 ws://127.0.0.1:3001。
       ONEBOT_WS_URL: ""
+      # OneBot WebSocket 鉴权 token；没有配置鉴权时留空。
       ONEBOT_WS_TOKEN: ""
+      # 机器人默认昵称，用于部分回复文本和识别。
       BOT_NICKNAME: ZeroBot
+      # 命令前缀，例如 /解析、/服务列表。
       COMMAND_PREFIX: /
+      # 超级用户 QQ 号，多个账号用空格分隔，例如 "12345 67890"。
       SUPER_USERS: ""
+      # 额外传给 zbp 的启动参数，例如 "-d" 开启 debug；不需要时留空。
       ZBP_ARGS: ""
     volumes:
+      # 持久化数据目录。配置、Cookie、缓存图片和 WebUI 数据都会写入 /app/data。
       - ./data:/app/data
