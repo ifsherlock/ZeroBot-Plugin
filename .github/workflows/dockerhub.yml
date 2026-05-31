@@ -53,6 +53,9 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Generate embed reference files
+        run: go generate main.go
+
       - name: Build binary for Docker target
         env:
           CGO_ENABLED: "0"

@@ -21,6 +21,7 @@ ARG TARGETARCH=amd64
 ENV CGO_ENABLED=0
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    go generate main.go && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/zbp .
 
 FROM ${ALPINE_IMAGE} AS runtime
