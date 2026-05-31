@@ -856,7 +856,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label>群成员模式 <select id="gumode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
 </div>
 <div class="accessGrid">
-<label class="field accessField" data-mode="pmode" data-kind="whitelist">私聊白名单<textarea id="userWhitelist" placeholder="一行一个号。OneBot 填 QQ 号；官方 QQBot 请先给机器人发送一条私聊消息，再在日志里找到 [qqbot] mapped private message 后面的 user_id 长数字填到这里。"></textarea><span class="muted">官方 QQBot 的私聊 user_id 是映射后的长数字，不是你的 QQ 号。</span></label>
+<label class="field accessField" data-mode="pmode" data-kind="whitelist">私聊白名单<textarea id="userWhitelist" placeholder="每行填写一个。OneBot 填 QQ 号；官方 QQBot 填日志里的映射 user_id 长数字。"></textarea><span class="muted">官方 QQBot 的私聊 user_id 是映射后的长数字，不是 QQ 号；可以在用户向机器人发送消息后，从日志里获取。</span></label>
 <label class="field accessField" data-mode="pmode" data-kind="blacklist">用户黑名单<textarea id="userBlacklist" placeholder="一行一个 QQ 号"></textarea></label>
 <label class="field accessField" data-mode="gmode" data-kind="whitelist">群白名单<textarea id="groupWhitelist" placeholder="一行一个群号"></textarea></label>
 <label class="field accessField" data-mode="gmode" data-kind="blacklist">群黑名单<textarea id="groupBlacklist" placeholder="一行一个群号"></textarea></label>
