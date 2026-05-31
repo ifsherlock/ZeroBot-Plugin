@@ -891,6 +891,15 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				size = 24
 				lineH = 34
 			}
+			if block.Kind == "color_red" && i+1 < len(blocks) && blocks[i+1].Kind == "link" && keylolInlineStatusSuffix(blocks[i+1].Text) {
+				text := strings.TrimSpace(block.Text + " " + blocks[i+1].Text)
+				lines := wrapTextByPixels(dcMeasure, bodyFontBytes, size, text, float64(contentW))
+				if len(lines) > 0 {
+					renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "status_pair", text: strings.TrimSpace(block.Text), desc: strings.TrimSpace(blocks[i+1].Text), lines: lines, height: len(lines) * lineH})
+					i++
+				}
+				continue
+			}
 			lines := wrapTextByPixels(dcMeasure, bodyFontBytes, size, block.Text, float64(contentW))
 			if len(lines) > 0 {
 				renderBlocks = append(renderBlocks, keylolRenderBlock{kind: block.Kind, text: block.Text, lines: lines, height: len(lines) * lineH})
@@ -1062,6 +1071,9 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 				drawKeylolOutlinedText(dc, bodyFontBytes, 28, color.RGBA{R: 230, G: 70, B: 62, A: 255}, line, float64(x), float64(y))
 				y += 40
 			}
+		case "status_pair":
+			drawKeylolStatusPair(dc, bodyFontBytes, block.text, block.desc, x, y)
+			y += block.height
 		case "color_green":
 			for _, line := range block.lines {
 				drawKeylolOutlinedText(dc, bodyFontBytes, 28, color.RGBA{R: 54, G: 170, B: 96, A: 255}, line, float64(x), float64(y))
@@ -1306,7 +1318,8 @@ func drawKeylolBadge(dc *gg.Context, fontBytes []byte, label string, x, y float6
 
 func drawKeylolHeaderLogo(dc *gg.Context, fontBytes []byte, x, y float64) {
 	if img := keylolOfficialLogo(); img != nil {
-		fit := imaging.Fit(img, 154, 50, imaging.Lanczos)
+		img = trimTransparentImage(img)
+		fit := imaging.Fit(img, 198, 64, imaging.Lanczos)
 		dc.DrawImage(fit, int(x), int(y))
 	} else {
 		mustFont(dc, fontBytes, 30)
@@ -1317,6 +1330,7 @@ func drawKeylolHeaderLogo(dc *gg.Context, fontBytes []byte, x, y float64) {
 
 func drawKeylolTopRightLogo(dc *gg.Context, fontBytes []byte, right, cy float64) {
 	if img := keylolOfficialLogo(); img != nil {
+		img = trimTransparentImage(img)
 		fit := imaging.Fit(img, 118, 42, imaging.Lanczos)
 		b := fit.Bounds()
 		dc.DrawImage(fit, int(right)-b.Dx(), int(cy)-b.Dy()/2)
@@ -1332,6 +1346,11 @@ func keylolOfficialLogo() image.Image {
 		return img
 	}
 	return fetchCachedCardImage("keylol-official-logo-v1", "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png", nil)
+}
+
+func keylolInlineStatusSuffix(s string) bool {
+	s = strings.TrimSpace(s)
+	return regexp.MustCompile(`^[\(（]\s*\d+\s*/\s*\d+\s*[\)）]$`).MatchString(s)
 }
 
 func drawKeylolAuthorLine(dc *gg.Context, fontBytes []byte, author string, x, y int) {
@@ -1538,6 +1557,18 @@ func drawKeylolOutlinedText(dc *gg.Context, fontBytes []byte, size float64, c co
 		drawInlineEmoji(dc, fontBytes, size, outline, s, x+off[0], y+off[1])
 	}
 	drawInlineEmoji(dc, fontBytes, size, c, s, x, y)
+}
+
+func drawKeylolStatusPair(dc *gg.Context, fontBytes []byte, status, count string, x, y int) {
+	status = strings.TrimSpace(status)
+	count = strings.TrimSpace(count)
+	red := color.RGBA{R: 230, G: 70, B: 62, A: 255}
+	blue := color.RGBA{R: 71, G: 151, B: 218, A: 255}
+	drawKeylolOutlinedText(dc, fontBytes, 28, red, status, float64(x), float64(y))
+	dcMeasure := gg.NewContext(10, 10)
+	mustFont(dcMeasure, fontBytes, 28)
+	tw, _ := dcMeasure.MeasureString(status)
+	drawInlineEmoji(dc, fontBytes, 28, blue, count, float64(x)+tw+12, float64(y))
 }
 
 func drawKeylolLinkLine(dc *gg.Context, fontBytes []byte, size float64, s string, x, y int) {
@@ -2714,6 +2745,45 @@ func logoHasTransparency(img image.Image) bool {
 		}
 	}
 	return false
+}
+
+func trimTransparentImage(img image.Image) image.Image {
+	if img == nil || !logoHasTransparency(img) {
+		return img
+	}
+	b := img.Bounds()
+	minX, minY := b.Max.X, b.Max.Y
+	maxX, maxY := b.Min.X, b.Min.Y
+	found := false
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			_, _, _, a := img.At(x, y).RGBA()
+			if a>>8 < 16 {
+				continue
+			}
+			if x < minX {
+				minX = x
+			}
+			if y < minY {
+				minY = y
+			}
+			if x+1 > maxX {
+				maxX = x + 1
+			}
+			if y+1 > maxY {
+				maxY = y + 1
+			}
+			found = true
+		}
+	}
+	if !found || minX >= maxX || minY >= maxY {
+		return img
+	}
+	crop := image.Rect(minX, minY, maxX, maxY)
+	if crop.Dx() == b.Dx() && crop.Dy() == b.Dy() {
+		return img
+	}
+	return imaging.Crop(img, crop)
 }
 
 func drawWhiteLogoBadge(dc *gg.Context, fontBytes []byte, platform string, right, cy float64) bool {
