@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/FloatTech/gg"
+	"github.com/disintegration/imaging"
 )
 
 func TestPermissionOKSeparatesPrivateAndGroupAccess(t *testing.T) {
@@ -1022,6 +1025,30 @@ func TestBlankCardImageDetectsLightPlaceholders(t *testing.T) {
 	draw.Draw(img, image.Rect(112, 112, 120, 120), &image.Uniform{C: color.RGBA{R: 210, G: 210, B: 210, A: 255}}, image.Point{}, draw.Src)
 	if !isBlankCardImage(img) {
 		t.Fatal("mostly white placeholder should be treated as blank")
+	}
+}
+
+func TestGalleryGridColsAvoidsEightImageHole(t *testing.T) {
+	if cols := galleryGridCols(8); cols != 2 {
+		t.Fatalf("8-image galleries should use 2 columns to avoid a trailing empty slot, got %d", cols)
+	}
+}
+
+func TestFloatingImageCellDrawsAfterPreviousClips(t *testing.T) {
+	dc := gg.NewContext(260, 130)
+	dc.SetRGB255(255, 255, 255)
+	dc.Clear()
+	red := image.NewRGBA(image.Rect(0, 0, 40, 40))
+	draw.Draw(red, red.Bounds(), &image.Uniform{C: color.RGBA{R: 220, G: 20, B: 20, A: 255}}, image.Point{}, draw.Src)
+	blue := image.NewRGBA(image.Rect(0, 0, 40, 40))
+	draw.Draw(blue, blue.Bounds(), &image.Uniform{C: color.RGBA{R: 20, G: 80, B: 220, A: 255}}, image.Point{}, draw.Src)
+
+	drawFloatingImageCellAnchored(dc, red, 10, 10, 100, 100, imaging.Center)
+	drawFloatingImageCellAnchored(dc, blue, 140, 10, 100, 100, imaging.Center)
+
+	r, g, b, _ := dc.Image().At(190, 60).RGBA()
+	if uint8(r>>8) < 10 || uint8(g>>8) < 40 || uint8(b>>8) < 180 {
+		t.Fatalf("second floating cell image was not drawn, got rgb=(%d,%d,%d)", uint8(r>>8), uint8(g>>8), uint8(b>>8))
 	}
 }
 

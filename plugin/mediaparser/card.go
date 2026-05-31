@@ -8,7 +8,7 @@ import (
 	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -356,6 +356,7 @@ func renderUnifiedGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) 
 		}
 	}
 	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
+	debugDumpCardImages(meta.Platform, images)
 	title := firstNonEmpty(meta.Title, "媒体解析")
 	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
 	if len(titleLines) == 0 {
@@ -2069,6 +2070,28 @@ func fetchCardImageGroup(urls []string, headers map[string]string) image.Image {
 	return nil
 }
 
+func debugDumpCardImages(platform string, imgs []image.Image) {
+	dir := strings.TrimSpace(os.Getenv("MEDIAPARSER_DEBUG_CARD_IMAGES"))
+	if dir == "" {
+		return
+	}
+	dir = filepath.Join(dir, platform)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+	for i, img := range imgs {
+		if img == nil {
+			continue
+		}
+		f, err := os.Create(filepath.Join(dir, fmt.Sprintf("%02d.png", i)))
+		if err != nil {
+			continue
+		}
+		_ = png.Encode(f, img)
+		_ = f.Close()
+	}
+}
+
 func compactCardImages(imgs []image.Image) []image.Image {
 	compact := make([]image.Image, 0, len(imgs))
 	for _, img := range imgs {
@@ -3087,7 +3110,7 @@ func galleryGridCols(n int) int {
 	switch {
 	case n <= 1:
 		return 1
-	case n == 2 || n == 4:
+	case n == 2 || n == 4 || n == 5 || n == 7 || n == 8:
 		return 2
 	default:
 		return 3
@@ -3109,7 +3132,7 @@ func drawImageCell(dc *gg.Context, img image.Image, x, y, w, h int, preserve boo
 }
 
 func drawFloatingImageCell(dc *gg.Context, img image.Image, x, y, w, h int) {
-	drawFloatingImageCellAnchored(dc, img, x, y, w, h, imaging.Top)
+	drawFloatingImageCellAnchored(dc, img, x, y, w, h, imaging.Center)
 }
 
 func drawFloatingImageCellAnchored(dc *gg.Context, img image.Image, x, y, w, h int, anchor imaging.Anchor) {
@@ -3134,9 +3157,10 @@ func drawFloatingImageCellAnchored(dc *gg.Context, img image.Image, x, y, w, h i
 	iw := w - int(border)*2
 	ih := h - int(border)*2
 	dc.DrawRoundedRectangle(float64(ix), float64(iy), float64(iw), float64(ih), radius-border)
-	dc.ClipPreserve()
+	dc.Clip()
 	if img == nil {
 		dc.SetRGB255(238, 238, 238)
+		dc.DrawRoundedRectangle(float64(ix), float64(iy), float64(iw), float64(ih), radius-border)
 		dc.Fill()
 	} else {
 		dc.DrawImage(imaging.Fill(img, iw, ih, anchor, imaging.Lanczos), ix, iy)
