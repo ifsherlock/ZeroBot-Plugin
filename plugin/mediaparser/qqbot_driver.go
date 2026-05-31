@@ -10,6 +10,7 @@ import (
 	"hash/crc64"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,8 @@ const (
 	qqBotIntents   = 1 << 25
 	qqBotUserAgent = "ZeroBot-Plugin/QQBot"
 )
+
+var qqBotCQCodePattern = regexp.MustCompile(`\[CQ:([^,\]]+)([^\]]*)\]`)
 
 type qqBotDriver struct {
 	appID          string
@@ -147,6 +150,20 @@ func (d *qqBotDriver) CallAPI(ctx context.Context, req zero.APIRequest) (zero.AP
 			return qqBotAPIError("qqbot group target not known"), nil
 		}
 		return d.sendOfficialMessage(ctx, target.openID, true, req.Params["message"])
+	case "send_private_forward_msg":
+		userID := int64Param(req.Params, "user_id")
+		target, ok := d.targetFor(userID, false)
+		if !ok {
+			return qqBotAPIError("qqbot private target not known"), nil
+		}
+		return d.sendOfficialMessage(ctx, target.openID, false, qqBotForwardMessageText(req.Params["messages"]))
+	case "send_group_forward_msg":
+		groupID := int64Param(req.Params, "group_id")
+		target, ok := d.targetFor(groupID, true)
+		if !ok {
+			return qqBotAPIError("qqbot group target not known"), nil
+		}
+		return d.sendOfficialMessage(ctx, target.openID, true, qqBotForwardMessageText(req.Params["messages"]))
 	case "get_login_info":
 		return qqBotAPIOK(map[string]any{"user_id": d.selfID, "nickname": d.name}), nil
 	case "mark_msg_as_read":
@@ -467,7 +484,7 @@ func (d *qqBotDriver) targetFor(id int64, group bool) (qqBotTarget, bool) {
 func qqBotMessageText(v any) string {
 	switch msg := v.(type) {
 	case string:
-		return msg
+		return qqBotCleanCQText(msg)
 	case message.Message:
 		return qqBotSegmentsText(msg)
 	case []message.Segment:
@@ -504,9 +521,63 @@ func qqBotSegmentsText(msg message.Message) string {
 			b.WriteString("@")
 			b.WriteString(seg.Data["qq"])
 			b.WriteString(" ")
+		case "node":
+			if name := strings.TrimSpace(seg.Data["name"]); name != "" {
+				b.WriteString(name)
+				b.WriteString(": ")
+			}
+			b.WriteString(qqBotCleanCQText(seg.Data["content"]))
+			b.WriteString("\n")
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func qqBotForwardMessageText(v any) string {
+	text := qqBotMessageText(v)
+	if text == "" {
+		return ""
+	}
+	return "官方 QQBot 暂不支持 OneBot 合并转发，已降级为文本：\n\n" + text
+}
+
+func qqBotCleanCQText(s string) string {
+	s = qqBotCQCodePattern.ReplaceAllStringFunc(s, func(code string) string {
+		match := qqBotCQCodePattern.FindStringSubmatch(code)
+		if len(match) < 2 {
+			return ""
+		}
+		typ := match[1]
+		switch typ {
+		case "image":
+			if u := cqAttr(code, "url"); strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+				return "\n![image](" + u + ")\n"
+			}
+			return "\n[图片]\n"
+		case "video":
+			return "\n[视频]\n"
+		case "at":
+			if qq := cqAttr(code, "qq"); qq != "" {
+				return "@" + qq + " "
+			}
+			return ""
+		case "reply":
+			return ""
+		default:
+			return ""
+		}
+	})
+	return strings.TrimSpace(s)
+}
+
+func cqAttr(code, key string) string {
+	prefix := key + "="
+	for _, part := range strings.Split(strings.Trim(code, "[]"), ",") {
+		if strings.HasPrefix(part, prefix) {
+			return strings.TrimPrefix(part, prefix)
+		}
+	}
+	return ""
 }
 
 func int64Param(params zero.Params, key string) int64 {
