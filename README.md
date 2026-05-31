@@ -47,6 +47,19 @@
 
 > webui持续开发中, 欢迎加入[ZeroBot-Plugin-Webui](https://github.com/FloatTech/ZeroBot-Plugin-Webui)
 
+## 本 fork 说明
+
+这是基于 `FloatTech/ZeroBot-Plugin` 的个人自用 fork，主要额外加入了 `plugin/mediaparser` 聚合解析插件，并围绕该插件做了少量自用适配。
+
+`mediaparser` 面向 llbot/OneBot v11 与官方 QQBot 使用，支持多平台链接解析、图文/视频卡片生成、媒体下载、黑白名单、按群按平台开关、轻量 WebUI 配置，以及通过内置 nginx 暴露缓存图片静态资源。
+
+本仓库改动以个人部署和使用为目标，不保证通用性，也不作为上游项目的正式发行版本。
+
+Docker 镜像和部署方式见 `docs/`：
+
+- `docs/docker-deploy.md`：Docker 镜像、端口、数据目录和部署说明。
+- `docs/docker-compose.mediaparser.yml`：使用 `jaysherlock/zerobot-plugin:latest` 的 compose 示例。
+
 ## 命令行参数
 > `[]`代表是可选参数
 ```bash
