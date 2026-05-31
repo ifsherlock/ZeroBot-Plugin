@@ -146,6 +146,18 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		}
 	})
 	mux.HandleFunc("/api/system/settings", serveSystemSettingsAPI)
+	mux.HandleFunc("/api/system/restart", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "message": "restarting"})
+		logrus.Infof("[webui] restart requested from WebUI")
+		go func() {
+			time.Sleep(350 * time.Millisecond)
+			os.Exit(0)
+		}()
+	})
 	mux.HandleFunc("/api/mediaparser/cache/clear", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeMethodNotAllowed(w)
@@ -1045,7 +1057,7 @@ function renderSystemSettings(){
   $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
  }
  const pending=sys.pending_restart||[];
- $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
+ $('sysPending').innerHTML=pending.length?'重启后生效：'+escapeHTML(pending.join('、'))+' <button class="primary" onclick="restartSystem()">重启进程</button>':'当前没有待重启生效的配置';
 }
 async function saveSystemSettings(){
  const payload={
@@ -1066,6 +1078,11 @@ async function saveSystemSettings(){
  const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  $('systemMsg').textContent=r.ok?'全局设置已保存':'全局设置保存失败';
  if(r.ok){const data=await r.json(); sys=data.settings||sys; renderSystemSettings(); await refreshStatus();}
+}
+async function restartSystem(){
+ if(!confirm('确定重启机器人进程吗？systemd 会自动拉起新进程。')) return;
+ $('systemMsg').textContent='正在重启进程...';
+ try{await fetch('/api/system/restart',{method:'POST'}); setTimeout(()=>{location.reload()},5000)}catch(e){$('systemMsg').textContent='重启请求发送失败：'+e}
 }
 async function loadGroups(force){
  try{

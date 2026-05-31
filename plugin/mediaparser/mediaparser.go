@@ -914,17 +914,24 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	}
 	meta.Author = cardDisplayAuthor(meta.Author)
 	applyOutputFlags(cfg, &meta)
+	qqbotEvent := isOfficialQQBotEvent(ctx)
 
 	infoCardSent := false
 	if cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform) {
-		infoCardSent = sendInfoCard(ctx, cfg, meta)
+		if qqbotEvent {
+			ctx.SendChain(message.Text(buildText(meta)))
+			infoCardSent = true
+			logrus.Infof("[mediaparser] sent_info_card_text_fallback channel=qqbot platform=%s title=%q", meta.Platform, meta.Title)
+		} else {
+			infoCardSent = sendInfoCard(ctx, cfg, meta)
+		}
 	}
-	if cfg.KeylolASFForward && meta.Platform == "keylol" {
+	if cfg.KeylolASFForward && meta.Platform == "keylol" && !qqbotEvent {
 		sendKeylolASFForward(ctx, meta)
 	}
-	mediaEnabled := cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform)
-	logDebug(cfg, "media_gate platform=%s send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
-		meta.Platform, cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), mediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
+	mediaEnabled := !qqbotEvent && cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform)
+	logDebug(cfg, "media_gate platform=%s channel_qqbot=%v send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
+		meta.Platform, qqbotEvent, cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), mediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
 	if mediaEnabled {
 		if err := sendMediaNodes(ctx, cfg, &meta); err != nil {
 			return err
@@ -935,6 +942,10 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 	}
 	logrus.Infof("[mediaparser] success platform=%s url=%s elapsed=%s", link.Platform, link.URL, time.Since(started).Round(time.Millisecond))
 	return nil
+}
+
+func isOfficialQQBotEvent(ctx *zero.Ctx) bool {
+	return ctx != nil && ctx.Event != nil && ctx.Event.RawEvent.Get("qqbot_source").Exists()
 }
 
 func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
