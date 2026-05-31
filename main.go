@@ -130,17 +130,28 @@ func init() {
 		MarkMessage:    !*markmsg,
 		Driver:         []zero.Driver{config.W[0]},
 	}
+	if qqDriver, ok := mediaparser.NewQQBotDriver(systemSettings); ok {
+		config.Z.Driver = append(config.Z.Driver, qqDriver)
+		logrus.Infoln("[main] official QQBot driver enabled")
+	}
 	config.ForceBase64File = *fb64
 	if *webui != "" {
 		os.Setenv("ZBP_BUILTIN_WEBUI", *webui)
 	}
 	mediaparser.SetRuntimeSystemSettings(mediaparser.SystemSettings{
-		WebUIAddr:     *webui,
-		WSURL:         *url,
-		WSToken:       *token,
-		Nickname:      *adana,
-		CommandPrefix: *prefix,
-		SuperUsers:    sus,
+		WebUIAddr:        *webui,
+		WSURL:            *url,
+		WSToken:          *token,
+		Nickname:         *adana,
+		CommandPrefix:    *prefix,
+		SuperUsers:       sus,
+		QQBotEnabled:     systemSettings.QQBotEnabled,
+		QQBotName:        systemSettings.QQBotName,
+		QQBotAppID:       systemSettings.QQBotAppID,
+		QQBotSecret:      systemSettings.QQBotSecret,
+		QQBotOpenID:      systemSettings.QQBotOpenID,
+		QQBotGroupOpenID: systemSettings.QQBotGroupOpenID,
+		QQBotMarkdown:    systemSettings.QQBotMarkdown,
 	})
 
 	if *save != "" {

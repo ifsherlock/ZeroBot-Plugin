@@ -158,6 +158,18 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "removed": n})
 	})
+	mux.HandleFunc("/api/mediaparser/cache/stats", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeMethodNotAllowed(w)
+			return
+		}
+		files, bytes, err := cacheStats()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "files": files, "bytes": bytes})
+	})
 	mux.HandleFunc("/api/mediaparser/logos", serveLogoAPI)
 	mux.HandleFunc("/api/mediaparser/logos/image", serveLogoImageAPI)
 	mux.HandleFunc("/api/onebot/groups", serveGroupListAPI)
@@ -251,6 +263,9 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(payload.WSToken) == "" {
 			payload.WSToken = current.WSToken
 		}
+		if strings.TrimSpace(payload.QQBotSecret) == "" {
+			payload.QQBotSecret = current.QQBotSecret
+		}
 		payload = normalizeSystemSettings(payload)
 		if err := saveSystemSettings(payload); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -276,6 +291,9 @@ func systemSettingsForSave() SystemSettings {
 	}
 	if saved.WSToken == "" {
 		saved.WSToken = current.WSToken
+	}
+	if saved.QQBotSecret == "" {
+		saved.QQBotSecret = current.QQBotSecret
 	}
 	if saved.Nickname == "" {
 		saved.Nickname = firstNonEmpty(firstString(zero.BotConfig.NickName), current.Nickname)
@@ -304,14 +322,30 @@ func systemSettingsForWeb() systemSettingsResponse {
 	if settings.WSToken != "" && current.WSToken != "" && settings.WSToken != current.WSToken {
 		pending = append(pending, "OneBot Token")
 	}
+	if settings.QQBotEnabled != current.QQBotEnabled ||
+		settings.QQBotName != current.QQBotName ||
+		settings.QQBotAppID != current.QQBotAppID ||
+		settings.QQBotSecret != current.QQBotSecret ||
+		settings.QQBotOpenID != current.QQBotOpenID ||
+		settings.QQBotGroupOpenID != current.QQBotGroupOpenID ||
+		settings.QQBotMarkdown != current.QQBotMarkdown {
+		pending = append(pending, "官方 QQBot 通道")
+	}
 	return systemSettingsResponse{
-		WebUIAddr:      firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
-		WSURL:          firstNonEmpty(settings.WSURL, current.WSURL),
-		WSTokenSet:     settings.WSToken != "",
-		Nickname:       firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
-		CommandPrefix:  firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
-		SuperUsers:     uniqueInt64(settings.SuperUsers),
-		PendingRestart: pending,
+		WebUIAddr:        firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
+		WSURL:            firstNonEmpty(settings.WSURL, current.WSURL),
+		WSTokenSet:       settings.WSToken != "",
+		Nickname:         firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
+		CommandPrefix:    firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
+		SuperUsers:       uniqueInt64(settings.SuperUsers),
+		QQBotEnabled:     settings.QQBotEnabled,
+		QQBotName:        firstNonEmpty(settings.QQBotName, "qqbot"),
+		QQBotAppID:       settings.QQBotAppID,
+		QQBotSecretSet:   settings.QQBotSecret != "",
+		QQBotOpenID:      settings.QQBotOpenID,
+		QQBotGroupOpenID: settings.QQBotGroupOpenID,
+		QQBotMarkdown:    settings.QQBotMarkdown,
+		PendingRestart:   pending,
 	}
 }
 
@@ -684,14 +718,14 @@ table{width:100%;border-collapse:separate;border-spacing:0;background:white;bord
 button,select,input,textarea{border:1px solid var(--line);border-radius:8px;background:white;color:var(--text);padding:0 10px}button,select,input{height:34px}textarea{width:100%;min-height:110px;padding:9px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff;font-weight:650}button:hover{border-color:#b8c5d6}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#fecdd3;color:var(--red);background:#fff7f7}
 .hidden,.page{display:none!important}.page.active{display:block!important}.page.active.metric{display:flex!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
-.settingsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}.settingsCard{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:14px;display:flex;flex-direction:column;gap:12px}.settingsCard .sectionTitle{margin-bottom:0}.settingsCard .field{min-width:0}.settingsCard textarea{min-height:132px}.settingsFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsFields.single{grid-template-columns:1fr}
+.settingsGrid{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;margin-top:12px}.settingsCard{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:14px;display:flex;flex-direction:column;gap:12px}.settingsCard .sectionTitle{margin-bottom:0}.settingsCard .field{min-width:0}.settingsCard textarea{min-height:132px}.settingsFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsFields.single{grid-template-columns:1fr}.settingsStack{display:grid;gap:14px}.cacheCard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:center}.cacheStat{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px}.cacheStat span{display:block;font-size:12px;color:var(--muted)}.cacheStat b{font-size:20px}.runtimeNote{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;color:var(--muted)}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
 .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.msg{min-height:20px;color:var(--muted)}.statusDot{display:inline-flex;align-items:center;gap:6px}.statusDot:before{content:"";width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px #dcfce7}
-@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
+@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.cacheCard{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
 </style>
 </head>
 <body>
@@ -732,7 +766,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span class="ok">可配置</span></td><td>QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">基础群管理、欢迎语、提醒和精华消息能力。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -746,6 +780,37 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <p class="muted" style="margin-bottom:0">这些命令沿用聊天内权限判断。WebUI 暂不开放踢人、禁言等直接操作按钮，等 WebUI 鉴权做好后再接入可执行动作。</p>
 </div>
+<div class="panel span4 page" data-page="qqbot" id="qqbot">
+<div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">接入腾讯官方机器人通道；当前阶段优先保证聚合解析可用。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="settingsGrid">
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>通道配置</b><span class="muted">AppID 和 Secret 保存后需要重启服务才会建立官方 Gateway 连接。</span></div>
+<div class="settingsFields">
+<label class="field">启用官方 QQBot <span class="row"><label class="switch"><input id="qqbotEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">启用后会和 OneBot 通道并行监听。</span></span></label>
+<label class="field">通道名称 <input id="qqbotName" placeholder="qqbot"></label>
+<label class="field">AppID <input id="qqbotAppID" autocomplete="off"></label>
+<label class="field">AppSecret <input id="qqbotSecret" type="password" autocomplete="new-password" placeholder="留空表示不修改"></label>
+<label class="field">默认用户 OpenID <input id="qqbotOpenID" autocomplete="off" placeholder="私聊主动发送兜底目标，可留空"></label>
+<label class="field">默认群 OpenID <input id="qqbotGroupOpenID" autocomplete="off" placeholder="群聊主动发送兜底目标，可留空"></label>
+<label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">开启后文本消息按 Markdown 载荷发送。</span></span></label>
+</div>
+<div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">保存后若提示重启，重启 qb 服务后生效。</span></div>
+</div>
+</div>
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>插件支持</b><span class="muted">官方 Bot 能力限制较多，先把可用范围列清楚。</span></div>
+<div class="commandGrid">
+<div class="commandItem"><b>聚合解析</b><small class="ok">第一阶段接入</small><code>文本链接解析</code><code>解析结果文本/Markdown 回发</code></div>
+<div class="commandItem"><b>图片卡片</b><small class="muted">后续增强</small><code>需要媒体上传或公网图片托管</code></div>
+<div class="commandItem"><b>控制功能</b><small class="muted">暂不接入</small><code>官方通道权限与事件模型差异较大</code></div>
+</div>
+<p class="muted" style="margin-bottom:0">当前实现会把官方 QQBot 消息转换成 OneBot 风格事件交给已有插件处理；本地生成的图片暂以文本占位回发。</p>
+</div>
+</div>
+</div>
+</div>
 <div class="panel span4 page" data-page="mediaparser" id="mediaparserHead">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 聚合解析</div><div class="sectionTitle"><b>聚合解析</b><span class="muted">短视频、图文、动态、商品链接解析配置。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="subnav" id="mediaparserTabs">
@@ -753,7 +818,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <button data-plugin-tab="platforms" onclick="showPluginSection('platforms')">平台设置</button>
 <button data-plugin-tab="access" onclick="showPluginSection('access')">黑白名单</button>
 <button data-plugin-tab="group-platform" onclick="showPluginSection('group-platform')">群平台开关</button>
-<button data-plugin-tab="runtime" onclick="showPluginSection('runtime')">下载与 Cookie</button>
+<button data-plugin-tab="runtime" onclick="showPluginSection('runtime')">运行配置</button>
 </div>
 </div>
 <div class="panel span2 page plugin-section active" data-page="mediaparser" data-plugin-section="basic" id="global"><div class="sectionTitle"><b>聚合解析总开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
@@ -795,10 +860,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="runtime" id="runtime">
-<div class="sectionTitle"><b>下载与 Cookie</b><span class="muted">全局画质作为默认值，平台设置里可以单独覆盖；YouTube 和 Instagram 直接粘贴 Cookie，程序会自动生成 yt-dlp 所需的临时 cookie 文件。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="sectionTitle"><b>运行配置</b><span class="muted">这里集中管理下载规则、缓存、平台凭据和 Keylol 卡片样式；Keylol 日夜模式是卡片全局开关。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="settingsGrid">
+<div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>下载规则</b><span class="muted">视频体积超限时只发送预览卡片。</span></div>
+<div class="sectionTitle"><b>下载规则</b><span class="muted">平台表里的画质会覆盖全局默认；视频体积超限时只发送预览卡片。</span></div>
 <div class="settingsFields">
 <label class="field">全局视频画质 <select id="res"><option value="0">不限</option><option value="360">360p</option><option value="720">720p</option><option value="1080">1080p</option></select></label>
 <label class="field">最大发送体积 MB <input id="maxmb" type="number" min="1"></label>
@@ -809,10 +875,27 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsFields single">
 <label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
 </div>
-<div class="row"><button class="danger" onclick="clearCache()">清理缓存</button></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>平台 Cookie</b><span class="muted">一行或一整段 Cookie 均可，配置只保存在本机。</span></div>
+<div class="sectionTitle"><b>缓存管理</b><span class="muted">统计当前媒体缓存文件数和占用空间。</span></div>
+<div class="cacheCard">
+<div class="cacheStat"><span>缓存文件</span><b id="cacheFiles">-</b></div>
+<div class="cacheStat"><span>占用空间</span><b id="cacheSize">-</b></div>
+<button class="danger" onclick="clearCache()">清理缓存</button><button onclick="loadCacheStats()">刷新统计</button>
+</div>
+<div class="runtimeNote" id="cacheMsg">清理只影响媒体缓存，不会删除配置和 Cookie。</div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>Keylol 卡片</b><span class="muted">日夜模式影响所有 Keylol 截图卡片；自动模式按北京时间切换。</span></div>
+<div class="settingsFields single">
+<label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
+</div>
+<div class="controlPills"><label class="row">自动日夜 <span id="keylolThemeAutoSwitch"></span></label><label class="row">黑夜模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">关闭自动后，黑夜模式开关才生效；白天使用彩色透明 Logo，黑夜使用白色透明 Logo。</span></div>
+<div class="controlPills"><label class="row">ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">帖子含“复制ASF代码”时追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
+</div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>平台凭据</b><span class="muted">Cookie 只保存在本机配置；YouTube 和 Instagram 会自动生成 yt-dlp 临时 cookie 文件。</span></div>
 <div class="settingsFields">
 <label class="field">B站 Cookie <textarea id="bilibiliCookie" placeholder="SESSDATA=...; bili_jct=..."></textarea></label>
 <label class="field">小红书 Cookie <textarea id="xiaohongshuCookie" placeholder="a1=...; web_session=..."></textarea></label>
@@ -820,14 +903,6 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">Instagram Cookie <textarea id="instagramCookie" placeholder="sessionid=...; ds_user_id=..."></textarea></label>
 <label class="field">Keylol Cookie <textarea id="keylolCookie" placeholder="key=value; key2=value2"></textarea></label>
 </div>
-</div>
-<div class="settingsCard">
-<div class="sectionTitle"><b>Keylol 卡片</b><span class="muted">底部文案支持 {time}、{title}、{author} 占位符。</span></div>
-<div class="settingsFields single">
-<label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
-</div>
-<div class="controlPills"><label class="row">跟随北京时间 <span id="keylolThemeAutoSwitch"></span></label><label class="row">深色模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">开启“跟随北京时间”时会自动日夜切换；关闭后用“深色模式”手动指定黑白。</span></div>
-<div class="controlPills"><label class="row">ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">开启后，帖子含“复制ASF代码”时会在卡片后追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
 </div>
 </div>
 </div>
@@ -837,12 +912,12 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </main>
 </div>
 <script>
-let cfg=null, sys=null, platforms=[], logos={}, groups=[], dirty=false, currentPluginSection='basic';
+let cfg=null, sys=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic';
 const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
- const sidePage=(page==='mediaparser'||page==='manager')?'plugins':page;
+ const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
  const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
@@ -901,6 +976,7 @@ async function refreshStatus(){
   infoLine('聚合解析', (cfg&&cfg.auto_parse?'已开启':'已关闭')+'，启用平台 '+enabled+'/'+platforms.length),
   infoLine('发送策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
   infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
+  infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-'),
   infoLine('路径', '配置 '+(st.config_path||'-')+' / 缓存 '+(st.cache_dir||'-'))
  ].join('');
  loadLogs();
@@ -919,6 +995,7 @@ async function load(){
  const data=await (await fetch('/api/mediaparser/config')).json();
  const sysData=await (await fetch('/api/system/settings')).json();
  const logoData=await (await fetch('/api/mediaparser/logos')).json();
+ await loadCacheStats(false);
  cfg=data.config; platforms=data.platforms;
  sys=sysData.settings||{};
  logos=logoData.logos||{};
@@ -940,6 +1017,7 @@ function render(){
  $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
  $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderKeylolThemeSwitches();
+ renderCacheStats();
  $('keylolASFForwardSwitch').innerHTML=switchHTML('cfg.keylol_asf_forward', cfg.keylol_asf_forward!==false);
  renderSystemSettings();
  updateAccessVisibility();
@@ -956,6 +1034,16 @@ function renderSystemSettings(){
  $('sysNick').value=sys.nickname||'';
  $('sysPrefix').value=sys.command_prefix||'/';
  $('sysSuperUsers').value=(sys.super_users||[]).join('\n');
+ if($('qqbotEnabled')){
+  $('qqbotEnabled').checked=!!sys.qqbot_enabled;
+  $('qqbotName').value=sys.qqbot_name||'qqbot';
+  $('qqbotAppID').value=sys.qqbot_app_id||'';
+  $('qqbotSecret').value='';
+  $('qqbotSecret').placeholder=sys.qqbot_secret_set?'已设置，留空不修改':'留空表示不设置';
+  $('qqbotOpenID').value=sys.qqbot_openid||'';
+  $('qqbotGroupOpenID').value=sys.qqbot_group_openid||'';
+  $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
+ }
  const pending=sys.pending_restart||[];
  $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
 }
@@ -966,7 +1054,14 @@ async function saveSystemSettings(){
   ws_token:String($('sysToken').value||'').trim(),
   nickname:String($('sysNick').value||'').trim(),
   command_prefix:String($('sysPrefix').value||'/').trim()||'/',
-  super_users:Object.keys(parseList($('sysSuperUsers').value)).map(x=>Number(x))
+  super_users:Object.keys(parseList($('sysSuperUsers').value)).map(x=>Number(x)),
+  qqbot_enabled:$('qqbotEnabled')?!!$('qqbotEnabled').checked:false,
+  qqbot_name:$('qqbotName')?String($('qqbotName').value||'qqbot').trim():'qqbot',
+  qqbot_app_id:$('qqbotAppID')?String($('qqbotAppID').value||'').trim():'',
+  qqbot_secret:$('qqbotSecret')?String($('qqbotSecret').value||'').trim():'',
+  qqbot_openid:$('qqbotOpenID')?String($('qqbotOpenID').value||'').trim():'',
+  qqbot_group_openid:$('qqbotGroupOpenID')?String($('qqbotGroupOpenID').value||'').trim():'',
+  qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
  };
  const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  $('systemMsg').textContent=r.ok?'全局设置已保存':'全局设置保存失败';
@@ -1044,7 +1139,10 @@ async function save(){
  dirty=!r.ok; $('saveMsg').textContent=r.ok?'已保存':'保存失败';
  if(r.ok) await load();
 }
-async function clearCache(){const r=await (await fetch('/api/mediaparser/cache/clear',{method:'POST'})).json(); $('saveMsg').textContent='已清理 '+(r.removed||0)+' 个缓存文件'}
+function formatBytes(n){n=Number(n||0);if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
+function renderCacheStats(){if(!$('cacheFiles'))return;$('cacheFiles').textContent=cacheInfo?String(cacheInfo.files||0):'-';$('cacheSize').textContent=cacheInfo?formatBytes(cacheInfo.bytes||0):'-'}
+async function loadCacheStats(showMsg=true){try{cacheInfo=await (await fetch('/api/mediaparser/cache/stats')).json();renderCacheStats();if(showMsg&&$('cacheMsg'))$('cacheMsg').textContent='缓存统计已刷新'}catch(e){if(showMsg&&$('cacheMsg'))$('cacheMsg').textContent='缓存统计读取失败'}}
+async function clearCache(){const r=await (await fetch('/api/mediaparser/cache/clear',{method:'POST'})).json(); $('saveMsg').textContent='已清理 '+(r.removed||0)+' 个缓存目录'; if($('cacheMsg'))$('cacheMsg').textContent='已清理 '+(r.removed||0)+' 个缓存目录'; await loadCacheStats(false)}
 async function uploadLogo(platform){
  const input=$('logo-'+platform); if(!input.files||!input.files[0]) return;
  const fd=new FormData(); fd.append('file', input.files[0]);

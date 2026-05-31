@@ -10,23 +10,37 @@ import (
 )
 
 type SystemSettings struct {
-	WebUIAddr     string  `json:"webui_addr"`
-	WSURL         string  `json:"ws_url"`
-	WSToken       string  `json:"ws_token,omitempty"`
-	Nickname      string  `json:"nickname"`
-	CommandPrefix string  `json:"command_prefix"`
-	SuperUsers    []int64 `json:"super_users"`
+	WebUIAddr        string  `json:"webui_addr"`
+	WSURL            string  `json:"ws_url"`
+	WSToken          string  `json:"ws_token,omitempty"`
+	Nickname         string  `json:"nickname"`
+	CommandPrefix    string  `json:"command_prefix"`
+	SuperUsers       []int64 `json:"super_users"`
+	QQBotEnabled     bool    `json:"qqbot_enabled"`
+	QQBotName        string  `json:"qqbot_name"`
+	QQBotAppID       string  `json:"qqbot_app_id,omitempty"`
+	QQBotSecret      string  `json:"qqbot_secret,omitempty"`
+	QQBotOpenID      string  `json:"qqbot_openid,omitempty"`
+	QQBotGroupOpenID string  `json:"qqbot_group_openid,omitempty"`
+	QQBotMarkdown    bool    `json:"qqbot_markdown"`
 }
 
 type systemSettingsResponse struct {
-	WebUIAddr      string   `json:"webui_addr"`
-	WSURL          string   `json:"ws_url"`
-	WSToken        string   `json:"ws_token,omitempty"`
-	WSTokenSet     bool     `json:"ws_token_set"`
-	Nickname       string   `json:"nickname"`
-	CommandPrefix  string   `json:"command_prefix"`
-	SuperUsers     []int64  `json:"super_users"`
-	PendingRestart []string `json:"pending_restart"`
+	WebUIAddr        string   `json:"webui_addr"`
+	WSURL            string   `json:"ws_url"`
+	WSToken          string   `json:"ws_token,omitempty"`
+	WSTokenSet       bool     `json:"ws_token_set"`
+	Nickname         string   `json:"nickname"`
+	CommandPrefix    string   `json:"command_prefix"`
+	SuperUsers       []int64  `json:"super_users"`
+	QQBotEnabled     bool     `json:"qqbot_enabled"`
+	QQBotName        string   `json:"qqbot_name"`
+	QQBotAppID       string   `json:"qqbot_app_id,omitempty"`
+	QQBotSecretSet   bool     `json:"qqbot_secret_set"`
+	QQBotOpenID      string   `json:"qqbot_openid,omitempty"`
+	QQBotGroupOpenID string   `json:"qqbot_group_openid,omitempty"`
+	QQBotMarkdown    bool     `json:"qqbot_markdown"`
+	PendingRestart   []string `json:"pending_restart"`
 }
 
 var (
@@ -91,6 +105,11 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 	settings.Nickname = strings.TrimSpace(settings.Nickname)
 	settings.CommandPrefix = strings.TrimSpace(settings.CommandPrefix)
 	settings.SuperUsers = uniqueInt64(settings.SuperUsers)
+	settings.QQBotName = strings.TrimSpace(settings.QQBotName)
+	settings.QQBotAppID = strings.TrimSpace(settings.QQBotAppID)
+	settings.QQBotSecret = strings.TrimSpace(settings.QQBotSecret)
+	settings.QQBotOpenID = strings.TrimSpace(settings.QQBotOpenID)
+	settings.QQBotGroupOpenID = strings.TrimSpace(settings.QQBotGroupOpenID)
 	return settings
 }
 

@@ -1919,7 +1919,7 @@ func appendYTDLPPlatformArgs(args []string, cfg config, platform string) []strin
 
 func enrichYTDLPError(platform string, cfg config, detail string) string {
 	if platform == "instagram" && cfg.InstagramCookie == "" && cfg.InstagramCookieFile == "" {
-		return detail + "\nInstagram 经常需要登录态 Cookie；请在 WebUI 的聚合解析 > 下载与 Cookie 里粘贴 Instagram Cookie。"
+		return detail + "\nInstagram 经常需要登录态 Cookie；请在 WebUI 的聚合解析 > 运行配置里粘贴 Instagram Cookie。"
 	}
 	return detail
 }
@@ -2262,6 +2262,30 @@ func cleanCache() (int, error) {
 		count++
 	}
 	return count, nil
+}
+
+func cacheStats() (int, int64, error) {
+	files := 0
+	var bytes int64
+	err := filepath.WalkDir(cacheDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		files++
+		bytes += info.Size()
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return 0, 0, nil
+	}
+	return files, bytes, err
 }
 
 func cacheFile(meta *mediaMeta, kind string, index int, ext string) string {

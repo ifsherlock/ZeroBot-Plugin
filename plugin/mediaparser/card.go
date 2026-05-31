@@ -991,7 +991,7 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	drawKeylolPanel(dc, outerPad, outerPad, w-outerPad*2, panelH, theme)
 	x := outerPad + panelPad
 	y := outerPad + panelPad
-	drawKeylolHeaderLogo(dc, fontBytes, float64(x), float64(y+6))
+	drawKeylolHeaderLogo(dc, fontBytes, float64(x), float64(y+6), theme)
 	y += 112
 	for _, line := range titleLines {
 		drawInlineEmoji(dc, fontBytes, titleSize, theme.Title, line, float64(x), float64(y))
@@ -1317,8 +1317,8 @@ func drawKeylolBadge(dc *gg.Context, fontBytes []byte, label string, x, y float6
 	drawInlineEmoji(dc, fontBytes, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255}, label, x+17, y+21)
 }
 
-func drawKeylolHeaderLogo(dc *gg.Context, fontBytes []byte, x, y float64) {
-	if img := keylolOfficialLogo(); img != nil {
+func drawKeylolHeaderLogo(dc *gg.Context, fontBytes []byte, x, y float64, theme keylolCardTheme) {
+	if img := keylolOfficialLogo(theme); img != nil {
 		img = trimTransparentImage(img)
 		fit := imaging.Fit(img, 198, 64, imaging.Lanczos)
 		dc.DrawImage(fit, int(x), int(y))
@@ -1330,7 +1330,7 @@ func drawKeylolHeaderLogo(dc *gg.Context, fontBytes []byte, x, y float64) {
 }
 
 func drawKeylolTopRightLogo(dc *gg.Context, fontBytes []byte, right, cy float64) {
-	if img := keylolOfficialLogo(); img != nil {
+	if img := keylolOfficialLogo(keylolCardThemeNow()); img != nil {
 		img = trimTransparentImage(img)
 		fit := imaging.Fit(img, 118, 42, imaging.Lanczos)
 		b := fit.Bounds()
@@ -1342,11 +1342,24 @@ func drawKeylolTopRightLogo(dc *gg.Context, fontBytes []byte, right, cy float64)
 	dc.DrawStringAnchored("Keylol", right, cy+1, 1, 0.5)
 }
 
-func keylolOfficialLogo() image.Image {
-	if img := loadPlatformLogo("keylol"); img != nil {
+func keylolOfficialLogo(theme keylolCardTheme) image.Image {
+	variants := []string{"keylol_light", "keylol"}
+	fallbackURL := "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png"
+	fallbackKey := "keylol-official-logo-light-v1"
+	if keylolThemeDark(theme) {
+		variants = []string{"keylol_dark", "keylol"}
+		fallbackURL = "https://keylol.com/static/image/mobile/images/logo-white.png"
+		fallbackKey = "keylol-official-logo-dark-v1"
+	}
+	for _, name := range variants {
+		if img := loadPlatformLogo(name); img != nil {
+			return img
+		}
+	}
+	if img := fetchCachedCardImage(fallbackKey, fallbackURL, nil); img != nil {
 		return img
 	}
-	return fetchCachedCardImage("keylol-official-logo-v1", "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png", nil)
+	return fetchCachedCardImage("keylol-official-logo-light-v1", "https://keylol.com/template/steamcn_metro/src/img/common/icon_with_text_256h.png", nil)
 }
 
 func keylolInlineStatusSuffix(s string) bool {
