@@ -14,11 +14,11 @@ services:
     image: jaysherlock/zerobot-plugin:latest
     container_name: mediaparser
     restart: unless-stopped
-    # Host networking shares host ports directly, so no ports: mapping is needed.
-    # The image listens on:
-    #   - 3000: WebUI
-    #   - 3088: bundled nginx static server for QQBot images
-    # nginx exposes /app/data/mediaparser/cache as /cache/.
+    # host 网络会直接使用宿主机端口，不需要再写 ports 映射。
+    # 镜像内监听：
+    #   - 3000：WebUI
+    #   - 3088：内置 nginx 静态服务，用于 QQBot 图片
+    # nginx 会把 /app/data/mediaparser/cache 暴露为 /cache/。
     network_mode: host
     environment:
       TZ: Asia/Shanghai
