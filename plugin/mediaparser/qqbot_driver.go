@@ -149,8 +149,12 @@ func (d *qqBotDriver) CallAPI(ctx context.Context, req zero.APIRequest) (zero.AP
 		return d.sendOfficialMessage(ctx, target.openID, true, req.Params["message"])
 	case "get_login_info":
 		return qqBotAPIOK(map[string]any{"user_id": d.selfID, "nickname": d.name}), nil
+	case "mark_msg_as_read":
+		messageID := int64Param(req.Params, "message_id")
+		logrus.Debugf("[qqbot] ignore mark_msg_as_read message_id=%d", messageID)
+		return qqBotAPIOK(map[string]any{"message_id": messageID}), nil
 	default:
-		logrus.Debugf("[qqbot] unsupported api action=%s", req.Action)
+		logrus.Infof("[qqbot] unsupported api action=%s params=%v", req.Action, req.Params)
 		return qqBotAPIError("unsupported qqbot api action: " + req.Action), nil
 	}
 }
@@ -281,6 +285,7 @@ func (d *qqBotDriver) zeroEvent(eventType string, raw json.RawMessage) []byte {
 		event["sub_type"] = "friend"
 		event["user_id"] = userID
 		event["sender"] = map[string]any{"user_id": userID, "nickname": "QQBot User"}
+		logrus.Infof("[qqbot] mapped private message message_id=%d user_id=%d text=%q", messageID, userID, truncate(content, 160))
 	case "GROUP_AT_MESSAGE_CREATE":
 		memberOpenID := msg.Author.MemberOpenID
 		groupID := qqBotStableID("group:" + msg.GroupOpenID)
@@ -292,6 +297,7 @@ func (d *qqBotDriver) zeroEvent(eventType string, raw json.RawMessage) []byte {
 		event["group_id"] = groupID
 		event["user_id"] = userID
 		event["sender"] = map[string]any{"user_id": userID, "nickname": "QQBot Member", "role": "member"}
+		logrus.Infof("[qqbot] mapped group message message_id=%d group_id=%d user_id=%d text=%q", messageID, groupID, userID, truncate(content, 160))
 	default:
 		return nil
 	}
@@ -324,6 +330,11 @@ func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, gr
 		return zero.APIResponse{}, err
 	}
 	id := qqBotStableID("sent:" + firstNonEmpty(gjson.GetBytes(data, "id").String(), gjson.GetBytes(data, "message_id").String(), time.Now().String()))
+	targetType := "private"
+	if group {
+		targetType = "group"
+	}
+	logrus.Infof("[qqbot] sent message target_type=%s message_id=%d markdown=%v content_len=%d", targetType, id, d.useMarkdown, len(content))
 	return qqBotAPIOK(map[string]any{"message_id": id}), nil
 }
 
