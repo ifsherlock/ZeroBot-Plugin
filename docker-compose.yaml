@@ -17,6 +17,8 @@ services:
       WEBUI_ADDR: 0.0.0.0:3000
       ONEBOT_WS_URL: ws://127.0.0.1:3001
       ONEBOT_WS_TOKEN: ""
+      # OneBot/llbot 所在主机能看到的数据目录；用于把容器内 /app/data 的 file:// 图片路径映射回宿主机路径。
+      ONEBOT_DATA_DIR: "${PWD}/data"
       BOT_NICKNAME: ZeroBot
       COMMAND_PREFIX: /
       SUPER_USERS: ""

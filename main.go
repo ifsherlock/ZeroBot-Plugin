@@ -142,6 +142,7 @@ func init() {
 		WebUIAddr:         *webui,
 		WSURL:             *url,
 		WSToken:           *token,
+		OneBotDataDir:     firstNonEmptyMain(os.Getenv("ONEBOT_DATA_DIR"), systemSettings.OneBotDataDir),
 		Nickname:          *adana,
 		CommandPrefix:     *prefix,
 		SuperUsers:        sus,
@@ -183,6 +184,15 @@ func mergeIDs(a, b []int64) []int64 {
 		out = append(out, id)
 	}
 	return out
+}
+
+func firstNonEmptyMain(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func main() {

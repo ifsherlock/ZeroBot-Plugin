@@ -984,8 +984,12 @@ func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
 		ctx.SendChain(message.Text(buildText(meta)))
 		return false
 	}
-	ctx.SendChain(message.Image(fileURI(card)))
-	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s", meta.Platform, meta.Title, card)
+	target := fileURI(card)
+	if !isOfficialQQBotEvent(ctx) {
+		target = oneBotLocalMediaTarget(card)
+	}
+	ctx.SendChain(message.Image(target))
+	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s target=%s", meta.Platform, meta.Title, card, target)
 	scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 	return true
 }
@@ -1294,7 +1298,7 @@ func mediaVideoTarget(meta *mediaMeta, i int) string {
 		return ""
 	}
 	if mode == "local" && i < len(meta.FilePaths) && meta.FilePaths[i] != "" {
-		return fileURI(meta.FilePaths[i])
+		return oneBotLocalMediaTarget(meta.FilePaths[i])
 	}
 	if len(meta.VideoURLs[i]) > 0 {
 		return stripMediaPrefix(meta.VideoURLs[i][0])
@@ -1315,7 +1319,7 @@ func mediaImageTarget(meta *mediaMeta, i int) string {
 	}
 	offset := len(meta.VideoURLs)
 	if mode == "local" && offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
-		return fileURI(meta.FilePaths[offset+i])
+		return oneBotLocalMediaTarget(meta.FilePaths[offset+i])
 	}
 	if len(meta.ImageURLs[i]) > 0 {
 		return stripMediaPrefix(meta.ImageURLs[i][0])
@@ -2406,11 +2410,100 @@ func fileSizeMB(path string) float64 {
 }
 
 func fileURI(path string) string {
+	if slashPath := filepath.ToSlash(path); strings.HasPrefix(slashPath, "/") && !strings.HasPrefix(slashPath, "//") {
+		return "file://" + slashPath
+	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		abs = path
 	}
 	return "file:///" + strings.TrimPrefix(filepath.ToSlash(abs), "/")
+}
+
+func oneBotLocalMediaTarget(path string) string {
+	if target := oneBotLoopbackCacheURL(path); target != "" {
+		return target
+	}
+	if target := oneBotMappedFileURI(path); target != "" {
+		return target
+	}
+	if target := cachePublicURL(path); target != "" {
+		return target
+	}
+	return fileURI(path)
+}
+
+func oneBotLoopbackCacheURL(path string) string {
+	systemMu.RLock()
+	wsURL := runtimeSystem.WSURL
+	systemMu.RUnlock()
+	if !isLoopbackWSURL(wsURL) {
+		return ""
+	}
+	return cacheURLWithBase("http://127.0.0.1:3088/cache", path)
+}
+
+func oneBotMappedFileURI(path string) string {
+	systemMu.RLock()
+	dataDir := runtimeSystem.OneBotDataDir
+	systemMu.RUnlock()
+	dataDir = strings.TrimSpace(dataDir)
+	if dataDir == "" {
+		return ""
+	}
+	localAbs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	appDataAbs, err := filepath.Abs(filepath.Join(cacheDir, ".."))
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(appDataAbs, localAbs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return ""
+	}
+	return fileURI(filepath.Join(dataDir, rel))
+}
+
+func cachePublicURL(path string) string {
+	systemMu.RLock()
+	baseURL := runtimeSystem.QQBotPublicBase
+	systemMu.RUnlock()
+	return cacheURLWithBase(baseURL, path)
+}
+
+func cacheURLWithBase(baseURL, path string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return ""
+	}
+	localAbs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	cacheAbs, err := filepath.Abs(cacheDir)
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(cacheAbs, localAbs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return ""
+	}
+	publicURL, err := url.JoinPath(baseURL, filepath.ToSlash(rel))
+	if err != nil {
+		return ""
+	}
+	return publicURL
+}
+
+func isLoopbackWSURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
 }
 
 func scheduleDelete(path string, delay time.Duration) {

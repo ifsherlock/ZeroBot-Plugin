@@ -45,6 +45,7 @@ ENV TZ=Asia/Shanghai \
     WEBUI_ADDR=0.0.0.0:3000 \
     ONEBOT_WS_URL=ws://127.0.0.1:3001 \
     ONEBOT_WS_TOKEN= \
+    ONEBOT_DATA_DIR= \
     BOT_NICKNAME=ZeroBot \
     COMMAND_PREFIX=/ \
     SUPER_USERS= \

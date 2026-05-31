@@ -304,6 +304,9 @@ func systemSettingsForSave() SystemSettings {
 	if saved.WSToken == "" {
 		saved.WSToken = current.WSToken
 	}
+	if saved.OneBotDataDir == "" {
+		saved.OneBotDataDir = current.OneBotDataDir
+	}
 	if saved.QQBotSecret == "" {
 		saved.QQBotSecret = current.QQBotSecret
 	}
@@ -350,6 +353,7 @@ func systemSettingsForWeb() systemSettingsResponse {
 		WebUIAddr:         firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
 		WSURL:             firstNonEmpty(settings.WSURL, current.WSURL),
 		WSTokenSet:        settings.WSToken != "",
+		OneBotDataDir:     firstNonEmpty(settings.OneBotDataDir, current.OneBotDataDir),
 		Nickname:          firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
 		CommandPrefix:     firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
 		SuperUsers:        uniqueInt64(settings.SuperUsers),
@@ -379,6 +383,7 @@ func applyRuntimeSystemSettings(settings SystemSettings) {
 		zero.BotConfig.SuperUsers = uniqueInt64(settings.SuperUsers)
 	}
 	systemMu.Lock()
+	runtimeSystem.OneBotDataDir = settings.OneBotDataDir
 	runtimeSystem.Nickname = firstNonEmpty(settings.Nickname, runtimeSystem.Nickname)
 	runtimeSystem.CommandPrefix = firstNonEmpty(settings.CommandPrefix, runtimeSystem.CommandPrefix)
 	runtimeSystem.SuperUsers = uniqueInt64(settings.SuperUsers)
@@ -776,6 +781,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">WebUI 监听地址 <input id="sysWebui" placeholder="0.0.0.0:3000"></label>
 <label class="field">OneBot WS 地址 <input id="sysWS" placeholder="ws://127.0.0.1:3001"></label>
 <label class="field">OneBot Token <input id="sysToken" type="password" placeholder="留空表示不修改"></label>
+<label class="field">OneBot 可见数据目录 <input id="onebotDataDir" placeholder="/home/jay/apps/mediaparser/data"><span class="muted">容器内 /app/data 对应的宿主机目录；llbot 不在容器内时用于 file:// 图片路径映射。</span></label>
 <label class="field">机器人昵称 <input id="sysNick" placeholder="ZeroBot"></label>
 <label class="field">命令前缀 <input id="sysPrefix" placeholder="/"></label>
 <label class="field">超级管理员 QQ <textarea id="sysSuperUsers" placeholder="一行一个 QQ"></textarea></label>
@@ -1054,6 +1060,7 @@ function renderSystemSettings(){
  $('sysWS').value=sys.ws_url||'';
  $('sysToken').value='';
  $('sysToken').placeholder=sys.ws_token_set?'已设置，留空不修改':'留空表示不设置';
+ $('onebotDataDir').value=sys.onebot_data_dir||'';
  $('sysNick').value=sys.nickname||'';
  $('sysPrefix').value=sys.command_prefix||'/';
  $('sysSuperUsers').value=(sys.super_users||[]).join('\n');
@@ -1082,6 +1089,7 @@ async function saveSystemSettings(){
   webui_addr:String($('sysWebui').value||'').trim(),
   ws_url:String($('sysWS').value||'').trim(),
   ws_token:String($('sysToken').value||'').trim(),
+  onebot_data_dir:String($('onebotDataDir').value||'').trim(),
   nickname:String($('sysNick').value||'').trim(),
   command_prefix:String($('sysPrefix').value||'/').trim()||'/',
   super_users:Object.keys(parseList($('sysSuperUsers').value)).map(x=>Number(x)),

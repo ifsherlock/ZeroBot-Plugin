@@ -13,6 +13,7 @@ type SystemSettings struct {
 	WebUIAddr         string  `json:"webui_addr"`
 	WSURL             string  `json:"ws_url"`
 	WSToken           string  `json:"ws_token,omitempty"`
+	OneBotDataDir     string  `json:"onebot_data_dir,omitempty"`
 	Nickname          string  `json:"nickname"`
 	CommandPrefix     string  `json:"command_prefix"`
 	SuperUsers        []int64 `json:"super_users"`
@@ -33,6 +34,7 @@ type systemSettingsResponse struct {
 	WSURL             string   `json:"ws_url"`
 	WSToken           string   `json:"ws_token,omitempty"`
 	WSTokenSet        bool     `json:"ws_token_set"`
+	OneBotDataDir     string   `json:"onebot_data_dir,omitempty"`
 	Nickname          string   `json:"nickname"`
 	CommandPrefix     string   `json:"command_prefix"`
 	SuperUsers        []int64  `json:"super_users"`
@@ -108,6 +110,7 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 	settings.WebUIAddr = strings.TrimSpace(settings.WebUIAddr)
 	settings.WSURL = strings.TrimSpace(settings.WSURL)
 	settings.WSToken = strings.TrimSpace(settings.WSToken)
+	settings.OneBotDataDir = strings.TrimSpace(settings.OneBotDataDir)
 	settings.Nickname = strings.TrimSpace(settings.Nickname)
 	settings.CommandPrefix = strings.TrimSpace(settings.CommandPrefix)
 	settings.SuperUsers = uniqueInt64(settings.SuperUsers)

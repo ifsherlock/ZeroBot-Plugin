@@ -30,6 +30,10 @@ services:
       ONEBOT_WS_URL: ""
       # OneBot WebSocket 鉴权 token；没有配置鉴权时留空。
       ONEBOT_WS_TOKEN: ""
+      # OneBot/llbot 所在主机能看到的数据目录。
+      # 当 llbot 不在容器内、且不能通过 127.0.0.1:3088 读取内置 nginx 时，用它把容器内 /app/data 映射回宿主机路径。
+      # 如果 compose 文件和 data 目录在同一目录，通常填 ${PWD}/data；不需要本地路径映射时留空。
+      ONEBOT_DATA_DIR: "${PWD}/data"
       # 机器人默认昵称，用于部分回复文本和识别。
       BOT_NICKNAME: ZeroBot
       # 命令前缀，例如 /解析、/服务列表。

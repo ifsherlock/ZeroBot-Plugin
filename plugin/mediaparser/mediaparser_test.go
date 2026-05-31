@@ -797,6 +797,92 @@ func TestAppendYTDLPPlatformArgs(t *testing.T) {
 	}
 }
 
+func TestOneBotLocalMediaTargetPrefersLoopbackCacheURL(t *testing.T) {
+	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
+	cacheDir = filepath.Join(t.TempDir(), "data", "mediaparser", "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	card := filepath.Join(cacheDir, "card_test.png")
+	if err := os.WriteFile(card, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	SetRuntimeSystemSettings(SystemSettings{
+		WSURL:           "ws://127.0.0.1:3001",
+		OneBotDataDir:   "/host/data",
+		QQBotPublicBase: "https://public.example/cache",
+	})
+	defer func() {
+		cacheDir = oldCacheDir
+		SetRuntimeSystemSettings(oldSystem)
+	}()
+
+	got := oneBotLocalMediaTarget(card)
+	want := "http://127.0.0.1:3088/cache/card_test.png"
+	if got != want {
+		t.Fatalf("target=%q, want %q", got, want)
+	}
+}
+
+func TestOneBotLocalMediaTargetUsesMappedPathWhenNotLoopback(t *testing.T) {
+	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
+	cacheDir = filepath.Join(t.TempDir(), "data", "mediaparser", "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	card := filepath.Join(cacheDir, "nested", "card_test.png")
+	if err := os.MkdirAll(filepath.Dir(card), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(card, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	SetRuntimeSystemSettings(SystemSettings{
+		WSURL:           "ws://0.0.0.0:3001",
+		OneBotDataDir:   "/host/data",
+		QQBotPublicBase: "https://public.example/cache",
+	})
+	defer func() {
+		cacheDir = oldCacheDir
+		SetRuntimeSystemSettings(oldSystem)
+	}()
+
+	got := filepath.ToSlash(oneBotLocalMediaTarget(card))
+	want := "file:///host/data/cache/nested/card_test.png"
+	if got != want {
+		t.Fatalf("target=%q, want %q", got, want)
+	}
+}
+
+func TestOneBotLocalMediaTargetFallsBackToPublicURL(t *testing.T) {
+	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
+	cacheDir = filepath.Join(t.TempDir(), "data", "mediaparser", "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	card := filepath.Join(cacheDir, "card_test.png")
+	if err := os.WriteFile(card, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	SetRuntimeSystemSettings(SystemSettings{
+		WSURL:           "ws://0.0.0.0:3001",
+		QQBotPublicBase: "https://public.example/cache/",
+	})
+	defer func() {
+		cacheDir = oldCacheDir
+		SetRuntimeSystemSettings(oldSystem)
+	}()
+
+	got := oneBotLocalMediaTarget(card)
+	want := "https://public.example/cache/card_test.png"
+	if got != want {
+		t.Fatalf("target=%q, want %q", got, want)
+	}
+}
+
 func TestBiliQualityFollowsGlobalResolution(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.VideoMaxResolution = 720
