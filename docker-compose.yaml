@@ -1,0 +1,20 @@
+services:
+  zerobot-plugin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zerobot-plugin:local
+    container_name: zerobot-plugin
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: Asia/Shanghai
+      WEBUI_ADDR: 0.0.0.0:3000
+      ONEBOT_WS_URL: ws://127.0.0.1:3001
+      ONEBOT_WS_TOKEN: ""
+      BOT_NICKNAME: ZeroBot
+      COMMAND_PREFIX: /
+      SUPER_USERS: ""
+      ZBP_ARGS: ""
+    volumes:
+      - ./data:/app/data

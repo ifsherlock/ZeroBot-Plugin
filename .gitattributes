@@ -1,1 +1,6 @@
 *.pb linguist-language=go
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+docker-compose.yaml text eol=lf
+docker/*.sh text eol=lf
+docker/*.conf text eol=lf
