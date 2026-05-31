@@ -1016,6 +1016,29 @@ func TestCompactCardImagesDropsFailedFetches(t *testing.T) {
 	}
 }
 
+func TestFetchCardImageGroupFallsBackFromBlankCandidate(t *testing.T) {
+	blank := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	draw.Draw(blank, blank.Bounds(), &image.Uniform{C: color.RGBA{R: 255, G: 255, B: 255, A: 255}}, image.Point{}, draw.Src)
+	good := testGradientImage(32, 32, color.RGBA{R: 16, G: 32, B: 48, A: 255}, color.RGBA{R: 180, G: 80, B: 40, A: 255})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		switch r.URL.Path {
+		case "/blank.png":
+			_ = png.Encode(w, blank)
+		case "/good.png":
+			_ = png.Encode(w, good)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	img := fetchCardImageGroup([]string{server.URL + "/blank.png", server.URL + "/good.png"}, nil)
+	if isBlankCardImage(img) {
+		t.Fatal("expected fallback image to be non-blank")
+	}
+}
+
 func containsArgPair(args []string, key, value string) bool {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == key && args[i+1] == value {

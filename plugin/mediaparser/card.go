@@ -346,16 +346,16 @@ func renderUnifiedGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) 
 	tm := unifiedThemeNow()
 	panelX, panelY, panelW, panelPad, contentW := unifiedLayout()
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
-	imageURLs := make([]string, 0, len(meta.ImageURLs))
+	imageGroups := make([][]string, 0, len(meta.ImageURLs))
 	for _, group := range meta.ImageURLs {
 		if len(group) > 0 {
-			imageURLs = append(imageURLs, group[0])
+			imageGroups = append(imageGroups, group)
 		}
-		if len(imageURLs) >= 9 {
+		if len(imageGroups) >= 9 {
 			break
 		}
 	}
-	images := compactCardImages(fetchCardImages(imageURLs, meta.ImageHeads))
+	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
 	title := firstNonEmpty(meta.Title, "媒体解析")
 	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
 	if len(titleLines) == 0 {
@@ -394,7 +394,7 @@ func renderUnifiedGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) 
 
 func renderUnifiedLongImageCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	bodyFontBytes := keylolBodyFontBytes(fontBytes)
-	img := fetchCardImage(meta.ImageURLs[0][0], meta.ImageHeads)
+	img := fetchCardImageGroup(meta.ImageURLs[0], meta.ImageHeads)
 	if !shouldRenderLongImageCard(meta, img) {
 		return renderUnifiedGalleryCard(meta, fontBytes)
 	}
@@ -715,17 +715,17 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	bodyFontBytes := keylolBodyFontBytes(fontBytes)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
-	imageURLs := make([]string, 0, len(meta.ImageURLs))
+	imageGroups := make([][]string, 0, len(meta.ImageURLs))
 	for _, group := range meta.ImageURLs {
 		if len(group) == 0 {
 			continue
 		}
-		imageURLs = append(imageURLs, group[0])
-		if len(imageURLs) >= 9 {
+		imageGroups = append(imageGroups, group)
+		if len(imageGroups) >= 9 {
 			break
 		}
 	}
-	images := compactCardImages(fetchCardImages(imageURLs, meta.ImageHeads))
+	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
 
 	title := firstNonEmpty(meta.Title, "媒体解析")
 	titleLines := []string{}
@@ -2024,10 +2024,49 @@ func fetchCardImages(urls []string, headers map[string]string) []image.Image {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			out[i] = fetchCardImage(raw, headers)
+			if isBlankCardImage(out[i]) {
+				time.Sleep(250 * time.Millisecond)
+				out[i] = fetchCardImage(raw, headers)
+			}
 		}(i, raw)
 	}
 	wg.Wait()
 	return compactCardImages(out)
+}
+
+func fetchCardImageGroups(groups [][]string, headers map[string]string) []image.Image {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]image.Image, len(groups))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for i, group := range groups {
+		wg.Add(1)
+		go func(i int, group []string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			out[i] = fetchCardImageGroup(group, headers)
+		}(i, group)
+	}
+	wg.Wait()
+	return compactCardImages(out)
+}
+
+func fetchCardImageGroup(urls []string, headers map[string]string) image.Image {
+	for _, raw := range urls {
+		img := fetchCardImage(raw, headers)
+		if !isBlankCardImage(img) {
+			return img
+		}
+		time.Sleep(250 * time.Millisecond)
+		img = fetchCardImage(raw, headers)
+		if !isBlankCardImage(img) {
+			return img
+		}
+	}
+	return nil
 }
 
 func compactCardImages(imgs []image.Image) []image.Image {
@@ -2051,11 +2090,17 @@ func isBlankCardImage(img image.Image) bool {
 	stepX := maxInt(b.Dx()/8, 1)
 	stepY := maxInt(b.Dy()/8, 1)
 	samples := 0
+	visible := 0
 	var minR, minG, minB uint8 = 255, 255, 255
 	var maxR, maxG, maxB uint8
 	for y := b.Min.Y; y < b.Max.Y; y += stepY {
 		for x := b.Min.X; x < b.Max.X; x += stepX {
-			r, g, bb, _ := img.At(x, y).RGBA()
+			r, g, bb, a := img.At(x, y).RGBA()
+			samples++
+			if a>>8 < 24 {
+				continue
+			}
+			visible++
 			rr, gg, bbb := uint8(r>>8), uint8(g>>8), uint8(bb>>8)
 			if rr < minR {
 				minR = rr
@@ -2075,15 +2120,17 @@ func isBlankCardImage(img image.Image) bool {
 			if bbb > maxB {
 				maxB = bbb
 			}
-			samples++
 		}
 	}
 	if samples == 0 {
 		return true
 	}
+	if float64(visible)/float64(samples) < 0.08 {
+		return true
+	}
 	spread := int(maxR-minR) + int(maxG-minG) + int(maxB-minB)
 	avg := (int(minR) + int(maxR) + int(minG) + int(maxG) + int(minB) + int(maxB)) / 6
-	return spread < 18 && avg >= 185 && avg <= 235
+	return spread < 18 && avg >= 185
 }
 
 func normalizeCardImageURL(raw string) string {
