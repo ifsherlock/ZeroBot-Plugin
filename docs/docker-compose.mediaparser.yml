@@ -1,0 +1,31 @@
+# Media Parser Docker Compose for prebuilt DockerHub image
+#
+# This compose file is for the slim media parser runtime published by GitHub Actions.
+# Image: jaysherlock/zerobot-plugin:latest
+#
+# Start:
+#   docker compose -f docs/docker-compose.mediaparser.yml up -d
+# Upgrade:
+#   docker compose -f docs/docker-compose.mediaparser.yml pull
+#   docker compose -f docs/docker-compose.mediaparser.yml up -d
+
+services:
+  mediaparser:
+    image: jaysherlock/zerobot-plugin:latest
+    container_name: mediaparser
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: Asia/Shanghai
+      WEBUI_ADDR: 0.0.0.0:3000
+      # If you only use the built-in WebUI/parser and do not connect llbot/OneBot,
+      # keep ONEBOT_WS_URL empty. Set it to ws://127.0.0.1:3001 when llbot runs on
+      # the same Linux host.
+      ONEBOT_WS_URL: ""
+      ONEBOT_WS_TOKEN: ""
+      BOT_NICKNAME: ZeroBot
+      COMMAND_PREFIX: /
+      SUPER_USERS: ""
+      ZBP_ARGS: ""
+    volumes:
+      - ./data:/app/data

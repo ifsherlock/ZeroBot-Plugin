@@ -20,6 +20,47 @@
 
 如果需要完整视频体验，建议先用 llbot/OneBot WS 通道；官方 QQBot 通道先跑卡片和图片。
 
+## 使用 GitHub Actions 自动构建镜像
+
+仓库里的 `.github/workflows/dockerhub.yml` 会在 GitHub Actions 中完成完整镜像构建流程：
+
+1. `go generate main.go` 生成编译期需要的 `abineundo/ref/**` 临时引用文件。
+2. 构建 `linux/amd64` 和 `linux/arm64` 的 Go 二进制做校验，产物只留在 CI 临时目录，不上传 artifact，也不会提交到仓库。
+3. 使用 `Dockerfile` 通过 Buildx 构建 `linux/amd64,linux/arm64` 多架构镜像。
+4. 推送到 DockerHub：`jaysherlock/zerobot-plugin`。
+
+需要在 GitHub 仓库里设置两个 Actions Secrets：
+
+- `DOCKERHUB_USERNAME`：DockerHub 用户名，例如 `jaysherlock`。
+- `DOCKERHUB_TOKEN`：DockerHub Access Token。
+
+设置路径：`Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret`。
+
+触发规则：
+
+- 推送到 `master`：发布 `latest` 和 `sha-<commit>` 标签。
+- 推送 `v*` tag：发布对应 tag 标签。
+- 也可以在 Actions 页面手动运行 `DockerHub Image` workflow。
+
+## 只使用媒体解析服务
+
+如果你只需要内置 WebUI 和媒体解析能力，不想在服务器上本地构建镜像，可以直接使用 GitHub Actions 自动发布到 DockerHub 的预构建镜像：
+
+```bash
+docker compose -f docs/docker-compose.mediaparser.yml up -d
+```
+
+更新镜像：
+
+```bash
+docker compose -f docs/docker-compose.mediaparser.yml pull
+docker compose -f docs/docker-compose.mediaparser.yml up -d
+```
+
+示例文件见 `docs/docker-compose.mediaparser.yml`。它默认使用 `jaysherlock/zerobot-plugin:latest`，并把 `ONEBOT_WS_URL` 留空，适合只打开 WebUI 做解析配置或只使用官方 QQBot/解析能力的场景。
+
+如果后续要对接同机 llbot，把 `ONEBOT_WS_URL` 改成 `ws://127.0.0.1:3001`；如果 llbot 在其他机器，改成对应地址。
+
 ## 一键启动
 
 在项目根目录执行：
