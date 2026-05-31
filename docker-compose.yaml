@@ -6,6 +6,11 @@ services:
     image: zerobot-plugin:local
     container_name: zerobot-plugin
     restart: unless-stopped
+    # Host networking shares host ports directly, so no ports: mapping is needed.
+    # The image listens on:
+    #   - 3000: WebUI
+    #   - 3088: bundled nginx static server for QQBot images
+    # nginx exposes /app/data/mediaparser/cache as /cache/.
     network_mode: host
     environment:
       TZ: Asia/Shanghai
