@@ -8,8 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc64"
+	"image"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -39,6 +43,7 @@ type qqBotDriver struct {
 	defaultGroupID string
 	name           string
 	useMarkdown    bool
+	publicBaseURL  string
 
 	mu              sync.Mutex
 	conn            *websocket.Conn
@@ -71,6 +76,7 @@ func NewQQBotDriver(settings SystemSettings) (zero.Driver, bool) {
 		defaultGroupID: settings.QQBotGroupOpenID,
 		name:           name,
 		useMarkdown:    settings.QQBotMarkdown,
+		publicBaseURL:  settings.QQBotPublicBase,
 		client:         &http.Client{Timeout: 30 * time.Second},
 		selfID:         qqBotStableID("self:" + settings.QQBotAppID),
 		targets:        map[int64]qqBotTarget{},
@@ -156,14 +162,14 @@ func (d *qqBotDriver) CallAPI(ctx context.Context, req zero.APIRequest) (zero.AP
 		if !ok {
 			return qqBotAPIError("qqbot private target not known"), nil
 		}
-		return d.sendOfficialMessage(ctx, target.openID, false, qqBotForwardMessageText(req.Params["messages"]))
+		return d.sendOfficialMessage(ctx, target.openID, false, d.forwardMessageText(req.Params["messages"]))
 	case "send_group_forward_msg":
 		groupID := int64Param(req.Params, "group_id")
 		target, ok := d.targetFor(groupID, true)
 		if !ok {
 			return qqBotAPIError("qqbot group target not known"), nil
 		}
-		return d.sendOfficialMessage(ctx, target.openID, true, qqBotForwardMessageText(req.Params["messages"]))
+		return d.sendOfficialMessage(ctx, target.openID, true, d.forwardMessageText(req.Params["messages"]))
 	case "get_login_info":
 		return qqBotAPIOK(map[string]any{"user_id": d.selfID, "nickname": d.name}), nil
 	case "mark_msg_as_read":
@@ -326,7 +332,7 @@ func (d *qqBotDriver) zeroEvent(eventType string, raw json.RawMessage) []byte {
 }
 
 func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, group bool, msg any) (zero.APIResponse, error) {
-	content := strings.TrimSpace(qqBotMessageText(msg))
+	content := strings.TrimSpace(d.messageText(msg))
 	if content == "" {
 		return qqBotAPIError("empty message"), nil
 	}
@@ -338,8 +344,9 @@ func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, gr
 	if group {
 		path = "/v2/groups/" + openID + "/messages"
 	}
+	useMarkdown := d.useMarkdown || strings.Contains(content, "![")
 	body := map[string]any{"content": content, "msg_type": 0}
-	if d.useMarkdown {
+	if useMarkdown {
 		body = map[string]any{"markdown": map[string]any{"content": content}, "msg_type": 2}
 	}
 	data, err := d.apiRequest(ctx, token, http.MethodPost, path, body)
@@ -351,7 +358,7 @@ func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, gr
 	if group {
 		targetType = "group"
 	}
-	logrus.Infof("[qqbot] sent message target_type=%s message_id=%d markdown=%v content_len=%d", targetType, id, d.useMarkdown, len(content))
+	logrus.Infof("[qqbot] sent message target_type=%s message_id=%d markdown=%v content_len=%d", targetType, id, useMarkdown, len(content))
 	return qqBotAPIOK(map[string]any{"message_id": id}), nil
 }
 
@@ -481,14 +488,14 @@ func (d *qqBotDriver) targetFor(id int64, group bool) (qqBotTarget, bool) {
 	return qqBotTarget{}, false
 }
 
-func qqBotMessageText(v any) string {
+func (d *qqBotDriver) messageText(v any) string {
 	switch msg := v.(type) {
 	case string:
 		return qqBotCleanCQText(msg)
 	case message.Message:
-		return qqBotSegmentsText(msg)
+		return d.segmentsText(msg)
 	case []message.Segment:
-		return qqBotSegmentsText(message.Message(msg))
+		return d.segmentsText(message.Message(msg))
 	case []any:
 		segments := make(message.Message, 0, len(msg))
 		for _, item := range msg {
@@ -497,14 +504,14 @@ func qqBotMessageText(v any) string {
 			}
 		}
 		if len(segments) > 0 {
-			return qqBotSegmentsText(segments)
+			return d.segmentsText(segments)
 		}
 	}
 	b, _ := json.Marshal(v)
 	return string(b)
 }
 
-func qqBotSegmentsText(msg message.Message) string {
+func (d *qqBotDriver) segmentsText(msg message.Message) string {
 	var b strings.Builder
 	for _, seg := range msg {
 		switch seg.Type {
@@ -512,8 +519,8 @@ func qqBotSegmentsText(msg message.Message) string {
 			b.WriteString(seg.Data["text"])
 		case "image":
 			file := strings.TrimSpace(seg.Data["file"])
-			if strings.HasPrefix(file, "http://") || strings.HasPrefix(file, "https://") {
-				fmt.Fprintf(&b, "\n![image](%s)\n", file)
+			if markdown, ok := d.imageMarkdown(file); ok {
+				b.WriteString(markdown)
 			} else {
 				b.WriteString("\n[图片]\n")
 			}
@@ -533,12 +540,96 @@ func qqBotSegmentsText(msg message.Message) string {
 	return strings.TrimSpace(b.String())
 }
 
-func qqBotForwardMessageText(v any) string {
-	text := qqBotMessageText(v)
+func (d *qqBotDriver) forwardMessageText(v any) string {
+	text := d.messageText(v)
 	if text == "" {
 		return ""
 	}
 	return "官方 QQBot 暂不支持 OneBot 合并转发，已降级为文本：\n\n" + text
+}
+
+func (d *qqBotDriver) imageMarkdown(file string) (string, bool) {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		return "", false
+	}
+	if strings.HasPrefix(file, "http://") || strings.HasPrefix(file, "https://") {
+		return "\n" + sizedQQMarkdownImage(file, 0, 0) + "\n", true
+	}
+	publicURL, localPath, ok := d.publicImageURL(file)
+	if !ok {
+		return "", false
+	}
+	w, h := localImageSize(localPath)
+	return "\n" + sizedQQMarkdownImage(publicURL, w, h) + "\n", true
+}
+
+func (d *qqBotDriver) publicImageURL(file string) (string, string, bool) {
+	if strings.TrimSpace(d.publicBaseURL) == "" {
+		return "", "", false
+	}
+	localPath := strings.TrimSpace(file)
+	if strings.HasPrefix(localPath, "file://") {
+		u, err := url.Parse(localPath)
+		if err != nil {
+			return "", "", false
+		}
+		localPath = u.Path
+	}
+	localAbs, err := filepath.Abs(localPath)
+	if err != nil {
+		return "", "", false
+	}
+	cacheAbs, err := filepath.Abs(cacheDir)
+	if err != nil {
+		return "", "", false
+	}
+	rel, err := filepath.Rel(cacheAbs, localAbs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return "", "", false
+	}
+	publicURL, err := url.JoinPath(d.publicBaseURL, filepath.ToSlash(rel))
+	if err != nil {
+		return "", "", false
+	}
+	return publicURL, localAbs, true
+}
+
+func localImageSize(path string) (int, int) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0
+	}
+	return fitQQMarkdownImageSize(cfg.Width, cfg.Height)
+}
+
+func fitQQMarkdownImageSize(width, height int) (int, int) {
+	if width <= 0 || height <= 0 {
+		return 0, 0
+	}
+	maxW, maxH := 900, 1200
+	if width <= maxW && height <= maxH {
+		return width, height
+	}
+	rw := float64(maxW) / float64(width)
+	rh := float64(maxH) / float64(height)
+	r := rw
+	if rh < r {
+		r = rh
+	}
+	return max(1, int(float64(width)*r)), max(1, int(float64(height)*r))
+}
+
+func sizedQQMarkdownImage(imageURL string, width, height int) string {
+	if width > 0 && height > 0 {
+		return fmt.Sprintf("![image #%dpx #%dpx](%s)", width, height, imageURL)
+	}
+	return fmt.Sprintf("![image](%s)", imageURL)
 }
 
 func qqBotCleanCQText(s string) string {

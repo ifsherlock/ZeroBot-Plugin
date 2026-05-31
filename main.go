@@ -151,6 +151,7 @@ func init() {
 		QQBotSecret:      systemSettings.QQBotSecret,
 		QQBotOpenID:      systemSettings.QQBotOpenID,
 		QQBotGroupOpenID: systemSettings.QQBotGroupOpenID,
+		QQBotPublicBase:  systemSettings.QQBotPublicBase,
 		QQBotMarkdown:    systemSettings.QQBotMarkdown,
 	})
 

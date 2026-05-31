@@ -22,6 +22,7 @@ type SystemSettings struct {
 	QQBotSecret      string  `json:"qqbot_secret,omitempty"`
 	QQBotOpenID      string  `json:"qqbot_openid,omitempty"`
 	QQBotGroupOpenID string  `json:"qqbot_group_openid,omitempty"`
+	QQBotPublicBase  string  `json:"qqbot_public_base,omitempty"`
 	QQBotMarkdown    bool    `json:"qqbot_markdown"`
 }
 
@@ -39,6 +40,7 @@ type systemSettingsResponse struct {
 	QQBotSecretSet   bool     `json:"qqbot_secret_set"`
 	QQBotOpenID      string   `json:"qqbot_openid,omitempty"`
 	QQBotGroupOpenID string   `json:"qqbot_group_openid,omitempty"`
+	QQBotPublicBase  string   `json:"qqbot_public_base,omitempty"`
 	QQBotMarkdown    bool     `json:"qqbot_markdown"`
 	PendingRestart   []string `json:"pending_restart"`
 }
@@ -110,6 +112,7 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 	settings.QQBotSecret = strings.TrimSpace(settings.QQBotSecret)
 	settings.QQBotOpenID = strings.TrimSpace(settings.QQBotOpenID)
 	settings.QQBotGroupOpenID = strings.TrimSpace(settings.QQBotGroupOpenID)
+	settings.QQBotPublicBase = strings.TrimSpace(settings.QQBotPublicBase)
 	return settings
 }
 

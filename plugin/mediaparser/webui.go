@@ -340,6 +340,7 @@ func systemSettingsForWeb() systemSettingsResponse {
 		settings.QQBotSecret != current.QQBotSecret ||
 		settings.QQBotOpenID != current.QQBotOpenID ||
 		settings.QQBotGroupOpenID != current.QQBotGroupOpenID ||
+		settings.QQBotPublicBase != current.QQBotPublicBase ||
 		settings.QQBotMarkdown != current.QQBotMarkdown {
 		pending = append(pending, "官方 QQBot 通道")
 	}
@@ -356,6 +357,7 @@ func systemSettingsForWeb() systemSettingsResponse {
 		QQBotSecretSet:   settings.QQBotSecret != "",
 		QQBotOpenID:      settings.QQBotOpenID,
 		QQBotGroupOpenID: settings.QQBotGroupOpenID,
+		QQBotPublicBase:  settings.QQBotPublicBase,
 		QQBotMarkdown:    settings.QQBotMarkdown,
 		PendingRestart:   pending,
 	}
@@ -805,9 +807,10 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">AppSecret <input id="qqbotSecret" type="password" autocomplete="new-password" placeholder="留空表示不修改"></label>
 <label class="field">默认用户 OpenID <input id="qqbotOpenID" autocomplete="off" placeholder="私聊主动发送兜底目标，可留空"></label>
 <label class="field">默认群 OpenID <input id="qqbotGroupOpenID" autocomplete="off" placeholder="群聊主动发送兜底目标，可留空"></label>
+<label class="field">图片公网根地址 <input id="qqbotPublicBase" autocomplete="off" placeholder="例如：https://你的域名/cache/"></label>
 <label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">开启后文本消息按 Markdown 载荷发送。</span></span></label>
 </div>
-<div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">保存后若提示重启，重启 qb 服务后生效。</span></div>
+<div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">图片公网根地址指向 qb 上媒体缓存的 HTTP 静态目录，保存后重启生效。</span></div>
 </div>
 </div>
 <div class="settingsStack">
@@ -1054,6 +1057,7 @@ function renderSystemSettings(){
   $('qqbotSecret').placeholder=sys.qqbot_secret_set?'已设置，留空不修改':'留空表示不设置';
   $('qqbotOpenID').value=sys.qqbot_openid||'';
   $('qqbotGroupOpenID').value=sys.qqbot_group_openid||'';
+  $('qqbotPublicBase').value=sys.qqbot_public_base||'';
   $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
  }
  const pending=sys.pending_restart||[];
@@ -1073,6 +1077,7 @@ async function saveSystemSettings(){
   qqbot_secret:$('qqbotSecret')?String($('qqbotSecret').value||'').trim():'',
   qqbot_openid:$('qqbotOpenID')?String($('qqbotOpenID').value||'').trim():'',
   qqbot_group_openid:$('qqbotGroupOpenID')?String($('qqbotGroupOpenID').value||'').trim():'',
+  qqbot_public_base:$('qqbotPublicBase')?String($('qqbotPublicBase').value||'').trim():'',
   qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
  };
  const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
