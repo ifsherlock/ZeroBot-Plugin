@@ -341,25 +341,29 @@ func systemSettingsForWeb() systemSettingsResponse {
 		settings.QQBotOpenID != current.QQBotOpenID ||
 		settings.QQBotGroupOpenID != current.QQBotGroupOpenID ||
 		settings.QQBotPublicBase != current.QQBotPublicBase ||
+		settings.QQBotCardDisabled != current.QQBotCardDisabled ||
+		settings.QQBotMediaEnabled != current.QQBotMediaEnabled ||
 		settings.QQBotMarkdown != current.QQBotMarkdown {
 		pending = append(pending, "官方 QQBot 通道")
 	}
 	return systemSettingsResponse{
-		WebUIAddr:        firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
-		WSURL:            firstNonEmpty(settings.WSURL, current.WSURL),
-		WSTokenSet:       settings.WSToken != "",
-		Nickname:         firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
-		CommandPrefix:    firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
-		SuperUsers:       uniqueInt64(settings.SuperUsers),
-		QQBotEnabled:     settings.QQBotEnabled,
-		QQBotName:        firstNonEmpty(settings.QQBotName, "qqbot"),
-		QQBotAppID:       settings.QQBotAppID,
-		QQBotSecretSet:   settings.QQBotSecret != "",
-		QQBotOpenID:      settings.QQBotOpenID,
-		QQBotGroupOpenID: settings.QQBotGroupOpenID,
-		QQBotPublicBase:  settings.QQBotPublicBase,
-		QQBotMarkdown:    settings.QQBotMarkdown,
-		PendingRestart:   pending,
+		WebUIAddr:         firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
+		WSURL:             firstNonEmpty(settings.WSURL, current.WSURL),
+		WSTokenSet:        settings.WSToken != "",
+		Nickname:          firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
+		CommandPrefix:     firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
+		SuperUsers:        uniqueInt64(settings.SuperUsers),
+		QQBotEnabled:      settings.QQBotEnabled,
+		QQBotName:         firstNonEmpty(settings.QQBotName, "qqbot"),
+		QQBotAppID:        settings.QQBotAppID,
+		QQBotSecretSet:    settings.QQBotSecret != "",
+		QQBotOpenID:       settings.QQBotOpenID,
+		QQBotGroupOpenID:  settings.QQBotGroupOpenID,
+		QQBotPublicBase:   settings.QQBotPublicBase,
+		QQBotCardEnabled:  !settings.QQBotCardDisabled,
+		QQBotMediaEnabled: settings.QQBotMediaEnabled,
+		QQBotMarkdown:     settings.QQBotMarkdown,
+		PendingRestart:    pending,
 	}
 }
 
@@ -808,6 +812,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">默认用户 OpenID <input id="qqbotOpenID" autocomplete="off" placeholder="私聊主动发送兜底目标，可留空"></label>
 <label class="field">默认群 OpenID <input id="qqbotGroupOpenID" autocomplete="off" placeholder="群聊主动发送兜底目标，可留空"></label>
 <label class="field">图片公网根地址 <input id="qqbotPublicBase" autocomplete="off" placeholder="例如：https://你的域名/cache/"></label>
+<label class="field">解析卡片 <span class="row"><label class="switch"><input id="qqbotCardEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">发送聚合解析卡片 PNG；需要图片公网根地址。</span></span></label>
+<label class="field">媒体图片下载 <span class="row"><label class="switch"><input id="qqbotMediaEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">只逐张发送图片，不发送视频，也不使用合并转发。</span></span></label>
 <label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">开启后文本消息按 Markdown 载荷发送。</span></span></label>
 </div>
 <div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。</span></div>
@@ -818,7 +824,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="sectionTitle"><b>能力范围</b><span class="muted">这里列的是官方 QQBot 通道下的实际表现。</span></div>
 <div class="commandGrid">
 <div class="commandItem"><b>聚合解析</b><small class="ok">可用</small><code>文本链接解析</code><code>卡片 PNG 转公网 URL 后回发</code></div>
-<div class="commandItem"><b>媒体下载</b><small class="muted">跳过</small><code>不发送原图、视频和合并转发</code></div>
+<div class="commandItem"><b>媒体图片</b><small class="ok">可选</small><code>开启后逐张发送图片</code><code>不发送视频，不合并转发</code></div>
 <div class="commandItem"><b>控制功能</b><small class="muted">暂不接入</small><code>官方通道权限与事件模型差异较大</code></div>
 </div>
 <p class="muted" style="margin-bottom:0">当前实现会把官方 QQBot 消息转换成 OneBot 风格事件交给聚合解析处理；白名单使用日志里的映射 user_id。</p>
@@ -991,7 +997,7 @@ async function refreshStatus(){
  $('overviewDetails').innerHTML=[
   infoLine('聚合解析', (cfg&&cfg.auto_parse?'已开启':'已关闭')+'，启用平台 '+enabled+'/'+platforms.length),
   infoLine('OneBot 策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
-  infoLine('QQBot 策略', (sys&&sys.qqbot_enabled?'卡片 Markdown 图片':'未启用')+' / 媒体下载关闭'),
+  infoLine('QQBot 策略', (sys&&sys.qqbot_enabled?(sys.qqbot_card_enabled?'卡片开启':'卡片关闭'):'未启用')+' / 媒体图片 '+onText(sys&&sys.qqbot_media_enabled)),
   infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
   infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-'),
   infoLine('路径', '配置 '+(st.config_path||'-')+' / 缓存 '+(st.cache_dir||'-'))
@@ -1060,6 +1066,8 @@ function renderSystemSettings(){
   $('qqbotOpenID').value=sys.qqbot_openid||'';
   $('qqbotGroupOpenID').value=sys.qqbot_group_openid||'';
   $('qqbotPublicBase').value=sys.qqbot_public_base||'';
+  $('qqbotCardEnabled').checked=sys.qqbot_card_enabled!==false;
+  $('qqbotMediaEnabled').checked=!!sys.qqbot_media_enabled;
   $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
  }
  const pending=sys.pending_restart||[];
@@ -1084,6 +1092,8 @@ async function saveSystemSettings(){
   qqbot_openid:$('qqbotOpenID')?String($('qqbotOpenID').value||'').trim():'',
   qqbot_group_openid:$('qqbotGroupOpenID')?String($('qqbotGroupOpenID').value||'').trim():'',
   qqbot_public_base:$('qqbotPublicBase')?String($('qqbotPublicBase').value||'').trim():'',
+  qqbot_card_disabled:$('qqbotCardEnabled')?!$('qqbotCardEnabled').checked:false,
+  qqbot_media_enabled:$('qqbotMediaEnabled')?!!$('qqbotMediaEnabled').checked:false,
   qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
  };
  const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

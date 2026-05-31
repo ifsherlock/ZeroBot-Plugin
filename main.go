@@ -139,20 +139,22 @@ func init() {
 		os.Setenv("ZBP_BUILTIN_WEBUI", *webui)
 	}
 	mediaparser.SetRuntimeSystemSettings(mediaparser.SystemSettings{
-		WebUIAddr:        *webui,
-		WSURL:            *url,
-		WSToken:          *token,
-		Nickname:         *adana,
-		CommandPrefix:    *prefix,
-		SuperUsers:       sus,
-		QQBotEnabled:     systemSettings.QQBotEnabled,
-		QQBotName:        systemSettings.QQBotName,
-		QQBotAppID:       systemSettings.QQBotAppID,
-		QQBotSecret:      systemSettings.QQBotSecret,
-		QQBotOpenID:      systemSettings.QQBotOpenID,
-		QQBotGroupOpenID: systemSettings.QQBotGroupOpenID,
-		QQBotPublicBase:  systemSettings.QQBotPublicBase,
-		QQBotMarkdown:    systemSettings.QQBotMarkdown,
+		WebUIAddr:         *webui,
+		WSURL:             *url,
+		WSToken:           *token,
+		Nickname:          *adana,
+		CommandPrefix:     *prefix,
+		SuperUsers:        sus,
+		QQBotEnabled:      systemSettings.QQBotEnabled,
+		QQBotName:         systemSettings.QQBotName,
+		QQBotAppID:        systemSettings.QQBotAppID,
+		QQBotSecret:       systemSettings.QQBotSecret,
+		QQBotOpenID:       systemSettings.QQBotOpenID,
+		QQBotGroupOpenID:  systemSettings.QQBotGroupOpenID,
+		QQBotPublicBase:   systemSettings.QQBotPublicBase,
+		QQBotCardDisabled: systemSettings.QQBotCardDisabled,
+		QQBotMediaEnabled: systemSettings.QQBotMediaEnabled,
+		QQBotMarkdown:     systemSettings.QQBotMarkdown,
 	})
 
 	if *save != "" {

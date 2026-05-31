@@ -10,39 +10,43 @@ import (
 )
 
 type SystemSettings struct {
-	WebUIAddr        string  `json:"webui_addr"`
-	WSURL            string  `json:"ws_url"`
-	WSToken          string  `json:"ws_token,omitempty"`
-	Nickname         string  `json:"nickname"`
-	CommandPrefix    string  `json:"command_prefix"`
-	SuperUsers       []int64 `json:"super_users"`
-	QQBotEnabled     bool    `json:"qqbot_enabled"`
-	QQBotName        string  `json:"qqbot_name"`
-	QQBotAppID       string  `json:"qqbot_app_id,omitempty"`
-	QQBotSecret      string  `json:"qqbot_secret,omitempty"`
-	QQBotOpenID      string  `json:"qqbot_openid,omitempty"`
-	QQBotGroupOpenID string  `json:"qqbot_group_openid,omitempty"`
-	QQBotPublicBase  string  `json:"qqbot_public_base,omitempty"`
-	QQBotMarkdown    bool    `json:"qqbot_markdown"`
+	WebUIAddr         string  `json:"webui_addr"`
+	WSURL             string  `json:"ws_url"`
+	WSToken           string  `json:"ws_token,omitempty"`
+	Nickname          string  `json:"nickname"`
+	CommandPrefix     string  `json:"command_prefix"`
+	SuperUsers        []int64 `json:"super_users"`
+	QQBotEnabled      bool    `json:"qqbot_enabled"`
+	QQBotName         string  `json:"qqbot_name"`
+	QQBotAppID        string  `json:"qqbot_app_id,omitempty"`
+	QQBotSecret       string  `json:"qqbot_secret,omitempty"`
+	QQBotOpenID       string  `json:"qqbot_openid,omitempty"`
+	QQBotGroupOpenID  string  `json:"qqbot_group_openid,omitempty"`
+	QQBotPublicBase   string  `json:"qqbot_public_base,omitempty"`
+	QQBotCardDisabled bool    `json:"qqbot_card_disabled,omitempty"`
+	QQBotMediaEnabled bool    `json:"qqbot_media_enabled"`
+	QQBotMarkdown     bool    `json:"qqbot_markdown"`
 }
 
 type systemSettingsResponse struct {
-	WebUIAddr        string   `json:"webui_addr"`
-	WSURL            string   `json:"ws_url"`
-	WSToken          string   `json:"ws_token,omitempty"`
-	WSTokenSet       bool     `json:"ws_token_set"`
-	Nickname         string   `json:"nickname"`
-	CommandPrefix    string   `json:"command_prefix"`
-	SuperUsers       []int64  `json:"super_users"`
-	QQBotEnabled     bool     `json:"qqbot_enabled"`
-	QQBotName        string   `json:"qqbot_name"`
-	QQBotAppID       string   `json:"qqbot_app_id,omitempty"`
-	QQBotSecretSet   bool     `json:"qqbot_secret_set"`
-	QQBotOpenID      string   `json:"qqbot_openid,omitempty"`
-	QQBotGroupOpenID string   `json:"qqbot_group_openid,omitempty"`
-	QQBotPublicBase  string   `json:"qqbot_public_base,omitempty"`
-	QQBotMarkdown    bool     `json:"qqbot_markdown"`
-	PendingRestart   []string `json:"pending_restart"`
+	WebUIAddr         string   `json:"webui_addr"`
+	WSURL             string   `json:"ws_url"`
+	WSToken           string   `json:"ws_token,omitempty"`
+	WSTokenSet        bool     `json:"ws_token_set"`
+	Nickname          string   `json:"nickname"`
+	CommandPrefix     string   `json:"command_prefix"`
+	SuperUsers        []int64  `json:"super_users"`
+	QQBotEnabled      bool     `json:"qqbot_enabled"`
+	QQBotName         string   `json:"qqbot_name"`
+	QQBotAppID        string   `json:"qqbot_app_id,omitempty"`
+	QQBotSecretSet    bool     `json:"qqbot_secret_set"`
+	QQBotOpenID       string   `json:"qqbot_openid,omitempty"`
+	QQBotGroupOpenID  string   `json:"qqbot_group_openid,omitempty"`
+	QQBotPublicBase   string   `json:"qqbot_public_base,omitempty"`
+	QQBotCardEnabled  bool     `json:"qqbot_card_enabled"`
+	QQBotMediaEnabled bool     `json:"qqbot_media_enabled"`
+	QQBotMarkdown     bool     `json:"qqbot_markdown"`
+	PendingRestart    []string `json:"pending_restart"`
 }
 
 var (
