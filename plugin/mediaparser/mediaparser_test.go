@@ -1016,6 +1016,15 @@ func TestCompactCardImagesDropsFailedFetches(t *testing.T) {
 	}
 }
 
+func TestBlankCardImageDetectsLightPlaceholders(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 128, 128))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 248, G: 248, B: 248, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(112, 112, 120, 120), &image.Uniform{C: color.RGBA{R: 210, G: 210, B: 210, A: 255}}, image.Point{}, draw.Src)
+	if !isBlankCardImage(img) {
+		t.Fatal("mostly white placeholder should be treated as blank")
+	}
+}
+
 func TestFetchCardImageGroupFallsBackFromBlankCandidate(t *testing.T) {
 	blank := image.NewRGBA(image.Rect(0, 0, 32, 32))
 	draw.Draw(blank, blank.Bounds(), &image.Uniform{C: color.RGBA{R: 255, G: 255, B: 255, A: 255}}, image.Point{}, draw.Src)
@@ -1036,6 +1045,29 @@ func TestFetchCardImageGroupFallsBackFromBlankCandidate(t *testing.T) {
 	img := fetchCardImageGroup([]string{server.URL + "/blank.png", server.URL + "/good.png"}, nil)
 	if isBlankCardImage(img) {
 		t.Fatal("expected fallback image to be non-blank")
+	}
+}
+
+func TestXhsImageURLCandidatesKeepsFallbacks(t *testing.T) {
+	img := map[string]any{
+		"urlDefault": "https://img.example.com/default.jpg",
+		"url":        "https://img.example.com/raw.jpg",
+		"infoList": []any{
+			map[string]any{"imageScene": "CRD_PRV_WEBP", "url": "https://img.example.com/preview.webp"},
+			map[string]any{"imageScene": "WB_DFT", "url": "https://img.example.com/wb.jpg"},
+			map[string]any{"imageScene": "CRD_WM_WEBP", "url": "https://img.example.com/wm.webp"},
+		},
+	}
+	got := xhsImageURLCandidates(img)
+	want := []string{
+		"https://img.example.com/wb.jpg",
+		"https://img.example.com/wm.webp",
+		"https://img.example.com/preview.webp",
+		"https://img.example.com/default.jpg",
+		"https://img.example.com/raw.jpg",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("unexpected candidates:\n got=%#v\nwant=%#v", got, want)
 	}
 }
 

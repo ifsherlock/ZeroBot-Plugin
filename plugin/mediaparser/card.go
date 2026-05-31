@@ -2087,10 +2087,11 @@ func isBlankCardImage(img image.Image) bool {
 	if b.Dx() <= 0 || b.Dy() <= 0 {
 		return true
 	}
-	stepX := maxInt(b.Dx()/8, 1)
-	stepY := maxInt(b.Dy()/8, 1)
+	stepX := maxInt(b.Dx()/16, 1)
+	stepY := maxInt(b.Dy()/16, 1)
 	samples := 0
 	visible := 0
+	light := 0
 	var minR, minG, minB uint8 = 255, 255, 255
 	var maxR, maxG, maxB uint8
 	for y := b.Min.Y; y < b.Max.Y; y += stepY {
@@ -2102,6 +2103,9 @@ func isBlankCardImage(img image.Image) bool {
 			}
 			visible++
 			rr, gg, bbb := uint8(r>>8), uint8(g>>8), uint8(bb>>8)
+			if rr >= 232 && gg >= 232 && bbb >= 232 {
+				light++
+			}
 			if rr < minR {
 				minR = rr
 			}
@@ -2126,6 +2130,9 @@ func isBlankCardImage(img image.Image) bool {
 		return true
 	}
 	if float64(visible)/float64(samples) < 0.08 {
+		return true
+	}
+	if visible > 0 && float64(light)/float64(visible) > 0.98 {
 		return true
 	}
 	spread := int(maxR-minR) + int(maxG-minG) + int(maxB-minB)

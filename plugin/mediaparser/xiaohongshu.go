@@ -81,26 +81,6 @@ func parseXiaohongshu(cfg config, raw string) (mediaMeta, error) {
 		}
 		videoGroups = append(videoGroups, []string{ensureHTTPS(videoURL)})
 	} else {
-		for _, item := range getSlice(note, "imageList") {
-			img, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			imgURL := firstNonEmpty(getString(img, "urlDefault"), getString(img, "url"))
-			if imgURL == "" {
-				for _, info := range getSlice(img, "infoList") {
-					m, ok := info.(map[string]any)
-					if ok && getString(m, "imageScene") == "WB_DFT" {
-						imgURL = getString(m, "url")
-						break
-					}
-				}
-			}
-			imgURL = ensureHTTPS(imgURL)
-			if imgURL != "" && !strings.Contains(imgURL, "picasso-static") && !strings.Contains(imgURL, "fe-platform") {
-				imageGroups = append(imageGroups, []string{imgURL})
-			}
-		}
 		if len(imageGroups) == 0 {
 			return mediaMeta{}, fmt.Errorf("小红书未找到图片URL")
 		}
@@ -227,30 +207,44 @@ func xhsExtractImageGroups(note map[string]any) [][]string {
 		if !ok {
 			continue
 		}
-		imgURL := ""
-		for _, scene := range []string{"WB_DFT", "CRD_WM_WEBP", "CRD_PRV_WEBP"} {
-			for _, info := range getSlice(img, "infoList") {
-				m, ok := info.(map[string]any)
-				if ok && getString(m, "imageScene") == scene {
-					imgURL = getString(m, "url")
-					break
-				}
-			}
-			if imgURL != "" {
-				break
-			}
-		}
-		if imgURL == "" {
-			imgURL = firstNonEmpty(getString(img, "urlDefault"), getString(img, "url"), firstNestedHTTPURL(img, 4))
-		}
-		imgURL = ensureHTTPS(imgURL)
-		if imgURL == "" || xhsBadImageURL(imgURL) || seen[imgURL] {
+		candidates := xhsImageURLCandidates(img)
+		if len(candidates) == 0 || seen[candidates[0]] {
 			continue
 		}
-		seen[imgURL] = true
-		groups = append(groups, []string{imgURL})
+		seen[candidates[0]] = true
+		groups = append(groups, candidates)
 	}
 	return groups
+}
+
+func xhsImageURLCandidates(img map[string]any) []string {
+	candidates := []string{}
+	add := func(raw string) {
+		raw = ensureHTTPS(raw)
+		if raw == "" || xhsBadImageURL(raw) {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == raw {
+				return
+			}
+		}
+		candidates = append(candidates, raw)
+	}
+	for _, scene := range []string{"WB_DFT", "CRD_WM_WEBP", "CRD_PRV_WEBP"} {
+		for _, info := range getSlice(img, "infoList") {
+			m, ok := info.(map[string]any)
+			if ok && getString(m, "imageScene") == scene {
+				add(getString(m, "url"))
+			}
+		}
+	}
+	add(getString(img, "urlDefault"))
+	add(getString(img, "url"))
+	for _, raw := range nestedHTTPURLs(img, 4) {
+		add(raw)
+	}
+	return candidates
 }
 
 func xhsBadImageURL(raw string) bool {
@@ -265,8 +259,26 @@ func dedupeMediaGroups(groups [][]string) [][]string {
 		if len(group) == 0 || group[0] == "" || seen[group[0]] {
 			continue
 		}
+		group = dedupeMediaGroup(group)
+		if len(group) == 0 {
+			continue
+		}
 		seen[group[0]] = true
 		out = append(out, group)
+	}
+	return out
+}
+
+func dedupeMediaGroup(group []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(group))
+	for _, raw := range group {
+		raw = ensureHTTPS(raw)
+		if raw == "" || seen[raw] {
+			continue
+		}
+		seen[raw] = true
+		out = append(out, raw)
 	}
 	return out
 }
