@@ -743,7 +743,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </style>
 </head>
 <body>
-<header><h1>ZeroBot 控制台</h1><div class="toolbar"><span class="statusDot" id="topState">加载中</span><button class="primary" onclick="save()">保存配置</button></div></header>
+<header><h1>ZeroBot 控制台</h1><div class="toolbar"><button class="primary hidden" id="restartTop" onclick="restartSystem()">重启进程</button><span class="statusDot" id="topState">加载中</span><button class="primary" onclick="save()">保存配置</button></div></header>
 <div class="app">
 <aside class="sidebar">
 <div class="brand">ZBP Console</div>
@@ -756,7 +756,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </nav>
 </aside>
 <main class="wrap">
-<div class="hero"><div><h2>机器人控制台</h2><p>查看运行状态，调整媒体解析与插件配置。</p></div><div class="toolbar"><button onclick="refreshStatus()">刷新状态</button><button class="danger" onclick="clearCache()">清理缓存</button></div></div>
+<div class="hero"><div><h2>机器人控制台</h2><p>查看运行状态，管理 OneBot 与官方 QQBot 通道。</p></div><div class="toolbar"><button onclick="refreshStatus()">刷新状态</button><button class="danger" onclick="clearCache()">清理缓存</button></div></div>
 <section class="grid">
 <div class="span4" id="overview"></div>
 <div class="panel metric page active" data-page="overview"><span class="muted">服务状态</span><b id="svc">-</b></div>
@@ -765,7 +765,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel metric page active" data-page="overview"><span class="muted">解析失败</span><b id="failn">-</b></div>
 <div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
 <div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>运行信息</b></div><div class="overviewList" id="runtimeSummary">-</div></div>
-<div class="panel span4 page active" data-page="overview"><div class="sectionTitle"><b>插件概览</b><span class="muted">关键开关和运行路径。</span></div><div class="overviewList" id="overviewDetails">-</div></div>
+<div class="panel span4 page active" data-page="overview"><div class="sectionTitle"><b>通道与插件</b><span class="muted">当前连接、解析策略和图片公开访问状态。</span></div><div class="overviewList" id="overviewDetails">-</div></div>
 <div class="panel span4 page" data-page="system" id="system">
 <div class="sectionTitle"><b>全局设置</b><span class="muted">端口和 WS 地址保存后需要重启服务生效；超级管理员、昵称、命令前缀会立即写入运行时。</span><span class="right msg" id="systemMsg"></span></div>
 <div class="accessGrid">
@@ -795,7 +795,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <p class="muted" style="margin-bottom:0">这些命令沿用聊天内权限判断。WebUI 暂不开放踢人、禁言等直接操作按钮，等 WebUI 鉴权做好后再接入可执行动作。</p>
 </div>
 <div class="panel span4 page" data-page="qqbot" id="qqbot">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">接入腾讯官方机器人通道；当前阶段优先保证聚合解析可用。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">官方通道能力较窄：解析卡片走 Markdown 图片，媒体下载和合并转发默认跳过。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="settingsGrid">
 <div class="settingsStack">
 <div class="settingsCard">
@@ -810,18 +810,18 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">图片公网根地址 <input id="qqbotPublicBase" autocomplete="off" placeholder="例如：https://你的域名/cache/"></label>
 <label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">开启后文本消息按 Markdown 载荷发送。</span></span></label>
 </div>
-<div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">图片公网根地址指向 qb 上媒体缓存的 HTTP 静态目录，保存后重启生效。</span></div>
+<div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。</span></div>
 </div>
 </div>
 <div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>插件支持</b><span class="muted">官方 Bot 能力限制较多，先把可用范围列清楚。</span></div>
+<div class="sectionTitle"><b>能力范围</b><span class="muted">这里列的是官方 QQBot 通道下的实际表现。</span></div>
 <div class="commandGrid">
-<div class="commandItem"><b>聚合解析</b><small class="ok">第一阶段接入</small><code>文本链接解析</code><code>解析结果文本/Markdown 回发</code></div>
-<div class="commandItem"><b>图片卡片</b><small class="muted">后续增强</small><code>需要媒体上传或公网图片托管</code></div>
+<div class="commandItem"><b>聚合解析</b><small class="ok">可用</small><code>文本链接解析</code><code>卡片 PNG 转公网 URL 后回发</code></div>
+<div class="commandItem"><b>媒体下载</b><small class="muted">跳过</small><code>不发送原图、视频和合并转发</code></div>
 <div class="commandItem"><b>控制功能</b><small class="muted">暂不接入</small><code>官方通道权限与事件模型差异较大</code></div>
 </div>
-<p class="muted" style="margin-bottom:0">当前实现会把官方 QQBot 消息转换成 OneBot 风格事件交给已有插件处理；本地生成的图片暂以文本占位回发。</p>
+<p class="muted" style="margin-bottom:0">当前实现会把官方 QQBot 消息转换成 OneBot 风格事件交给聚合解析处理；白名单使用日志里的映射 user_id。</p>
 </div>
 </div>
 </div>
@@ -985,11 +985,13 @@ async function refreshStatus(){
   infoLine('Go 版本', st.go||'-'),
   infoLine('WebUI 地址', (sys&&sys.webui_addr)||'-'),
   infoLine('OneBot WS', (sys&&sys.ws_url)||'-'),
+  infoLine('官方 QQBot', (sys&&sys.qqbot_enabled?'已启用':'未启用')+' / 图片 '+((sys&&sys.qqbot_public_base)?'已配置':'未配置')),
   infoLine('命令前缀', (sys&&sys.command_prefix)||'/')
  ].join('');
  $('overviewDetails').innerHTML=[
   infoLine('聚合解析', (cfg&&cfg.auto_parse?'已开启':'已关闭')+'，启用平台 '+enabled+'/'+platforms.length),
-  infoLine('发送策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
+  infoLine('OneBot 策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
+  infoLine('QQBot 策略', (sys&&sys.qqbot_enabled?'卡片 Markdown 图片':'未启用')+' / 媒体下载关闭'),
   infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
   infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-'),
   infoLine('路径', '配置 '+(st.config_path||'-')+' / 缓存 '+(st.cache_dir||'-'))
@@ -1061,7 +1063,11 @@ function renderSystemSettings(){
   $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
  }
  const pending=sys.pending_restart||[];
- $('sysPending').innerHTML=pending.length?'重启后生效：'+escapeHTML(pending.join('、'))+' <button class="primary" onclick="restartSystem()">重启进程</button>':'当前没有待重启生效的配置';
+ $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
+ if($('restartTop')){
+  $('restartTop').classList.toggle('hidden', !pending.length);
+  $('restartTop').title=pending.length?'重启后生效：'+pending.join('、'):'';
+ }
 }
 async function saveSystemSettings(){
  const payload={

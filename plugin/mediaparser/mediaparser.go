@@ -918,7 +918,7 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 
 	infoCardSent := false
 	if cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform) {
-		if qqbotEvent {
+		if qqbotEvent && !qqBotPublicImageEnabled() {
 			ctx.SendChain(message.Text(buildText(meta)))
 			infoCardSent = true
 			logrus.Infof("[mediaparser] sent_info_card_text_fallback channel=qqbot platform=%s title=%q", meta.Platform, meta.Title)
@@ -946,6 +946,12 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 
 func isOfficialQQBotEvent(ctx *zero.Ctx) bool {
 	return ctx != nil && ctx.Event != nil && ctx.Event.RawEvent.Get("qqbot_source").Exists()
+}
+
+func qqBotPublicImageEnabled() bool {
+	systemMu.RLock()
+	defer systemMu.RUnlock()
+	return strings.TrimSpace(runtimeSystem.QQBotPublicBase) != ""
 }
 
 func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
