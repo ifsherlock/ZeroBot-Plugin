@@ -1695,6 +1695,7 @@ func testGradientImage(w, h int, a, b color.RGBA) image.Image {
 
 func TestSafetyBlockedUsesGlobalCategories(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories[safetyCategoryAdult] = true
 	meta := mediaMeta{Platform: "bilibili", Title: "normal title", Desc: "contains NSFW marker"}
 	hit, blocked := safetyBlocked(cfg, meta, "")
 	if !blocked {
@@ -1707,6 +1708,7 @@ func TestSafetyBlockedUsesGlobalCategories(t *testing.T) {
 
 func TestSafetyBlockedUsesXAdultTags(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories[safetyCategoryAdult] = true
 	meta := mediaMeta{Platform: "twitter", Title: "tag batch", Desc: "#goon #nsfwtwt wataa"}
 	hit, blocked := safetyBlocked(cfg, meta, "")
 	if !blocked {
@@ -1719,6 +1721,7 @@ func TestSafetyBlockedUsesXAdultTags(t *testing.T) {
 
 func TestSafetyBlockedUsesPlatformCategoriesOnlyForPlatform(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.SafetyPlatformCategories["twitter"] = map[string]bool{safetyCategoryAd: true}
 	meta := mediaMeta{Platform: "twitter", Desc: "dm for menu"}
 	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
 		t.Fatal("expected twitter ad category to block")
@@ -1765,6 +1768,7 @@ func TestSafetyBlockedUsesCustomCategoryOnPlatform(t *testing.T) {
 
 func TestSafetyBlockedUsesGlobalExcludes(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories[safetyCategoryAdult] = true
 	cfg.SafetyExcludeGlobal[safetyCategoryAdult] = []string{"nsfw art contest"}
 	meta := mediaMeta{Platform: "bilibili", Title: "NSFW art contest recap"}
 	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
@@ -1774,6 +1778,8 @@ func TestSafetyBlockedUsesGlobalExcludes(t *testing.T) {
 
 func TestSafetyBlockedUsesPlatformExcludesOnlyForPlatform(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.SafetyPlatformCategories["twitter"] = map[string]bool{safetyCategoryAd: true}
+	cfg.SafetyPlatformCategories["instagram"] = map[string]bool{safetyCategoryAd: true}
 	cfg.SafetyExcludePlatform["twitter"] = map[string][]string{
 		safetyCategoryAd: {"dm for menu archive"},
 	}
@@ -1788,9 +1794,38 @@ func TestSafetyBlockedUsesPlatformExcludesOnlyForPlatform(t *testing.T) {
 }
 
 func TestNormalizeSafetyWordsDeduplicatesAndTrims(t *testing.T) {
-	got := uniqueSafetyWords([]string{" NSFW ", "nsfw", "", "R-18"})
+	got := uniqueSafetyWords([]string{" #NSFW ", "nsfw", "", "R-18"})
 	if len(got) != 2 {
 		t.Fatalf("len=%d got=%v", len(got), got)
+	}
+	if containsString(got, "#NSFW") || !containsString(got, "NSFW") {
+		t.Fatalf("expected leading hash to be stripped, got=%v", got)
+	}
+}
+
+func TestDefaultSafetyCategoriesOnlyEnableGlobalPolitics(t *testing.T) {
+	cfg := defaultConfig()
+	if len(cfg.SafetyPlatformCategories) != 0 {
+		t.Fatalf("expected no default platform categories, got=%v", cfg.SafetyPlatformCategories)
+	}
+	if len(cfg.SafetyGlobalCategories) != 1 || !cfg.SafetyGlobalCategories[safetyCategoryPolitics] {
+		t.Fatalf("expected only global politics enabled, got=%v", cfg.SafetyGlobalCategories)
+	}
+}
+
+func TestNormalizeSafetyCustomCategoriesCleansLegacyPlatformLabels(t *testing.T) {
+	got := normalizeSafetyCustomCategories(map[string]safetyCustomCategory{
+		"custom_adult":    {Label: "Instagram 自定义-黄推诈骗/导流", Words: []string{"#NSFW"}},
+		"custom_politics": {Label: "tk 自定义-political_sensitive", Words: []string{"legacy"}},
+	})
+	if got["custom_adult"].Label != "自定义-色情" {
+		t.Fatalf("adult label=%q", got["custom_adult"].Label)
+	}
+	if got["custom_politics"].Label != "自定义-政治" {
+		t.Fatalf("politics label=%q", got["custom_politics"].Label)
+	}
+	if containsString(got["custom_adult"].Words, "#NSFW") || !containsString(got["custom_adult"].Words, "NSFW") {
+		t.Fatalf("expected custom words without leading hash, got=%v", got["custom_adult"].Words)
 	}
 }
 

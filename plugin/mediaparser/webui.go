@@ -1827,7 +1827,7 @@ function renderSafetyPlatformCategories(){
  const map=cfg.safety_platform_categories[platform]||{};
  $('safetyPlatformCategories').innerHTML=allSafetyCategories().map(c=>'<label class="groupItem"><input type="checkbox" '+checked(!!map[c.id])+' data-platform="'+escapeHTML(platform)+'" data-category="'+escapeHTML(c.id)+'" onchange="setSafetyPlatformCategory(this.dataset.platform,this.dataset.category,this.checked)"><span>'+escapeHTML(c.label)+'<small>'+(c.builtin?'内置':'自定义')+' · '+escapeHTML(c.id)+'</small></span></label>').join('');
 }
-function splitWords(text){return String(text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean)}
+function splitWords(text){return String(text||'').split(/\n+/).map(x=>x.trim().replace(/^#+/,'')).filter(Boolean)}
 function renderSafetyCategoryEditor(){
  ensureSafetyMaps();
  const id=selectedSafetyCategory;

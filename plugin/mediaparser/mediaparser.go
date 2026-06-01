@@ -123,6 +123,7 @@ type config struct {
 	SafetyExcludePlatform    map[string]map[string][]string  `json:"safety_exclude_platform"`
 	SafetyCustomCategories   map[string]safetyCustomCategory `json:"safety_custom_categories"`
 	SafetyCustomSeedVersion  int                             `json:"safety_custom_seed_version"`
+	SafetyDefaultVersion     int                             `json:"safety_default_version"`
 
 	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
 	BilibiliCookie     string `json:"bilibili_cookie"`
@@ -260,44 +261,41 @@ func defaultConfig() config {
 		output[p.Name] = outputAll
 	}
 	return config{
-		AutoParse:              true,
-		Keywords:               []string{"视频解析", "解析视频", "解析", "parse"},
-		AdminID:                10000,
-		AccessMode:             accessNone,
-		PrivateAccessMode:      accessNone,
-		GroupAccessMode:        accessNone,
-		GroupUserAccessMode:    accessNone,
-		UserBlacklist:          map[int64]bool{},
-		GroupBlacklist:         map[int64]bool{},
-		GroupUserBlacklist:     map[int64]bool{},
-		UserWhitelist:          map[int64]bool{},
-		GroupWhitelist:         map[int64]bool{},
-		GroupUserWhitelist:     map[int64]bool{},
-		PlatformEnabled:        enabled,
-		PlatformInfoCard:       infoCard,
-		PlatformSendMedia:      sendMedia,
-		PlatformDownload:       download,
-		PlatformGroupBlock:     platformGroupBlock,
-		OutputMode:             output,
-		SendInfoCard:           true,
-		SendMedia:              true,
-		DownloadVideo:          true,
-		MaxVideoMB:             defaultMaxVideoMB,
-		VideoMaxResolution:     0,
-		PlatformResolution:     map[string]int{},
-		CacheTTLMinutes:        defaultTTLMinutes,
-		TimeoutSeconds:         defaultTimeoutSec,
-		Debug:                  true,
-		ParseReaction:          true,
-		ParseReactionEmoji:     "🍉",
-		FailReactionEmoji:      "❌",
-		SafetyFilterEnabled:    true,
-		SafetyFilterNotice:     false,
-		SafetyFilterNoticeText: "内容触发安全屏蔽，已停止解析。",
-		SafetyGlobalCategories: map[string]bool{
-			safetyCategoryAdult:    true,
-			safetyCategoryViolence: true,
-		},
+		AutoParse:                true,
+		Keywords:                 []string{"视频解析", "解析视频", "解析", "parse"},
+		AdminID:                  10000,
+		AccessMode:               accessNone,
+		PrivateAccessMode:        accessNone,
+		GroupAccessMode:          accessNone,
+		GroupUserAccessMode:      accessNone,
+		UserBlacklist:            map[int64]bool{},
+		GroupBlacklist:           map[int64]bool{},
+		GroupUserBlacklist:       map[int64]bool{},
+		UserWhitelist:            map[int64]bool{},
+		GroupWhitelist:           map[int64]bool{},
+		GroupUserWhitelist:       map[int64]bool{},
+		PlatformEnabled:          enabled,
+		PlatformInfoCard:         infoCard,
+		PlatformSendMedia:        sendMedia,
+		PlatformDownload:         download,
+		PlatformGroupBlock:       platformGroupBlock,
+		OutputMode:               output,
+		SendInfoCard:             true,
+		SendMedia:                true,
+		DownloadVideo:            true,
+		MaxVideoMB:               defaultMaxVideoMB,
+		VideoMaxResolution:       0,
+		PlatformResolution:       map[string]int{},
+		CacheTTLMinutes:          defaultTTLMinutes,
+		TimeoutSeconds:           defaultTimeoutSec,
+		Debug:                    true,
+		ParseReaction:            true,
+		ParseReactionEmoji:       "🍉",
+		FailReactionEmoji:        "❌",
+		SafetyFilterEnabled:      true,
+		SafetyFilterNotice:       false,
+		SafetyFilterNoticeText:   "内容触发安全屏蔽，已停止解析。",
+		SafetyGlobalCategories:   defaultSafetyGlobalCategories(),
 		SafetyPlatformCategories: defaultSafetyPlatformCategories(),
 		SafetyCustomGlobal:       map[string][]string{},
 		SafetyCustomPlatform:     map[string]map[string][]string{},
@@ -305,6 +303,7 @@ func defaultConfig() config {
 		SafetyExcludePlatform:    map[string]map[string][]string{},
 		SafetyCustomCategories:   map[string]safetyCustomCategory{},
 		SafetyCustomSeedVersion:  0,
+		SafetyDefaultVersion:     currentSafetyDefaultVersion,
 		AvoidAV1:                 true,
 		BilibiliMaxQuality:       "不限制",
 		UseYTDLPFallback:         false,
@@ -558,6 +557,9 @@ func normalizeConfig(cfg *config) bool {
 		cfg.SafetyCustomCategories = normalized
 	}
 	if migrateLegacySafetyCustomWords(cfg) {
+		changed = true
+	}
+	if migrateSafetyDefaults(cfg) {
 		changed = true
 	}
 	if cfg.SafetyCustomSeedVersion < currentSafetyCustomSeedVersion {

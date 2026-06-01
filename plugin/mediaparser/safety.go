@@ -20,6 +20,7 @@ const (
 	safetyCategoryPolitics = "politics"
 
 	currentSafetyCustomSeedVersion = 3
+	currentSafetyDefaultVersion    = 2
 )
 
 type safetyHit struct {
@@ -100,20 +101,12 @@ var safetyCategoryDefs = []safetyCategoryDef{
 var safetyBuiltinWordCache = buildSafetyBuiltinWordCache()
 
 func defaultSafetyPlatformCategories() map[string]map[string]bool {
-	out := map[string]map[string]bool{}
-	for _, p := range []string{"twitter", "instagram", "tiktok", "youtube"} {
-		out[p] = map[string]bool{
-			safetyCategoryAd:       true,
-			safetyCategoryPolitics: true,
-		}
-	}
-	return out
+	return map[string]map[string]bool{}
 }
 
 func defaultSafetyGlobalCategories() map[string]bool {
 	return map[string]bool{
-		safetyCategoryAdult:    true,
-		safetyCategoryViolence: true,
+		safetyCategoryPolitics: true,
 	}
 }
 
@@ -445,7 +438,7 @@ func normalizeSafetyCustomCategories(in map[string]safetyCustomCategory) map[str
 			id = target
 			legacy = true
 		}
-		item.Label = strings.TrimSpace(item.Label)
+		item.Label = cleanSafetyCustomCategoryLabel(id, item.Label)
 		if item.Label == "" {
 			item.Label = id
 		}
@@ -468,6 +461,34 @@ func normalizeSafetyCustomCategories(in map[string]safetyCustomCategory) map[str
 		out[id] = item
 	}
 	return out
+}
+
+func cleanSafetyCustomCategoryLabel(id, label string) string {
+	label = strings.TrimSpace(label)
+	switch normalizeCustomSafetyCategoryID(id) {
+	case "custom_adult":
+		return "自定义-色情"
+	case "custom_ad":
+		return "自定义-广告"
+	case "custom_violence":
+		return "自定义-暴恐"
+	case "custom_politics":
+		return "自定义-政治"
+	}
+	for _, prefix := range []string{"Instagram ", "TikTok ", "Twitter ", "YouTube ", "X ", "tk "} {
+		label = strings.TrimPrefix(label, prefix)
+	}
+	return strings.TrimSpace(label)
+}
+
+func migrateSafetyDefaults(cfg *config) bool {
+	if cfg.SafetyDefaultVersion >= currentSafetyDefaultVersion {
+		return false
+	}
+	cfg.SafetyGlobalCategories = defaultSafetyGlobalCategories()
+	cfg.SafetyPlatformCategories = defaultSafetyPlatformCategories()
+	cfg.SafetyDefaultVersion = currentSafetyDefaultVersion
+	return true
 }
 
 func legacyCustomSafetyCategoryID(id string) (string, bool) {
@@ -549,7 +570,7 @@ func uniqueSafetyWords(words []string) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, word := range words {
-		word = strings.TrimSpace(word)
+		word = cleanSafetyWord(word)
 		if word == "" {
 			continue
 		}
@@ -564,6 +585,10 @@ func uniqueSafetyWords(words []string) []string {
 		return normalizeSafetyText(out[i]) < normalizeSafetyText(out[j])
 	})
 	return out
+}
+
+func cleanSafetyWord(word string) string {
+	return strings.TrimLeft(strings.TrimSpace(word), "#")
 }
 
 func safetyBlocked(cfg config, meta mediaMeta, raw string) (safetyHit, bool) {
