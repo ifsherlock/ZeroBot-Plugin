@@ -3,11 +3,16 @@ package mediaparser
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc64"
 	"image"
 	"image/color"
 	"image/png"
@@ -32,10 +37,18 @@ import (
 type WebStatusProvider func() map[string]any
 
 type webAuthConfig struct {
-	User     string
-	Pass     string
-	PassPath string
-	Enabled  bool
+	User      string
+	Password  string
+	StorePath string
+	Enabled   bool
+	Store     webAuthStore
+}
+
+type webAuthStore struct {
+	User       string `json:"user"`
+	Salt       string `json:"salt"`
+	Hash       string `json:"hash"`
+	Iterations int    `json:"iterations"`
 }
 
 type webPlatform struct {
@@ -169,6 +182,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		}
 	})
 	mux.HandleFunc("/api/system/settings", serveSystemSettingsAPI)
+	mux.HandleFunc("/api/system/auth", serveWebAuthAPI)
 	mux.HandleFunc("/api/system/restart", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeMethodNotAllowed(w)
@@ -213,7 +227,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 	handler := http.Handler(mux)
 	if auth.Enabled {
 		handler = withWebAuth(handler, auth)
-		logrus.Infof("[webui] auth enabled user=%s token_path=%s", auth.User, auth.PassPath)
+		logrus.Infof("[webui] auth enabled user=%s store_path=%s", auth.User, auth.StorePath)
 	}
 	go func() {
 		logrus.Infof("[webui] listening on %s", addr)
@@ -242,27 +256,146 @@ func loadWebAuthConfig() webAuthConfig {
 		user = "admin"
 	}
 	pass := strings.TrimSpace(os.Getenv("WEBUI_PASSWORD"))
-	passPath := filepath.Join(engine.DataFolder(), "webui_auth_token")
+	storePath := webAuthStorePath()
 	if pass == "" {
 		pass = strings.TrimSpace(os.Getenv("WEBUI_TOKEN"))
-	}
-	if pass == "" {
-		if data, err := os.ReadFile(passPath); err == nil {
-			pass = strings.TrimSpace(string(data))
-		}
-	}
-	if pass == "" {
-		pass = newWebAuthToken()
-		if err := os.MkdirAll(filepath.Dir(passPath), 0755); err != nil {
-			logrus.Warnf("[webui] create auth token dir failed: %v", err)
-		} else if err := os.WriteFile(passPath, []byte(pass+"\n"), 0600); err != nil {
-			logrus.Warnf("[webui] save auth token failed: %v", err)
-		}
 	}
 	if strings.EqualFold(pass, "off") || strings.EqualFold(pass, "disabled") {
 		return webAuthConfig{Enabled: false}
 	}
-	return webAuthConfig{User: user, Pass: pass, PassPath: passPath, Enabled: pass != ""}
+	if pass != "" {
+		store, err := newWebAuthStore(user, pass)
+		if err != nil {
+			logrus.Warnf("[webui] create env auth store failed: %v", err)
+			return webAuthConfig{Enabled: true, User: user, Password: pass, StorePath: storePath}
+		}
+		return webAuthConfig{Enabled: true, User: store.User, Store: store, StorePath: storePath}
+	}
+
+	if store, err := readWebAuthStore(); err == nil && store.Hash != "" {
+		return webAuthConfig{Enabled: true, User: store.User, Store: store, StorePath: storePath}
+	}
+
+	legacyToken := ""
+	legacyPath := filepath.Join(engine.DataFolder(), "webui_auth_token")
+	if data, err := os.ReadFile(legacyPath); err == nil {
+		legacyToken = strings.TrimSpace(string(data))
+	}
+	if legacyToken == "" {
+		legacyToken = newWebAuthToken()
+	}
+	store, err := newWebAuthStore(user, legacyToken)
+	if err != nil {
+		logrus.Warnf("[webui] create auth store failed: %v", err)
+		return webAuthConfig{Enabled: true, User: user, Password: legacyToken, StorePath: storePath}
+	}
+	if err := writeWebAuthStore(store); err != nil {
+		logrus.Warnf("[webui] save auth store failed: %v", err)
+	}
+	return webAuthConfig{Enabled: true, User: store.User, Store: store, StorePath: storePath}
+}
+
+func webAuthStorePath() string {
+	return filepath.Join(engine.DataFolder(), "webui_auth.json")
+}
+
+func readWebAuthStore() (webAuthStore, error) {
+	data, err := os.ReadFile(webAuthStorePath())
+	if err != nil {
+		return webAuthStore{}, err
+	}
+	var store webAuthStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return webAuthStore{}, err
+	}
+	store.User = strings.TrimSpace(store.User)
+	if store.User == "" {
+		store.User = "admin"
+	}
+	if store.Iterations <= 0 {
+		store.Iterations = 120000
+	}
+	return store, nil
+}
+
+func writeWebAuthStore(store webAuthStore) error {
+	if err := os.MkdirAll(filepath.Dir(webAuthStorePath()), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := webAuthStorePath() + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, webAuthStorePath())
+}
+
+func newWebAuthStore(user, password string) (webAuthStore, error) {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		user = "admin"
+	}
+	password = strings.TrimSpace(password)
+	if password == "" {
+		return webAuthStore{}, fmt.Errorf("password is empty")
+	}
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return webAuthStore{}, err
+	}
+	iterations := 120000
+	sum := pbkdf2SHA256([]byte(password), salt, iterations, 32)
+	return webAuthStore{
+		User:       user,
+		Salt:       base64.StdEncoding.EncodeToString(salt),
+		Hash:       base64.StdEncoding.EncodeToString(sum),
+		Iterations: iterations,
+	}, nil
+}
+
+func verifyWebAuthStore(store webAuthStore, user, password string) bool {
+	if !webAuthEqual(user, store.User) {
+		return false
+	}
+	salt, err := base64.StdEncoding.DecodeString(store.Salt)
+	if err != nil {
+		return false
+	}
+	want, err := base64.StdEncoding.DecodeString(store.Hash)
+	if err != nil || len(want) == 0 {
+		return false
+	}
+	got := pbkdf2SHA256([]byte(password), salt, store.Iterations, len(want))
+	return subtle.ConstantTimeCompare(got, want) == 1
+}
+
+func pbkdf2SHA256(password, salt []byte, iterations, keyLen int) []byte {
+	if iterations <= 0 {
+		iterations = 120000
+	}
+	var out []byte
+	block := uint32(1)
+	for len(out) < keyLen {
+		h := hmac.New(sha256.New, password)
+		h.Write(salt)
+		h.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
+		u := h.Sum(nil)
+		t := append([]byte(nil), u...)
+		for i := 1; i < iterations; i++ {
+			h = hmac.New(sha256.New, password)
+			h.Write(u)
+			u = h.Sum(nil)
+			for j := range t {
+				t[j] ^= u[j]
+			}
+		}
+		out = append(out, t...)
+		block++
+	}
+	return out[:keyLen]
 }
 
 func newWebAuthToken() string {
@@ -277,13 +410,23 @@ func withWebAuth(next http.Handler, auth webAuthConfig) http.Handler {
 	realm := `Basic realm="ZeroBot WebUI", charset="UTF-8"`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()
-		if !ok || !webAuthEqual(user, auth.User) || !webAuthEqual(pass, auth.Pass) {
+		if !ok || !verifyWebAuth(auth, user, pass) {
 			w.Header().Set("WWW-Authenticate", realm)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func verifyWebAuth(auth webAuthConfig, user, pass string) bool {
+	if store, err := readWebAuthStore(); err == nil && store.Hash != "" {
+		return verifyWebAuthStore(store, user, pass)
+	}
+	if auth.Store.Hash != "" {
+		return verifyWebAuthStore(auth.Store, user, pass)
+	}
+	return webAuthEqual(user, auth.User) && webAuthEqual(pass, auth.Password)
 }
 
 func webAuthEqual(a, b string) bool {
@@ -294,6 +437,7 @@ func webAuthEqual(a, b string) bool {
 }
 
 func defaultWebStatus() map[string]any {
+	accounts := webBotAccounts()
 	var selfID int64
 	zero.RangeBot(func(id int64, ctx *zero.Ctx) bool {
 		selfID = id
@@ -301,11 +445,57 @@ func defaultWebStatus() map[string]any {
 	})
 	return map[string]any{
 		"self_id":        selfID,
+		"accounts":       accounts,
 		"nickname":       zero.BotConfig.NickName,
 		"super_users":    zero.BotConfig.SuperUsers,
 		"drivers":        len(zero.BotConfig.Driver),
 		"command_prefix": zero.BotConfig.CommandPrefix,
 	}
+}
+
+func webBotAccounts() []map[string]any {
+	ids := make([]int64, 0, 4)
+	zero.RangeBot(func(id int64, ctx *zero.Ctx) bool {
+		ids = append(ids, id)
+		return true
+	})
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	systemMu.RLock()
+	settings := runtimeSystem
+	systemMu.RUnlock()
+	qqbotID := int64(0)
+	if settings.QQBotEnabled && settings.QQBotAppID != "" {
+		qqbotID = webQQBotStableID("self:" + settings.QQBotAppID)
+	}
+	out := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		kind := "onebot"
+		label := "OneBot / llbot"
+		if qqbotID > 0 && id == qqbotID {
+			kind = "qqbot"
+			label = "官方 QQBot"
+		}
+		out = append(out, map[string]any{
+			"id":    id,
+			"kind":  kind,
+			"label": label,
+		})
+	}
+	return out
+}
+
+func webQQBotStableID(s string) int64 {
+	if strings.TrimSpace(s) == "" {
+		s = time.Now().String()
+	}
+	table := crc64.MakeTable(crc64.ISO)
+	sum := crc64.Checksum([]byte(s), table) & 0x7fffffffffffffff
+	if sum <= 0xffffffff {
+		h := sha1.Sum([]byte(s))
+		n, _ := strconv.ParseInt(hex.EncodeToString(h[:8])[:15], 16, 64)
+		sum = uint64(n & 0x7fffffffffffffff)
+	}
+	return int64(sum)
 }
 
 func qqBotDriverAvailable() bool {
@@ -424,6 +614,50 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		applyRuntimeSystemSettings(payload)
 		writeJSON(w, map[string]any{"ok": true, "settings": systemSettingsForWeb()})
+	default:
+		writeMethodNotAllowed(w)
+	}
+}
+
+func serveWebAuthAPI(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		auth := loadWebAuthConfig()
+		writeJSON(w, map[string]any{
+			"ok":      true,
+			"enabled": auth.Enabled,
+			"user":    auth.User,
+			"path":    webAuthStorePath(),
+		})
+	case http.MethodPost:
+		var payload struct {
+			User     string `json:"user"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		user := strings.TrimSpace(payload.User)
+		password := strings.TrimSpace(payload.Password)
+		if user == "" {
+			http.Error(w, "user is required", http.StatusBadRequest)
+			return
+		}
+		if password == "" {
+			http.Error(w, "password is required", http.StatusBadRequest)
+			return
+		}
+		store, err := newWebAuthStore(user, password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := writeWebAuthStore(store); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "user": store.User, "path": webAuthStorePath()})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -921,7 +1155,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <section class="grid">
 <div class="span4" id="overview"></div>
 <div class="panel metric page active" data-page="overview"><span class="muted">服务状态</span><b id="svc">-</b></div>
-<div class="panel metric page active" data-page="overview"><span class="muted">机器人 QQ</span><b id="self">-</b></div>
+<div class="panel metric page active" data-page="overview"><span class="muted">机器人账号</span><b id="self">-</b></div>
 <div class="panel metric page active" data-page="overview"><span class="muted">解析成功</span><b id="okn">-</b></div>
 <div class="panel metric page active" data-page="overview"><span class="muted">解析失败</span><b id="failn">-</b></div>
 <div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
@@ -939,6 +1173,15 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">超级管理员 QQ <textarea id="sysSuperUsers" placeholder="一行一个 QQ"></textarea></label>
 </div>
 <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSystemSettings()">保存全局设置</button><span class="muted" id="sysPending"></span></div>
+<div class="settingsCard" style="margin-top:14px">
+<div class="sectionTitle"><b>WebUI 登录账户</b><span class="muted">密码会以加盐哈希保存，不落明文；保存后刷新页面并使用新账户重新登录。</span></div>
+<div class="settingsFields">
+<label class="field">用户名 <input id="webAuthUser" autocomplete="username" placeholder="admin"></label>
+<label class="field">新密码 <input id="webAuthPass" type="password" autocomplete="new-password" placeholder="输入新密码"></label>
+<label class="field">确认新密码 <input id="webAuthPass2" type="password" autocomplete="new-password" placeholder="再次输入新密码"></label>
+</div>
+<div class="row"><button class="primary" onclick="saveWebAuth()">保存登录账户</button><span class="muted" id="webAuthMsg"></span></div>
+</div>
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
@@ -1188,7 +1431,7 @@ async function refreshStatus(){
  const st=await (await fetch('/api/status')).json();
  $('svc').innerHTML='<span class="ok">运行中</span>'; $('topState').textContent=dirty?'有未保存修改':'WebUI 已连接';
  const rt=st.runtime_status||{}; const bot=st.bot||{};
- $('self').textContent=rt.last_self_id||bot.self_id||'-'; $('okn').textContent=rt.parse_success||0; $('failn').textContent=rt.parse_failed||0;
+ $('self').innerHTML=botAccountsHTML(bot, rt); $('okn').textContent=rt.parse_success||0; $('failn').textContent=rt.parse_failed||0;
  $('okn2').textContent=rt.parse_success||0; $('failn2').textContent=rt.parse_failed||0;
  $('lastMsg').textContent=rt.last_message||'暂无消息';
  const enabled=platforms.filter(p=>cfg&&cfg.platform_enabled&&cfg.platform_enabled[p.name]).length;
@@ -1210,6 +1453,14 @@ async function refreshStatus(){
  loadLogs();
 }
 function infoLine(k,v){return '<div class="infoLine"><b>'+escapeHTML(k)+'</b><span class="muted">'+escapeHTML(v)+'</span></div>'}
+function botAccountsHTML(bot,rt){
+ const accounts=(bot&&bot.accounts)||[];
+ if(accounts.length){
+  return accounts.map(a=>'<span style="display:block;font-size:15px;line-height:1.35"><small class="muted">'+escapeHTML(a.label||a.kind||'Bot')+'</small><br>'+escapeHTML(a.id||'-')+'</span>').join('');
+ }
+ const fallback=(bot&&bot.self_id)||(rt&&rt.last_self_id)||'-';
+ return '<span style="display:block;font-size:15px">'+escapeHTML(fallback)+'</span>';
+}
 function onText(v){return v?'开启':'关闭'}
 function qualityText(v){return Number(v)>0 ? String(v)+'p' : '不限'}
 function qqbotAvailable(){return !!(sys&&sys.qqbot_available)}
@@ -1249,10 +1500,12 @@ async function load(){
  const data=await (await fetch('/api/mediaparser/config')).json();
  const sysData=await (await fetch('/api/system/settings')).json();
  const logoData=await (await fetch('/api/mediaparser/logos')).json();
+ const authData=await (await fetch('/api/system/auth')).json();
  await loadCacheStats(false);
  cfg=data.config; platforms=data.platforms; safetyBuiltins=data.safety_builtins||[];
  sys=sysData.settings||{};
  logos=logoData.logos||{};
+ if($('webAuthUser')) $('webAuthUser').value=(authData&&authData.user)||'admin';
  await refreshStatus();
  render();
 }
@@ -1339,6 +1592,21 @@ async function saveSystemSettings(){
  const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  $('systemMsg').textContent=r.ok?'全局设置已保存':'全局设置保存失败';
  if(r.ok){const data=await r.json(); sys=data.settings||sys; renderSystemSettings(); await refreshStatus();}
+}
+async function saveWebAuth(){
+ const user=String($('webAuthUser').value||'').trim();
+ const pass=String($('webAuthPass').value||'').trim();
+ const pass2=String($('webAuthPass2').value||'').trim();
+ if(!user){$('webAuthMsg').textContent='用户名不能为空'; return}
+ if(!pass){$('webAuthMsg').textContent='新密码不能为空'; return}
+ if(pass!==pass2){$('webAuthMsg').textContent='两次密码不一致'; return}
+ const r=await fetch('/api/system/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:user,password:pass})});
+ if(r.ok){
+  $('webAuthPass').value=''; $('webAuthPass2').value='';
+  $('webAuthMsg').textContent='登录账户已保存；刷新页面后使用新账户重新登录';
+ }else{
+  $('webAuthMsg').textContent='保存失败：'+await r.text();
+ }
 }
 async function restartSystem(){
  if(!confirm('确定重启机器人进程吗？systemd 会自动拉起新进程。')) return;
