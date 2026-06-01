@@ -1093,7 +1093,7 @@ func webPlatforms() []webPlatform {
 func safetyBuiltinPayload() []map[string]any {
 	out := make([]map[string]any, 0, len(safetyCategoryDefs))
 	for _, def := range safetyCategoryDefs {
-		keywords := safetyBuiltinWords(def)
+		keywords := visibleSafetyBuiltinWords(def)
 		hidden := def.ID == safetyCategoryPolitics
 		if hidden {
 			keywords = nil
@@ -1104,6 +1104,18 @@ func safetyBuiltinPayload() []map[string]any {
 			"keywords": keywords,
 			"hidden":   hidden,
 		})
+	}
+	return out
+}
+
+func visibleSafetyBuiltinWords(def safetyCategoryDef) []string {
+	words := safetyBuiltinWords(def)
+	out := make([]string, 0, len(words))
+	for _, word := range words {
+		if strings.HasPrefix(word, "__mediaparser_") {
+			continue
+		}
+		out = append(out, word)
 	}
 	return out
 }

@@ -63,18 +63,20 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 		VideoHeads: buildHeaders(true, "", defaultUA),
 		ImageHeads: buildHeaders(false, "", defaultUA),
 		ForceLocal: len(videos) > 0,
+		AccessText: info.SafetyText,
 	}, nil
 }
 
 type twitterInfo struct {
-	Title     string
-	Text      string
-	Author    string
-	Avatar    string
-	Timestamp string
-	Cover     string
-	Images    []string
-	Videos    []twitterVideo
+	Title      string
+	Text       string
+	Author     string
+	Avatar     string
+	Timestamp  string
+	Cover      string
+	Images     []string
+	Videos     []twitterVideo
+	SafetyText string
 }
 
 type twitterVideo struct {
@@ -144,6 +146,9 @@ func parseFxTwitterResponse(data map[string]any) (twitterInfo, error) {
 		Author:    combineParenthetical(author, quote["author"]),
 		Avatar:    firstNestedHTTPURLByKeys(authorMap, 5, "avatar", "profile_image"),
 		Timestamp: combineParenthetical(timestamp, quote["timestamp"]),
+	}
+	if anyBool(tweet["possibly_sensitive"]) {
+		info.SafetyText = safetyMarkerTwitterSensitive
 	}
 	media := getMap(tweet, "media")
 	for _, photo := range getSlice(media, "photos") {
@@ -216,6 +221,17 @@ func parseTwitterDate(raw string) string {
 		return t.Format("2006-01-02")
 	}
 	return raw
+}
+
+func anyBool(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		return strings.EqualFold(strings.TrimSpace(x), "true")
+	default:
+		return false
+	}
 }
 
 func extractFxQuote(v any) map[string]string {

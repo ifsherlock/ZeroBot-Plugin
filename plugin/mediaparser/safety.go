@@ -20,6 +20,8 @@ const (
 	safetyCategoryViolence = "violence"
 	safetyCategoryPolitics = "politics"
 
+	safetyMarkerTwitterSensitive = "__mediaparser_twitter_possibly_sensitive__"
+
 	currentSafetyCustomSeedVersion = 3
 	currentSafetyDefaultVersion    = 3
 )
@@ -61,6 +63,7 @@ var safetyCategoryDefs = []safetyCategoryDef{
 			"Y2hhdg==", "aG9ybnk=", "YW5pbWU=", "Y3Vt", "bWlsZg==", "Y3Vtc2x1dA==",
 			"c2x1dA==", "Y3Vjaw==", "d2Fua2NoYXQ=", "bGV3ZHJw", "YmlnZGljaw==", "cHVzc3k=",
 			"YmlnYXNz", "YmJj", "c2V4",
+			"X19tZWRpYXBhcnNlcl90d2l0dGVyX3Bvc3NpYmx5X3NlbnNpdGl2ZV9f",
 		},
 	},
 	{

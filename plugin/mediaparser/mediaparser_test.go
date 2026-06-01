@@ -1719,6 +1719,38 @@ func TestSafetyBlockedUsesXAdultTags(t *testing.T) {
 	}
 }
 
+func TestSafetyBlockedUsesTwitterSensitiveMarker(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories[safetyCategoryAdult] = true
+	meta := mediaMeta{Platform: "twitter", AccessText: safetyMarkerTwitterSensitive}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked {
+		t.Fatal("expected twitter sensitive marker to block")
+	}
+	if hit.Category != safetyCategoryAdult || hit.Source != "builtin" {
+		t.Fatalf("unexpected hit=%+v", hit)
+	}
+}
+
+func TestParseFxTwitterResponseMarksPossiblySensitive(t *testing.T) {
+	info, err := parseFxTwitterResponse(map[string]any{
+		"tweet": map[string]any{
+			"text":               "probe text",
+			"possibly_sensitive": true,
+			"author": map[string]any{
+				"name":        "Probe",
+				"screen_name": "probe",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.SafetyText != safetyMarkerTwitterSensitive {
+		t.Fatalf("safety marker=%q", info.SafetyText)
+	}
+}
+
 func TestSafetyBlockedUsesPlatformCategoriesOnlyForPlatform(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SafetyPlatformCategories["twitter"] = map[string]bool{safetyCategoryAd: true}
