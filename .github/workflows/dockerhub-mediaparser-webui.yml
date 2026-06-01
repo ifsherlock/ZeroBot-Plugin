@@ -1,12 +1,7 @@
-name: DockerHub MediaParser WebUI Compliance
+name: DockerHub Test Image
 
 on:
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Optional DockerHub tag to push"
-        required: false
-        default: "mediaparser-webui-compliance"
   push:
     branches:
       - codex/mediaparser-playground-webui-dockerhub
@@ -30,7 +25,6 @@ concurrency:
 env:
   IMAGE_NAME: jaysherlock/zerobot-plugin
   GO_VERSION: "1.26.1"
-  DEFAULT_TEST_TAG: mediaparser-webui-compliance
 
 jobs:
   build-binary:
@@ -78,17 +72,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve image tags
-        id: vars
-        shell: bash
-        run: |
-          input_tag="${{ github.event.inputs.image_tag }}"
-          if [ -z "$input_tag" ]; then
-            input_tag="${DEFAULT_TEST_TAG}"
-          fi
-          echo "image_tag=$input_tag" >> "$GITHUB_OUTPUT"
-          echo "run_tag=${input_tag}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -107,9 +90,7 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ steps.vars.outputs.image_tag }}
-            type=raw,value=${{ steps.vars.outputs.run_tag }}
-            type=sha,prefix=mediaparser-webui-compliance-sha-
+            type=raw,value=test
 
       - name: Build and push
         uses: docker/build-push-action@v6
