@@ -20,7 +20,7 @@ const (
 	safetyCategoryPolitics = "politics"
 
 	currentSafetyCustomSeedVersion = 3
-	currentSafetyDefaultVersion    = 2
+	currentSafetyDefaultVersion    = 3
 )
 
 type safetyHit struct {
