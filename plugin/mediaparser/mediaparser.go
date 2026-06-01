@@ -293,7 +293,6 @@ func defaultConfig() config {
 		SafetyFilterNotice:  false,
 		SafetyGlobalCategories: map[string]bool{
 			safetyCategoryAdult:    true,
-			safetyCategoryMinor:    true,
 			safetyCategoryViolence: true,
 		},
 		SafetyPlatformCategories: defaultSafetyPlatformCategories(),

@@ -1705,11 +1705,23 @@ func TestSafetyBlockedUsesGlobalCategories(t *testing.T) {
 	}
 }
 
+func TestSafetyBlockedUsesXAdultTags(t *testing.T) {
+	cfg := defaultConfig()
+	meta := mediaMeta{Platform: "twitter", Title: "tag batch", Desc: "#goon #nsfwtwt wataa"}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked {
+		t.Fatal("expected X adult tags to block")
+	}
+	if hit.Category != safetyCategoryAdult {
+		t.Fatalf("category=%s", hit.Category)
+	}
+}
+
 func TestSafetyBlockedUsesPlatformCategoriesOnlyForPlatform(t *testing.T) {
 	cfg := defaultConfig()
 	meta := mediaMeta{Platform: "twitter", Desc: "dm for menu"}
 	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
-		t.Fatal("expected twitter adult_scam category to block")
+		t.Fatal("expected twitter ad category to block")
 	}
 	meta.Platform = "bilibili"
 	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
@@ -1763,7 +1775,7 @@ func TestSafetyBlockedUsesGlobalExcludes(t *testing.T) {
 func TestSafetyBlockedUsesPlatformExcludesOnlyForPlatform(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SafetyExcludePlatform["twitter"] = map[string][]string{
-		safetyCategoryAdultScam: {"dm for menu archive"},
+		safetyCategoryAd: {"dm for menu archive"},
 	}
 	meta := mediaMeta{Platform: "twitter", Desc: "dm for menu archive"}
 	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
@@ -1782,29 +1794,30 @@ func TestNormalizeSafetyWordsDeduplicatesAndTrims(t *testing.T) {
 	}
 }
 
-func TestNormalizeConfigSeedsCustomWordsOnce(t *testing.T) {
+func TestNormalizeConfigMigratesLegacyCustomWords(t *testing.T) {
 	cfg := defaultConfig()
-	cfg.SafetyCustomGlobal = map[string][]string{}
-	cfg.SafetyCustomPlatform = map[string]map[string][]string{}
+	cfg.SafetyCustomGlobal = map[string][]string{
+		"adult_scam": {"legacy adult ad"},
+	}
+	cfg.SafetyCustomPlatform = map[string]map[string][]string{
+		"twitter": {"political_sensitive": {"legacy politics"}},
+	}
 	cfg.SafetyCustomSeedVersion = 0
 	if changed := normalizeConfig(&cfg); !changed {
-		t.Fatal("expected first seed migration to mark config changed")
+		t.Fatal("expected legacy migration to mark config changed")
 	}
 	if cfg.SafetyCustomSeedVersion != currentSafetyCustomSeedVersion {
 		t.Fatalf("seed version=%d", cfg.SafetyCustomSeedVersion)
 	}
 	seedID := "custom_" + safetyCategoryAdult
 	if len(cfg.SafetyCustomCategories[seedID].Words) == 0 {
-		t.Fatal("expected adult custom seed words")
+		t.Fatal("expected legacy adult words")
 	}
-
-	item := cfg.SafetyCustomCategories[seedID]
-	item.Words = nil
-	cfg.SafetyCustomCategories[seedID] = item
-	if changed := normalizeConfig(&cfg); changed {
-		t.Fatal("did not expect seeded config to migrate again")
+	politicsID := "custom_" + safetyCategoryPolitics
+	if len(cfg.SafetyCustomCategories[politicsID].Words) == 0 {
+		t.Fatal("expected legacy platform politics words to become global custom category")
 	}
-	if len(cfg.SafetyCustomCategories[seedID].Words) != 0 {
-		t.Fatal("expected deleted custom seed words to stay deleted")
+	if cfg.SafetyCustomPlatform == nil || len(cfg.SafetyCustomPlatform) != 0 {
+		t.Fatal("expected legacy platform custom words to be cleared")
 	}
 }

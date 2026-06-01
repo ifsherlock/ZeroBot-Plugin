@@ -2,6 +2,7 @@ package mediaparser
 
 import (
 	"crypto/sha1"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -13,14 +14,12 @@ import (
 )
 
 const (
-	safetyCategoryAdult           = "adult"
-	safetyCategoryAdultScam       = "adult_scam"
-	safetyCategoryMinor           = "minor_risk"
-	safetyCategoryViolence        = "violence"
-	safetyCategoryWeaponExplosive = "weapon_explosive"
-	safetyCategoryIllegalURLAd    = "illegal_url_ad"
+	safetyCategoryAdult    = "adult"
+	safetyCategoryAd       = "ad"
+	safetyCategoryViolence = "violence"
+	safetyCategoryPolitics = "politics"
 
-	currentSafetyCustomSeedVersion = 2
+	currentSafetyCustomSeedVersion = 3
 )
 
 type safetyHit struct {
@@ -30,9 +29,9 @@ type safetyHit struct {
 }
 
 type safetyCategoryDef struct {
-	ID       string
-	Label    string
-	Keywords []string
+	ID          string
+	Label       string
+	KeywordsB64 []string
 }
 
 type safetyCustomCategory struct {
@@ -44,75 +43,68 @@ type safetyCustomCategory struct {
 var safetyCategoryDefs = []safetyCategoryDef{
 	{
 		ID:    safetyCategoryAdult,
-		Label: "色情/NSFW/R18",
-		Keywords: []string{
-			"nsfw", "r18", "r-18", "18+", "adult content", "explicit", "porn", "xxx",
-			"nude", "nudity", "lewd", "hentai", "ecchi", "onlyfans", "fansly",
-			"色情", "成人内容", "露骨", "黄图", "黄推", "福利姬", "擦边", "成人向",
-			"私房", "裸聊", "约炮", "成人视频", "成人网站", "成人论坛",
-			"成人向け", "エロ", "えろ", "ヘンタイ", "変態", "ヌード", "センシティブ",
-			"성인", "성인물", "19금", "야짤", "후방주의", "음란", "노출", "누드",
+		Label: "色情",
+		KeywordsB64: []string{
+			"bnNmdw==", "cjE4", "ci0xOA==", "MTgr", "YWR1bHQgY29udGVudA==", "ZXhwbGljaXQ=",
+			"cG9ybg==", "eHh4", "bnVkZQ==", "bnVkaXR5", "bGV3ZA==", "aGVudGFp",
+			"ZWNjaGk=", "b25seWZhbnM=", "ZmFuc2x5", "56aP5Yip5aes", "6buE5o6o", "5pOm6L65",
+			"5oiQ5Lq65YaF5a65", "6Zyy6aqo", "56eB5oi/", "6KO46IGK", "57qm54Ku", "5oiQ5Lq65ZCR",
+			"55S36I+p6JCo", "5aWz6I+p6JCo", "I+iFueiCjA==", "I+iWhOiCjA==", "I05TRlc=", "I+eUt+iPqeiQqA==",
+			"I+Wls+iPqeiQqA==", "5oiQ5Lq65ZCR44GR", "44Ko44Ot", "44GI44KN", "44OY44Oz44K/44Kk", "5aSJ5oWL",
+			"44OM44O844OJ", "44K744Oz44K344OG44Kj44OW", "7ISx7J24", "7ISx7J2466y8", "MTnquIg=", "7JW87Kek",
+			"7ZuE67Cp7KO87J2Y", "7J2M656A", "64W47Lac", "64iE65Oc",
+			"d2F0dGE=", "Y2h1ZGFp", "Z29vbg==", "Z29vbmVy", "amF2", "d2F0YWE=",
+			"Z29vbmV0dGU=", "c3BpdA==", "amVyaw==",
+			"am9p", "Ym9w", "Z29vbmluZw==", "bnV0dHk=", "YmFiZWNvY2s=", "bnNmd3R3dA==",
+			"Y2hhdg==", "aG9ybnk=", "YW5pbWU=", "Y3Vt", "bWlsZg==", "Y3Vtc2x1dA==",
+			"c2x1dA==", "Y3Vjaw==", "d2Fua2NoYXQ=", "bGV3ZHJw", "YmlnZGljaw==", "cHVzc3k=",
+			"YmlnYXNz", "YmJj", "c2V4",
 		},
 	},
 	{
-		ID:    safetyCategoryAdultScam,
-		Label: "黄推诈骗/导流",
-		Keywords: []string{
-			"黄推", "诈骗黄推", "外围", "上门服务", "同城约", "裸聊诈骗", "激情视频",
-			"成人视频群", "福利视频群", "telegram福利", "tg福利", "引流", "私信发资源",
-			"约拍私房", "成人交友", "付费私聊", "unlock content", "premium snap",
-			"link in bio", "dm for menu", "adult telegram", "sex work",
-		},
-	},
-	{
-		ID:    safetyCategoryMinor,
-		Label: "未成年高风险成人词",
-		Keywords: []string{
-			"未成年色情", "儿童色情", "幼女", "萝莉", "炼铜", "幼态成人",
-			"ロリ", "ロリコン", "児童ポルノ", "未成年者",
-			"미성년", "아동", "로리", "미성년자",
-			"child porn", "cp porn", "loli", "lolicon", "underage nude",
+		ID:    safetyCategoryAd,
+		Label: "广告",
+		KeywordsB64: []string{
+			"dGVsZWdyYW0=", "dGfnpo/liKk=", "5byV5rWB", "56eB5L+h5Y+R6LWE5rqQ", "5LuY6LS556eB6IGK", "bGluayBpbiBiaW8=",
+			"ZG0gZm9yIG1lbnU=", "dW5sb2NrIGNvbnRlbnQ=", "cHJlbWl1bSBzbmFw", "b25seWZhbnMuY29t", "ZmFuc2x5LmNvbQ==", "bGlua3RyLmVl",
+			"ZnJlZSBvbmx5ZmFucyBsZWFr", "bGVha2VkIG51ZGVz", "5Y2a5b2p5bmz5Y+w", "572R6LWM", "5pyA5paw5Zyw5Z2A", "6Ziy6LWw5aSx",
+			"5aSH55So5Z+f5ZCN", "6Lez6L2s6ZO+5o6l", "5oiQ5Lq65a+86Iiq", "55yL54mH572R5Z2A", "Y3J5cHRvIGdpdmVhd2F5", "YWlyZHJvcCBzY2Ft",
+			"5Ye65Lya44GE57O7", "6KOP5Z6i5aWz5a2Q", "54Sh5L+u5q2j44Oq44Oz44Kv", "7ISx7J247IKs7J207Yq4", "67aI67KV7Yag7Yag", "64+E67CV7IKs7J207Yq4",
 		},
 	},
 	{
 		ID:    safetyCategoryViolence,
-		Label: "极端暴力/血腥",
-		Keywords: []string{
-			"极端暴力", "血腥", "虐杀", "斩首", "分尸", "肢解", "处决视频", "自残直播",
-			"gore", "graphic violence", "beheading", "dismemberment", "execution video",
-			"グロ", "残虐", "流血", "斬首",
-			"고어", "잔혹", "참수", "유혈",
+		Label: "暴恐",
+		KeywordsB64: []string{
+			"5p6B56uv5pq05Yqb", "6KGA6IWl", "6JmQ5p2A", "5pap6aaW", "5YiG5bC4", "6IKi6Kej",
+			"5aSE5Yaz6KeG6aKR", "6Ieq5q6L55u05pKt", "5p6q5pSv5Lqk5piT", "5Lmw5p6q", "5Y2W5p6q", "54K46I2v6YWN5pa5",
+			"54iG54K454mp5Yi25L2c", "6Ieq5Yi254K45by5", "566h5Yi25YiA5YW35Lqk5piT", "Z29yZQ==", "Z3JhcGhpYyB2aW9sZW5jZQ==", "YmVoZWFkaW5n",
+			"ZGlzbWVtYmVybWVudA==", "ZXhlY3V0aW9uIHZpZGVv", "YnV5IGd1bg==", "Z2hvc3QgZ3Vu", "aG9tZW1hZGUgZXhwbG9zaXZl", "Ym9tYiBtYWtpbmc=",
+			"aWVkIHR1dG9yaWFs", "44Kw44Ot", "5q6L6JmQ", "5rWB6KGA", "5pas6aaW", "6YqD6LKp5aOy",
+			"54iG6Jas5L2c5oiQ", "54iG5by+5L2c5oiQ", "6rOg7Ja0", "7J6U7Zi5", "7LC47IiY", "7Jyg7ZiI",
+			"7LSd6riw6rGw656Y", "7Y+t7YOE7KCc7KGw", "7Y+t67Cc66y87KCc7KGw",
 		},
 	},
 	{
-		ID:    safetyCategoryWeaponExplosive,
-		Label: "涉枪涉爆",
-		Keywords: []string{
-			"枪支交易", "买枪", "卖枪", "炸药配方", "爆炸物制作", "自制炸弹", "管制刀具交易",
-			"buy gun", "ghost gun", "homemade explosive", "bomb making", "ied tutorial",
-			"銃販売", "爆薬作成", "爆弾作成",
-			"총기거래", "폭탄제조", "폭발물제조",
-		},
-	},
-	{
-		ID:    safetyCategoryIllegalURLAd,
-		Label: "非法网址/广告导流",
-		Keywords: []string{
-			"偷拍视频", "成人视频网址", "色情网盘", "非法网址", "博彩平台", "网赌", "澳门现金网",
-			"最新地址", "防走失", "备用域名", "跳转链接", "成人导航", "看片网址",
-			"crypto giveaway", "airdrop scam", "free onlyfans leak", "leaked nudes",
-			"出会い系", "裏垢女子", "無修正リンク",
-			"성인사이트", "불법토토", "도박사이트",
+		ID:    safetyCategoryPolitics,
+		Label: "政治",
+		KeywordsB64: []string{
+			"5Lmg6L+R5bmz", "5Lit5YWx", "5YWx5Lqn5YWa", "5YWt5Zub", "5aSp5a6J6Zeo5LqL5Lu2", "5Y+w54us",
+			"5riv54us", "6JeP54us", "55aG54us", "5rOV6L2u5Yqf", "5raJ5pS/", "5pS/5rK75pWP5oSf",
+			"eGkgamlucGluZw==", "Y2Nw", "Y29tbXVuaXN0IHBhcnR5IG9mIGNoaW5h", "dGlhbmFubWVu", "anVuZSA0dGg=", "ZnJlZSB0aWJldA==",
+			"ZnJlZSBob25nIGtvbmc=",
 		},
 	},
 }
+
+var safetyBuiltinWordCache = buildSafetyBuiltinWordCache()
 
 func defaultSafetyPlatformCategories() map[string]map[string]bool {
 	out := map[string]map[string]bool{}
 	for _, p := range []string{"twitter", "instagram", "tiktok", "youtube"} {
 		out[p] = map[string]bool{
-			safetyCategoryAdultScam:    true,
-			safetyCategoryIllegalURLAd: true,
+			safetyCategoryAd:       true,
+			safetyCategoryPolitics: true,
 		}
 	}
 	return out
@@ -121,59 +113,54 @@ func defaultSafetyPlatformCategories() map[string]map[string]bool {
 func defaultSafetyGlobalCategories() map[string]bool {
 	return map[string]bool{
 		safetyCategoryAdult:    true,
-		safetyCategoryMinor:    true,
 		safetyCategoryViolence: true,
 	}
 }
 
-func defaultSafetyCustomGlobalSeeds() map[string][]string {
-	return map[string][]string{
-		safetyCategoryAdult: uniqueSafetyWords([]string{
-			"AV", "Adult", "sex", "intercourse", "fuck", "blowjob", "bj", "cunnilingus", "anal", "creampie",
-			"cum", "orgasm", "squirt", "masturbation", "handjob", "facial", "gangbang", "rape",
-			"penis", "vagina", "clitoris", "dick", "cock", "pussy", "cunt", "boobs", "tits", "nipple", "breasts", "booty",
-			"bdsm", "bondage", "fetish", "submissive", "dominant", "cuckold", "erotic", "milf", "dilf", "nsfwart", "hentaiart",
-			"福利姬", "外围", "国产乱伦", "探花", "裸聊", "色图", "黄片", "番号",
-			"性交", "做爱", "啪啪", "打炮", "内射", "口交", "肛交", "自慰", "打飞机", "高潮", "潮吹", "颜射", "中出", "迷奸", "强奸", "轮奸",
-			"阴茎", "阴道", "阴蒂", "睾丸", "鸡巴", "乳房", "奶头", "乳头", "巨乳", "爆乳", "露点", "露阴",
-			"调教", "性奴", "绿帽", "主仆", "捆绑", "肉便器", "里番", "同人h",
-			"裏垢", "裏垢女子", "裏垢男子", "オナペ", "パイ凸", "マン凸",
-			"セックス", "中出し", "ハメ撮り", "フェラ", "クンニ", "アナル", "オナニー", "手コキ", "本番", "潮吹き", "パイズリ", "騎乗位", "レイプ",
-			"ちんこ", "おちんちん", "クリトリス", "まんこ", "おまんこ", "おっぱい", "乳首", "巨乳", "爆乳",
-			"調教", "奴隷", "寝取られ", "NTR", "緊縛", "エロアニメ", "エロ漫画", "同人誌", "エロパロ",
-			"일탈", "일탈계", "섹트", "야짤", "섹스", "성관계", "질내사정", "오랄", "펠라", "쿠니", "애널", "자위", "딸딸이", "오나니", "절정", "분수", "얼싸", "파이즈리", "강간",
-			"음경", "자지", "꼬추", "보지", "클리", "젖꼭지", "유두", "거유", "폭유", "야애니", "야만화", "동인지", "한국야동",
-		}),
-	}
+func seedSafetyCustomWords(cfg *config) bool {
+	return false
 }
 
-func defaultSafetyCustomPlatformSeeds() map[string]map[string][]string {
-	xSeeds := map[string][]string{
-		safetyCategoryAdultScam: uniqueSafetyWords([]string{
-			"onlyfans.com", "fansly.com", "linktr.ee", "t.co", "telegram", "telegram福利", "tg福利",
-			"付费私聊", "私信发资源", "约拍私房", "成人交友", "unlock content", "premium snap", "dm for menu", "link in bio",
-			"腹肌", "薄肌", "薄肌男", "男菩萨", "女菩萨", "男菩薩", "女菩薩",
-			"#腹肌", "#薄肌", "#nsfw", "#NSFW", "#男菩萨", "#女菩萨", "#男菩薩", "#女菩薩",
-			" 오프", " 조건",
-		}),
-		safetyCategoryIllegalURLAd: uniqueSafetyWords([]string{
-			"onlyfans.com", "fansly.com", "linktr.ee", "free onlyfans leak", "leaked nudes", "crypto giveaway", "airdrop scam",
-		}),
-		"political_sensitive": uniqueSafetyWords([]string{
-			"习近平", "中共", "共产党", "六四", "天安门事件", "台独", "港独", "藏独", "疆独", "法轮功",
-			"xi jinping", "ccp", "communist party of china", "tiananmen", "june 4th", "free tibet", "free hong kong",
-		}),
+func safetyBuiltinWords(def safetyCategoryDef) []string {
+	if words, ok := safetyBuiltinWordCache[def.ID]; ok {
+		return words
 	}
-	out := map[string]map[string][]string{}
-	for _, platform := range []string{"twitter", "instagram", "tiktok", "youtube"} {
-		out[platform] = cloneSafetyCustomMap(xSeeds)
+	return decodeSafetyBuiltinWords(def.KeywordsB64)
+}
+
+func buildSafetyBuiltinWordCache() map[string][]string {
+	out := make(map[string][]string, len(safetyCategoryDefs))
+	for _, def := range safetyCategoryDefs {
+		out[def.ID] = decodeSafetyBuiltinWords(def.KeywordsB64)
 	}
 	return out
 }
 
-func seedSafetyCustomWords(cfg *config) bool {
-	changed := mergeSafetyCustomCategorySeeds(cfg, defaultSafetyCustomGlobalSeeds())
-	return migrateSafetyPlatformWords(cfg, defaultSafetyCustomPlatformSeeds()) || changed
+func decodeSafetyBuiltinWords(encoded []string) []string {
+	words := make([]string, 0, len(encoded))
+	for _, raw := range encoded {
+		decoded, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil {
+			continue
+		}
+		words = append(words, string(decoded))
+	}
+	return uniqueSafetyWords(words)
+}
+
+func migrateSafetyCategoryID(id string) string {
+	switch normalizeSafetyCategory(id) {
+	case "adult", "adult_scam", "minor_risk":
+		return safetyCategoryAdult
+	case "ad", "illegal_url_ad":
+		return safetyCategoryAd
+	case "violence", "weapon_explosive":
+		return safetyCategoryViolence
+	case "politics", "political_sensitive":
+		return safetyCategoryPolitics
+	default:
+		return normalizeSafetyCategory(id)
+	}
 }
 
 func mergeSafetyCustomCategorySeeds(cfg *config, seeds map[string][]string) bool {
@@ -182,6 +169,7 @@ func mergeSafetyCustomCategorySeeds(cfg *config, seeds map[string][]string) bool
 		cfg.SafetyCustomCategories = map[string]safetyCustomCategory{}
 	}
 	for cat, words := range seeds {
+		cat = migrateSafetyCategoryID(cat)
 		if len(words) == 0 {
 			continue
 		}
@@ -242,6 +230,7 @@ func cloneSafetyCustomMap(in map[string][]string) map[string][]string {
 func migrateLegacySafetyCustomWords(cfg *config) bool {
 	changed := mergeSafetyCustomCategorySeeds(cfg, cfg.SafetyCustomGlobal)
 	for cat, words := range cfg.SafetyExcludeGlobal {
+		cat = migrateSafetyCategoryID(cat)
 		if len(words) == 0 {
 			continue
 		}
@@ -276,13 +265,14 @@ func migrateLegacySafetyCustomWords(cfg *config) bool {
 			cfg.SafetyPlatformCategories[name] = map[string]bool{}
 		}
 		for cat, words := range cats {
+			cat = migrateSafetyCategoryID(cat)
 			if len(words) == 0 {
 				continue
 			}
-			id := "custom_" + name + "_" + normalizeSafetyCategory(cat)
+			id := "custom_" + normalizeSafetyCategory(cat)
 			item := cfg.SafetyCustomCategories[id]
 			if strings.TrimSpace(item.Label) == "" {
-				item.Label = platformDisplayName(name) + " 自定义-" + safetyCategoryLabel(cat)
+				item.Label = "自定义-" + safetyCategoryLabel(cat)
 				changed = true
 			}
 			before := len(item.Excludes)
@@ -292,8 +282,8 @@ func migrateLegacySafetyCustomWords(cfg *config) bool {
 			}
 			cfg.SafetyCustomCategories[id] = item
 			if len(item.Excludes) > 0 || len(item.Words) > 0 {
-				if !cfg.SafetyPlatformCategories[name][id] {
-					cfg.SafetyPlatformCategories[name][id] = true
+				if !cfg.SafetyGlobalCategories[id] {
+					cfg.SafetyGlobalCategories[id] = true
 					changed = true
 				}
 			}
@@ -322,17 +312,15 @@ func migrateSafetyPlatformWords(cfg *config, src map[string]map[string][]string)
 		if name == "" {
 			continue
 		}
-		if cfg.SafetyPlatformCategories[name] == nil {
-			cfg.SafetyPlatformCategories[name] = map[string]bool{}
-		}
 		for cat, words := range cats {
+			cat = migrateSafetyCategoryID(cat)
 			if len(words) == 0 {
 				continue
 			}
-			id := "custom_" + name + "_" + normalizeSafetyCategory(cat)
+			id := "custom_" + normalizeSafetyCategory(cat)
 			item := cfg.SafetyCustomCategories[id]
 			if strings.TrimSpace(item.Label) == "" {
-				item.Label = platformDisplayName(name) + " 自定义-" + safetyCategoryLabel(cat)
+				item.Label = "自定义-" + safetyCategoryLabel(cat)
 				changed = true
 			}
 			before := len(item.Words)
@@ -342,8 +330,11 @@ func migrateSafetyPlatformWords(cfg *config, src map[string]map[string][]string)
 			}
 			cfg.SafetyCustomCategories[id] = item
 			if len(item.Words) > 0 {
-				if !cfg.SafetyPlatformCategories[name][id] {
-					cfg.SafetyPlatformCategories[name][id] = true
+				if cfg.SafetyGlobalCategories == nil {
+					cfg.SafetyGlobalCategories = map[string]bool{}
+				}
+				if !cfg.SafetyGlobalCategories[id] {
+					cfg.SafetyGlobalCategories[id] = true
 					changed = true
 				}
 			}
@@ -373,7 +364,7 @@ func builtinSafetyCategoryIDs() []string {
 }
 
 func validSafetyCategory(id string) bool {
-	id = normalizeSafetyCategory(id)
+	id = migrateSafetyCategoryID(id)
 	for _, def := range safetyCategoryDefs {
 		if def.ID == id {
 			return true
@@ -383,7 +374,7 @@ func validSafetyCategory(id string) bool {
 }
 
 func safetyCategoryLabel(id string) string {
-	id = normalizeSafetyCategory(id)
+	id = migrateSafetyCategoryID(id)
 	for _, def := range safetyCategoryDefs {
 		if def.ID == id {
 			return def.Label
@@ -437,9 +428,9 @@ func normalizeSafetyCustomCategories(in map[string]safetyCustomCategory) map[str
 func normalizeSafetyMap(in map[string]bool) map[string]bool {
 	out := map[string]bool{}
 	for k, v := range in {
-		k = normalizeSafetyCategory(k)
+		k = migrateSafetyCategoryID(k)
 		if validSafetyCategory(k) || k != "" {
-			out[k] = v
+			out[k] = out[k] || v
 		}
 	}
 	return out
@@ -460,7 +451,7 @@ func normalizeSafetyPlatformCategories(in map[string]map[string]bool) map[string
 func normalizeSafetyCustom(in map[string][]string) map[string][]string {
 	out := map[string][]string{}
 	for cat, words := range in {
-		cat = normalizeSafetyCategory(cat)
+		cat = migrateSafetyCategoryID(cat)
 		if !validSafetyCategory(cat) {
 			continue
 		}
@@ -523,7 +514,7 @@ func safetyBlocked(cfg config, meta mediaMeta, raw string) (safetyHit, bool) {
 		if !categories[def.ID] {
 			continue
 		}
-		for _, word := range def.Keywords {
+		for _, word := range safetyBuiltinWords(def) {
 			if safetyTextContains(normalized, word) {
 				if safetyExcluded(cfg, platform, def.ID, normalized) {
 					continue
@@ -713,7 +704,7 @@ func handleSafetyCommand(ctx *zero.Ctx, args []string) bool {
 
 func handleSafetyPlatformCommand(ctx *zero.Ctx, args []string) bool {
 	if len(args) < 1 {
-		ctx.SendChain(message.Text("usage: /媒体解析 safety platform twitter category adult_scam on|off"))
+		ctx.SendChain(message.Text("usage: /媒体解析 safety platform twitter category ad on|off"))
 		return false
 	}
 	platform := normalizePlatformName(args[0])
@@ -747,11 +738,11 @@ func handleSafetyWordsCommand(ctx *zero.Ctx, platform string, args []string) boo
 		if platform == "" {
 			ctx.SendChain(message.Text("usage: /媒体解析 safety global adult add|del word"))
 		} else {
-			ctx.SendChain(message.Text("usage: /媒体解析 safety platform twitter adult add|del word"))
+			ctx.SendChain(message.Text("usage: /媒体解析 safety platform twitter category ad on|off；自定义词请用 global"))
 		}
 		return false
 	}
-	cat := normalizeSafetyCategory(args[0])
+	cat := migrateSafetyCategoryID(args[0])
 	if !validSafetyCategory(cat) {
 		ctx.SendChain(message.Text("未知安全分类: ", args[0]))
 		return false
@@ -762,20 +753,20 @@ func handleSafetyWordsCommand(ctx *zero.Ctx, platform string, args []string) boo
 		ctx.SendChain(message.Text("屏蔽词不能为空"))
 		return false
 	}
-	if platform == "" {
-		if currentConf.SafetyCustomGlobal == nil {
-			currentConf.SafetyCustomGlobal = map[string][]string{}
-		}
-		currentConf.SafetyCustomGlobal[cat] = updateSafetyWordList(currentConf.SafetyCustomGlobal[cat], action, word)
-		return true
+	if currentConf.SafetyCustomCategories == nil {
+		currentConf.SafetyCustomCategories = map[string]safetyCustomCategory{}
 	}
-	if currentConf.SafetyCustomPlatform == nil {
-		currentConf.SafetyCustomPlatform = map[string]map[string][]string{}
+	if currentConf.SafetyGlobalCategories == nil {
+		currentConf.SafetyGlobalCategories = map[string]bool{}
 	}
-	if currentConf.SafetyCustomPlatform[platform] == nil {
-		currentConf.SafetyCustomPlatform[platform] = map[string][]string{}
+	id := "custom_" + cat
+	item := currentConf.SafetyCustomCategories[id]
+	if strings.TrimSpace(item.Label) == "" {
+		item.Label = "自定义-" + safetyCategoryLabel(cat)
 	}
-	currentConf.SafetyCustomPlatform[platform][cat] = updateSafetyWordList(currentConf.SafetyCustomPlatform[platform][cat], action, word)
+	item.Words = updateSafetyWordList(item.Words, action, word)
+	currentConf.SafetyCustomCategories[id] = item
+	currentConf.SafetyGlobalCategories[id] = true
 	return true
 }
 

@@ -1093,10 +1093,16 @@ func webPlatforms() []webPlatform {
 func safetyBuiltinPayload() []map[string]any {
 	out := make([]map[string]any, 0, len(safetyCategoryDefs))
 	for _, def := range safetyCategoryDefs {
+		keywords := safetyBuiltinWords(def)
+		hidden := def.ID == safetyCategoryPolitics
+		if hidden {
+			keywords = nil
+		}
 		out = append(out, map[string]any{
 			"id":       def.ID,
 			"label":    def.Label,
-			"keywords": uniqueSafetyWords(def.Keywords),
+			"keywords": keywords,
+			"hidden":   hidden,
 		})
 	}
 	return out
@@ -1369,7 +1375,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="safety" id="safety">
-<div class="sectionTitle"><b>内容安全</b><span class="muted">先维护分类词库，再在全局或平台启用分类。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="sectionTitle"><b>内容安全</b><span class="muted">词库只按分类维护；平台页只选择额外启用哪些分类。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="reviewGrid">
 <div class="reviewColumn">
 <div class="settingsCard reviewCard">
@@ -1377,7 +1383,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="controlPills"><label class="row">启用屏蔽 <span id="safetyEnabledSwitch"></span></label><label class="row">命中提示 <span id="safetyNoticeSwitch"></span></label></div>
 </div>
 <div class="settingsCard reviewCard tall">
-<div class="sectionTitle"><b>分类词库</b><span class="muted">内置分类只读，自定义分类可新建和编辑。</span><button onclick="addSafetyCustomCategory()">新建分类</button></div>
+<div class="sectionTitle"><b>分类词库</b><span class="muted">内置分类只读预览；自定义分类全局保存，可被全局或平台启用。</span><button onclick="addSafetyCustomCategory()">新建分类</button></div>
 <div class="groupList" id="safetyCategoryList"></div>
 </div>
 </div>
@@ -1397,7 +1403,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupList" id="safetyGlobalCategories"></div>
 </div>
 <div class="settingsCard reviewCard">
-<div class="sectionTitle"><b>平台启用分类</b><span class="muted">选择平台后勾选该平台额外启用的分类。</span></div>
+<div class="sectionTitle"><b>平台启用分类</b><span class="muted">不单独存平台词库；这里只决定该平台额外启用哪些分类。</span></div>
 <select id="safetyPlatformSelect" onchange="renderSafetyPlatformCategories()"></select>
 <div class="groupList" id="safetyPlatformCategories"></div>
 </div>
@@ -1465,12 +1471,10 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <script>
 let cfg=null, sys=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic', safetyBuiltins=[], selectedSafetyCategory='adult';
 const safetyCategories=[
- ['adult','色情/NSFW/R18'],
- ['adult_scam','黄推诈骗/导流'],
- ['minor_risk','未成年高风险成人词'],
- ['violence','极端暴力/血腥'],
- ['weapon_explosive','涉枪涉爆'],
- ['illegal_url_ad','非法网址/广告导流']
+ ['adult','色情'],
+ ['ad','广告'],
+ ['violence','暴恐'],
+ ['politics','政治']
 ];
 const $=id=>document.getElementById(id);
 function showPage(name){
@@ -1780,7 +1784,7 @@ function ensureSafetyMaps(){
 function isBuiltinSafetyCategory(id){return builtinSafetyCategories().some(c=>c.id===id)}
 function safetyCategoryLabelByID(id){const b=builtinSafetyCategories().find(c=>c.id===id); if(b) return b.label; const c=(cfg.safety_custom_categories||{})[id]; return c&&c.label?c.label:id}
 function allSafetyCategories(){
- const builtins=builtinSafetyCategories().map(c=>({id:c.id,label:c.label,builtin:true,keywords:c.keywords||[]}));
+ const builtins=builtinSafetyCategories().map(c=>({id:c.id,label:c.label,builtin:true,keywords:c.keywords||[],hidden:!!c.hidden}));
  const customs=Object.keys(cfg.safety_custom_categories||{}).sort().map(id=>({id:id,label:(cfg.safety_custom_categories[id]&&cfg.safety_custom_categories[id].label)||id,builtin:false,keywords:(cfg.safety_custom_categories[id]&&cfg.safety_custom_categories[id].words)||[]}));
  return builtins.concat(customs);
 }
@@ -1801,7 +1805,8 @@ function renderSafetyCategoryList(){
  const list=allSafetyCategories();
  $('safetyCategoryList').innerHTML=list.map(c=>{
   const n=c.builtin?(c.keywords||[]).length:((cfg.safety_custom_categories[c.id]&&cfg.safety_custom_categories[c.id].words||[]).length);
-  return '<label class="groupItem" style="cursor:pointer;background:'+(selectedSafetyCategory===c.id?'#eef6ff':'transparent')+'" data-category="'+escapeHTML(c.id)+'" onclick="selectSafetyCategory(this.dataset.category)"><span><b>'+escapeHTML(c.label)+'</b><small>'+(c.builtin?'内置只读':'自定义')+' · '+escapeHTML(c.id)+' · '+n+' 词</small></span></label>';
+  const count=c.hidden?'预览隐藏':(n+' 词');
+  return '<label class="groupItem" style="cursor:pointer;background:'+(selectedSafetyCategory===c.id?'#eef6ff':'transparent')+'" data-category="'+escapeHTML(c.id)+'" onclick="selectSafetyCategory(this.dataset.category)"><span><b>'+escapeHTML(c.label)+'</b><small>'+(c.builtin?'内置只读':'自定义')+' · '+escapeHTML(c.id)+' · '+count+'</small></span></label>';
  }).join('')||'<div class="muted">暂无分类</div>';
 }
 function selectSafetyCategory(id){collectSafetyCategoryEditor(); selectedSafetyCategory=id; renderSafetySettings()}
@@ -1825,13 +1830,13 @@ function renderSafetyCategoryEditor(){
  const builtin=builtinSafetyCategories().find(c=>c.id===id);
  const custom=cfg.safety_custom_categories[id]||{label:'',words:[],excludes:[]};
  $('safetyCategoryTitle').textContent=builtin?builtin.label:(custom.label||id);
- $('safetyCategoryMeta').textContent=builtin?'内置分类，只能预览词库；排除词用于处理误杀。':'自定义分类，可编辑名称、屏蔽词和排除词。';
+ $('safetyCategoryMeta').textContent=builtin?(builtin.hidden?'内置分类，词库预览已隐藏；排除词仍可用于处理误杀。':'内置分类，只能预览词库；排除词用于处理误杀。'):'自定义分类，可编辑名称、屏蔽词和排除词。';
  $('safetyCategoryID').value=id||'';
  $('safetyCategoryID').disabled=!!builtin;
  $('safetyCategoryLabel').value=builtin?builtin.label:(custom.label||'');
  $('safetyCategoryLabel').disabled=!!builtin;
  $('safetyDeleteCategory').style.display=builtin?'none':'inline-block';
- $('safetyBuiltinPreview').value=builtin?(builtin.keywords||[]).join('\n'):'';
+ $('safetyBuiltinPreview').value=builtin?(builtin.hidden?'此分类内置词已隐藏，仅后端匹配使用。':(builtin.keywords||[]).join('\n')):'';
  $('safetyBuiltinPreview').style.display=builtin?'block':'none';
  $('safetyCustomWords').value=builtin?'':(custom.words||[]).join('\n');
  $('safetyCustomWords').disabled=!!builtin;
