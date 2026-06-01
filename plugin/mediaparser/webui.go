@@ -430,11 +430,14 @@ func withWebAuth(next http.Handler, auth webAuthConfig) http.Handler {
 }
 
 func verifyWebAuth(auth webAuthConfig, user, pass string) bool {
-	if store, err := readWebAuthStore(); err == nil && store.Hash != "" {
-		return verifyWebAuthStore(store, user, pass)
-	}
 	if auth.Store.Hash != "" {
 		return verifyWebAuthStore(auth.Store, user, pass)
+	}
+	if auth.Password != "" {
+		return webAuthEqual(user, auth.User) && webAuthEqual(pass, auth.Password)
+	}
+	if store, err := readWebAuthStore(); err == nil && store.Hash != "" {
+		return verifyWebAuthStore(store, user, pass)
 	}
 	return webAuthEqual(user, auth.User) && webAuthEqual(pass, auth.Password)
 }
