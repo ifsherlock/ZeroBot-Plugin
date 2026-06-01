@@ -1868,3 +1868,44 @@ func TestSafetyMigrationDoesNotBlockNormalXTCoLinks(t *testing.T) {
 		t.Fatalf("expected normal X t.co link to pass, hit=%+v", hit)
 	}
 }
+
+func TestSafetyNoticeTextUsesDefault(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyFilterNoticeText = ""
+	got := safetyNoticeText(cfg, mediaMeta{}, safetyHit{})
+	if got != "内容触发安全屏蔽，已停止解析。" {
+		t.Fatalf("notice=%q", got)
+	}
+}
+
+func TestSafetyNoticeTextSupportsTemplate(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyFilterNoticeText = "已屏蔽 {platform}/{category}: {title}"
+	meta := mediaMeta{Platform: "twitter", Title: "测试标题"}
+	hit := safetyHit{Category: "adult"}
+	got := safetyNoticeText(cfg, meta, hit)
+	if got != "已屏蔽 twitter/adult: 测试标题" {
+		t.Fatalf("notice=%q", got)
+	}
+}
+
+func TestDecodeSafetyBuiltinWordsTrimsLeadingHash(t *testing.T) {
+	got := decodeSafetyBuiltinWords([]string{"I05TRlc=", "I+eUt+iPqeiQqA=="})
+	for _, word := range got {
+		if strings.HasPrefix(word, "#") {
+			t.Fatalf("expected leading hash to be trimmed, got %q in %v", word, got)
+		}
+	}
+	if !containsString(got, "NSFW") || !containsString(got, "男菩萨") {
+		t.Fatalf("expected decoded words without hash, got %v", got)
+	}
+}
+
+func containsString(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}

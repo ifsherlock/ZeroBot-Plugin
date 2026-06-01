@@ -114,6 +114,7 @@ type config struct {
 	FailReactionEmoji        string                          `json:"fail_reaction_emoji"`
 	SafetyFilterEnabled      bool                            `json:"safety_filter_enabled"`
 	SafetyFilterNotice       bool                            `json:"safety_filter_notice"`
+	SafetyFilterNoticeText   string                          `json:"safety_filter_notice_text"`
 	SafetyGlobalCategories   map[string]bool                 `json:"safety_global_categories"`
 	SafetyPlatformCategories map[string]map[string]bool      `json:"safety_platform_categories"`
 	SafetyCustomGlobal       map[string][]string             `json:"safety_custom_global"`
@@ -259,39 +260,40 @@ func defaultConfig() config {
 		output[p.Name] = outputAll
 	}
 	return config{
-		AutoParse:           true,
-		Keywords:            []string{"视频解析", "解析视频", "解析", "parse"},
-		AdminID:             10000,
-		AccessMode:          accessNone,
-		PrivateAccessMode:   accessNone,
-		GroupAccessMode:     accessNone,
-		GroupUserAccessMode: accessNone,
-		UserBlacklist:       map[int64]bool{},
-		GroupBlacklist:      map[int64]bool{},
-		GroupUserBlacklist:  map[int64]bool{},
-		UserWhitelist:       map[int64]bool{},
-		GroupWhitelist:      map[int64]bool{},
-		GroupUserWhitelist:  map[int64]bool{},
-		PlatformEnabled:     enabled,
-		PlatformInfoCard:    infoCard,
-		PlatformSendMedia:   sendMedia,
-		PlatformDownload:    download,
-		PlatformGroupBlock:  platformGroupBlock,
-		OutputMode:          output,
-		SendInfoCard:        true,
-		SendMedia:           true,
-		DownloadVideo:       true,
-		MaxVideoMB:          defaultMaxVideoMB,
-		VideoMaxResolution:  0,
-		PlatformResolution:  map[string]int{},
-		CacheTTLMinutes:     defaultTTLMinutes,
-		TimeoutSeconds:      defaultTimeoutSec,
-		Debug:               true,
-		ParseReaction:       true,
-		ParseReactionEmoji:  "🍉",
-		FailReactionEmoji:   "❌",
-		SafetyFilterEnabled: true,
-		SafetyFilterNotice:  false,
+		AutoParse:              true,
+		Keywords:               []string{"视频解析", "解析视频", "解析", "parse"},
+		AdminID:                10000,
+		AccessMode:             accessNone,
+		PrivateAccessMode:      accessNone,
+		GroupAccessMode:        accessNone,
+		GroupUserAccessMode:    accessNone,
+		UserBlacklist:          map[int64]bool{},
+		GroupBlacklist:         map[int64]bool{},
+		GroupUserBlacklist:     map[int64]bool{},
+		UserWhitelist:          map[int64]bool{},
+		GroupWhitelist:         map[int64]bool{},
+		GroupUserWhitelist:     map[int64]bool{},
+		PlatformEnabled:        enabled,
+		PlatformInfoCard:       infoCard,
+		PlatformSendMedia:      sendMedia,
+		PlatformDownload:       download,
+		PlatformGroupBlock:     platformGroupBlock,
+		OutputMode:             output,
+		SendInfoCard:           true,
+		SendMedia:              true,
+		DownloadVideo:          true,
+		MaxVideoMB:             defaultMaxVideoMB,
+		VideoMaxResolution:     0,
+		PlatformResolution:     map[string]int{},
+		CacheTTLMinutes:        defaultTTLMinutes,
+		TimeoutSeconds:         defaultTimeoutSec,
+		Debug:                  true,
+		ParseReaction:          true,
+		ParseReactionEmoji:     "🍉",
+		FailReactionEmoji:      "❌",
+		SafetyFilterEnabled:    true,
+		SafetyFilterNotice:     false,
+		SafetyFilterNoticeText: "内容触发安全屏蔽，已停止解析。",
 		SafetyGlobalCategories: map[string]bool{
 			safetyCategoryAdult:    true,
 			safetyCategoryViolence: true,
@@ -485,6 +487,10 @@ func normalizeConfig(cfg *config) bool {
 	}
 	if strings.TrimSpace(cfg.FailReactionEmoji) == "" {
 		cfg.FailReactionEmoji = "❌"
+	}
+	cfg.SafetyFilterNoticeText = strings.TrimSpace(cfg.SafetyFilterNoticeText)
+	if cfg.SafetyFilterNoticeText == "" {
+		cfg.SafetyFilterNoticeText = "内容触发安全屏蔽，已停止解析。"
 	}
 	if cfg.SafetyGlobalCategories == nil {
 		cfg.SafetyGlobalCategories = defaultSafetyGlobalCategories()
@@ -1067,7 +1073,7 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 	if hit, blocked := safetyBlocked(cfg, meta, rawMessage); blocked {
 		logrus.Warnf("[mediaparser] safety_blocked platform=%s category=%s source=%s keyword_sha1=%s title=%q", meta.Platform, hit.Category, hit.Source, safetyKeywordDigest(hit.Keyword), truncate(meta.Title, 80))
 		if cfg.SafetyFilterNotice {
-			ctx.SendChain(message.Text("内容触发安全屏蔽，已停止解析。"))
+			ctx.SendChain(message.Text(safetyNoticeText(cfg, meta, hit)))
 		}
 		return nil
 	}

@@ -143,9 +143,22 @@ func decodeSafetyBuiltinWords(encoded []string) []string {
 		if err != nil {
 			continue
 		}
-		words = append(words, string(decoded))
+		words = append(words, strings.TrimPrefix(strings.TrimSpace(string(decoded)), "#"))
 	}
 	return uniqueSafetyWords(words)
+}
+
+func safetyNoticeText(cfg config, meta mediaMeta, hit safetyHit) string {
+	text := strings.TrimSpace(cfg.SafetyFilterNoticeText)
+	if text == "" {
+		text = "内容触发安全屏蔽，已停止解析。"
+	}
+	replacer := strings.NewReplacer(
+		"{platform}", strings.TrimSpace(meta.Platform),
+		"{category}", strings.TrimSpace(hit.Category),
+		"{title}", strings.TrimSpace(meta.Title),
+	)
+	return replacer.Replace(text)
 }
 
 func migrateSafetyCategoryID(id string) string {
