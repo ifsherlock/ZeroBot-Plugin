@@ -1212,14 +1212,14 @@ table{width:100%;border-collapse:separate;border-spacing:0;background:white;bord
 button,select,input,textarea{border:1px solid var(--line);border-radius:8px;background:white;color:var(--text);padding:0 10px}button,select,input{height:34px}textarea{width:100%;min-height:110px;padding:9px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff;font-weight:650}button:hover{border-color:#b8c5d6}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#fecdd3;color:var(--red);background:#fff7f7}
 .hidden,.page{display:none!important}.page.active{display:block!important}.page.active.metric{display:flex!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
-.settingsGrid{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;margin-top:12px}.settingsCard{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:14px;display:flex;flex-direction:column;gap:12px}.settingsCard .sectionTitle{margin-bottom:0}.settingsCard .field{min-width:0}.settingsCard textarea{min-height:132px}.settingsFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsFields.single{grid-template-columns:1fr}.settingsStack{display:grid;gap:14px}.cacheCard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:center}.cacheStat{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px}.cacheStat span{display:block;font-size:12px;color:var(--muted)}.cacheStat b{font-size:20px}.runtimeNote{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;color:var(--muted)}
+.settingsGrid{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;margin-top:12px}.settingsCard{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:14px;display:flex;flex-direction:column;gap:12px}.settingsCard .sectionTitle{margin-bottom:0}.settingsCard .field{min-width:0}.settingsCard textarea{min-height:132px}.settingsFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsFields.single{grid-template-columns:1fr}.settingsStack{display:grid;gap:14px}.reviewGrid{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(420px,1.1fr);gap:14px;align-items:stretch}.reviewColumn{display:grid;gap:14px;grid-auto-rows:minmax(0,auto)}.reviewCard{min-height:172px;overflow:hidden}.reviewCard.tall{min-height:376px}.reviewCard .groupList{max-height:236px;border:1px solid #edf2f7;border-radius:8px;background:#fff}.reviewCard.tall .groupList{max-height:520px}.reviewCard textarea{min-height:116px}.reviewCard .sectionTitle{min-height:36px}.proxySummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.proxyBadge{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:9px 10px}.proxyBadge b{display:block;font-size:12px;margin-bottom:3px}.proxyBadge span{color:var(--muted);font-size:12px}.cacheCard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:center}.cacheStat{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px}.cacheStat span{display:block;font-size:12px;color:var(--muted)}.cacheStat b{font-size:20px}.runtimeNote{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;color:var(--muted)}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
 .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.msg{min-height:20px;color:var(--muted)}.statusDot{display:inline-flex;align-items:center;gap:6px}.statusDot:before{content:"";width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px #dcfce7}
-@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.cacheCard{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
+@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.reviewGrid,.proxySummary,.cacheCard{grid-template-columns:1fr}.reviewCard,.reviewCard.tall{min-height:auto}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
 </style>
 </head>
 <body>
@@ -1370,17 +1370,19 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="safety" id="safety">
 <div class="sectionTitle"><b>内容安全</b><span class="muted">先维护分类词库，再在全局或平台启用分类。</span><button class="primary right" onclick="save()">保存</button></div>
-<div class="settingsGrid">
-<div class="settingsStack">
-<div class="settingsCard">
+<div class="reviewGrid">
+<div class="reviewColumn">
+<div class="settingsCard reviewCard">
 <div class="sectionTitle"><b>开关</b><span class="muted">命中后会停止发送卡片、媒体和合并转发。</span></div>
 <div class="controlPills"><label class="row">启用屏蔽 <span id="safetyEnabledSwitch"></span></label><label class="row">命中提示 <span id="safetyNoticeSwitch"></span></label></div>
 </div>
-<div class="settingsCard">
+<div class="settingsCard reviewCard tall">
 <div class="sectionTitle"><b>分类词库</b><span class="muted">内置分类只读，自定义分类可新建和编辑。</span><button onclick="addSafetyCustomCategory()">新建分类</button></div>
 <div class="groupList" id="safetyCategoryList"></div>
 </div>
-<div class="settingsCard">
+</div>
+<div class="reviewColumn">
+<div class="settingsCard reviewCard tall">
 <div class="sectionTitle"><b id="safetyCategoryTitle">分类详情</b><span class="muted" id="safetyCategoryMeta">选择一个分类查看词库。</span><button class="danger" id="safetyDeleteCategory" onclick="deleteSafetyCustomCategory()">删除分类</button></div>
 <div class="settingsFields">
 <label class="field">分类 ID <input id="safetyCategoryID" placeholder="custom_bili_marketing" oninput="editSafetyCustomCategoryID()"></label>
@@ -1390,13 +1392,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">自定义屏蔽词<textarea id="safetyCustomWords" placeholder="一行一个屏蔽词" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
 <label class="field">排除词 / 白名单<textarea id="safetyCustomExcludes" placeholder="一行一个放行词；命中本分类时优先放行" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
 </div>
-</div>
-<div class="settingsStack">
-<div class="settingsCard">
+<div class="settingsCard reviewCard">
 <div class="sectionTitle"><b>全局启用分类</b><span class="muted">勾选后对所有平台生效。</span></div>
 <div class="groupList" id="safetyGlobalCategories"></div>
 </div>
-<div class="settingsCard">
+<div class="settingsCard reviewCard">
 <div class="sectionTitle"><b>平台启用分类</b><span class="muted">选择平台后勾选该平台额外启用的分类。</span></div>
 <select id="safetyPlatformSelect" onchange="renderSafetyPlatformCategories()"></select>
 <div class="groupList" id="safetyPlatformCategories"></div>
@@ -1420,6 +1420,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsFields single">
 <label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
 <label class="field">海外平台代理 <input id="proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"><span class="muted">仅 X/TikTok/YouTube/Instagram 生效，不影响国内平台。</span></label>
+</div>
+<div class="proxySummary">
+<div class="proxyBadge"><b>适用平台</b><span>X / TikTok / YouTube / Instagram</span></div>
+<div class="proxyBadge"><b>qb 实测</b><span>YouTube、Instagram 200；X 返回 403 但代理连通</span></div>
+<div class="proxyBadge"><b>当前配置</b><span id="proxySummaryText">未配置</span></div>
 </div>
 </div>
 <div class="settingsCard">
@@ -1606,6 +1611,7 @@ function render(){
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  $('proxy').value=cfg.proxy||'';
+ if($('proxySummaryText')) $('proxySummaryText').textContent=cfg.proxy||'未配置';
  setSecretInput('bilibiliCookie', cfg.bilibili_cookie_set, 'SESSDATA=...; bili_jct=...');
  setSecretInput('xiaohongshuCookie', cfg.xiaohongshu_cookie_set, 'a1=...; web_session=...');
  setSecretInput('youtubeCookie', cfg.youtube_cookie_set, 'VISITOR_INFO1_LIVE=...; SID=...');
