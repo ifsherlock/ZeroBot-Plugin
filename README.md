@@ -111,63 +111,43 @@
 
 ## Docker 部署方式
 
-仓库提供两种 compose 用法：
+普通部署建议直接使用 DockerHub 预构建镜像。新建 `docker-compose.yml`，写入：
 
-- `docker-compose.yaml`：本地源码构建镜像，适合你修改代码后自己构建运行。
-- `docs/docker-compose.mediaparser.yml`：直接使用预构建镜像，适合只部署 mediaparser 运行环境。
-
-两种方式都会把容器内 `/app/data` 挂载到宿主机 `./data`，配置、Cookie、缓存图片、WebUI 数据都会保存在这里。不要把账号、Token、Cookie、AppSecret 等敏感内容提交到 Git。
-
-### 使用预构建镜像
-
-适合普通部署或只想使用 WebUI / mediaparser 的场景：
-
-```bash
-docker compose -f docs/docker-compose.mediaparser.yml up -d
+```yaml
+services:
+  mediaparser:
+    image: jaysherlock/zerobot-plugin:latest
+    container_name: mediaparser
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: Asia/Shanghai
+      WEBUI_ADDR: 0.0.0.0:3000
+      WEBUI_USER: admin
+      # WEBUI_PASSWORD 环境变量=请使用强密码！！！
+      WEBUI_PASSWORD: "请使用强密码！！！"
+      # 只使用 WebUI/解析能力时留空；连接同机 llbot 时可填 ws://127.0.0.1:3001。
+      ONEBOT_WS_URL: ""
+      ONEBOT_WS_TOKEN: ""
+      # OneBot/llbot 可见的数据目录；不需要本地路径映射时可留空。
+      ONEBOT_DATA_DIR: "${PWD}/data"
+      BOT_NICKNAME: ZeroBot
+      COMMAND_PREFIX: /
+      SUPER_USERS: ""
+      ZBP_ARGS: ""
+    volumes:
+      - ./data:/app/data
 ```
 
-更新镜像：
+启动和更新：
 
 ```bash
-docker compose -f docs/docker-compose.mediaparser.yml pull
-docker compose -f docs/docker-compose.mediaparser.yml up -d
+docker compose up -d
+docker compose pull
+docker compose up -d
 ```
 
-这个文件默认使用：
-
-- 镜像：`jaysherlock/zerobot-plugin:latest`
-- 服务名：`mediaparser`
-- 容器名：`mediaparser`
-- 网络：`host`
-- 数据目录：`./data:/app/data`
-- `ONEBOT_WS_URL` 默认留空，适合先只打开 WebUI 做配置。
-
-如果要连接同机 llbot，可把 `ONEBOT_WS_URL` 改成 llbot 的反向 WebSocket 地址，例如 `ws://127.0.0.1:3001`。
-
-### 使用本地源码构建
-
-适合改过源码或想使用当前工作区内容构建镜像：
-
-```bash
-docker compose up -d --build
-```
-
-这个文件默认使用：
-
-- 构建上下文：当前仓库根目录。
-- 镜像名：`zerobot-plugin:local`
-- 服务名：`zerobot-plugin`
-- 容器名：`zerobot-plugin`
-- 网络：`host`
-- 数据目录：`./data:/app/data`
-- `ONEBOT_WS_URL` 默认指向 `ws://127.0.0.1:3001`。
-
-修改插件源码或 `main.go` 里的插件 import 后，重新构建：
-
-```bash
-docker compose build --no-cache zerobot-plugin
-docker compose up -d zerobot-plugin
-```
+容器内 `/app/data` 会持久化到宿主机 `./data`，配置、Cookie、缓存图片、WebUI 数据都会保存在这里。不要把账号、Token、Cookie、AppSecret 等敏感内容提交到 Git。
 
 ## 端口说明
 
@@ -239,23 +219,30 @@ http://127.0.0.1:3000
 常用命令：
 
 ```bash
-docker compose logs -f zerobot-plugin
-docker compose restart zerobot-plugin
+docker compose logs -f mediaparser
+docker compose restart mediaparser
 docker compose down
-```
-
-如果使用预构建 compose，把服务名换成 `mediaparser`：
-
-```bash
-docker compose -f docs/docker-compose.mediaparser.yml logs -f mediaparser
-docker compose -f docs/docker-compose.mediaparser.yml restart mediaparser
-docker compose -f docs/docker-compose.mediaparser.yml down
 ```
 
 检查缓存服务是否启动：
 
 ```bash
 curl http://127.0.0.1:3088/healthz
+```
+
+## 自定义构建
+
+如果改过源码，或想用当前工作区内容构建镜像，可以使用仓库根目录的 `docker-compose.yaml`：
+
+```bash
+docker compose -f docker-compose.yaml up -d --build
+```
+
+这个文件会从当前仓库构建 `zerobot-plugin:local` 镜像，服务名和容器名都是 `zerobot-plugin`。修改插件源码或 `main.go` 的插件 import 后，可重新构建：
+
+```bash
+docker compose -f docker-compose.yaml build --no-cache zerobot-plugin
+docker compose -f docker-compose.yaml up -d zerobot-plugin
 ```
 
 ## 说明
