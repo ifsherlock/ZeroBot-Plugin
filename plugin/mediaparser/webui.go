@@ -273,6 +273,7 @@ func loadWebAuthConfig() webAuthConfig {
 	}
 
 	if store, err := readWebAuthStore(); err == nil && store.Hash != "" {
+		removeLegacyWebAuthToken()
 		return webAuthConfig{Enabled: true, User: store.User, Store: store, StorePath: storePath}
 	}
 
@@ -291,12 +292,21 @@ func loadWebAuthConfig() webAuthConfig {
 	}
 	if err := writeWebAuthStore(store); err != nil {
 		logrus.Warnf("[webui] save auth store failed: %v", err)
+	} else {
+		removeLegacyWebAuthToken()
 	}
 	return webAuthConfig{Enabled: true, User: store.User, Store: store, StorePath: storePath}
 }
 
 func webAuthStorePath() string {
 	return filepath.Join(engine.DataFolder(), "webui_auth.json")
+}
+
+func removeLegacyWebAuthToken() {
+	legacyPath := filepath.Join(engine.DataFolder(), "webui_auth_token")
+	if err := os.Remove(legacyPath); err != nil && !os.IsNotExist(err) {
+		logrus.Warnf("[webui] remove legacy auth token failed: %v", err)
+	}
 }
 
 func readWebAuthStore() (webAuthStore, error) {
