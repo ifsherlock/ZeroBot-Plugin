@@ -25,6 +25,9 @@ services:
       TZ: Asia/Shanghai
       # WebUI 监听地址。host 网络下会直接监听宿主机 3000 端口。
       WEBUI_ADDR: 0.0.0.0:3000
+      WEBUI_USER: admin
+      # WEBUI_PASSWORD 环境变量=请使用强密码！！！
+      WEBUI_PASSWORD: "请使用强密码！！！"
       # OneBot 反向 WebSocket 地址。
       # 只使用内置 WebUI/解析能力时留空；llbot 和本容器在同一台 Linux 主机时填 ws://127.0.0.1:3001。
       ONEBOT_WS_URL: ""

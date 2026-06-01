@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -116,6 +117,8 @@ func redactWebLog(s string) string {
 			return strings.TrimSpace(s[:idx]) + key + "[redacted]"
 		}
 	}
+	s = regexp.MustCompile(`(?i)(access_token|token|secret|appsecret|openid|sessionid|sessdata)=([^&\s]+)`).ReplaceAllString(s, "$1=[redacted]")
+	s = regexp.MustCompile(`(?i)\b(user_id|group_id|uin|qq)=\d+`).ReplaceAllString(s, "$1=[redacted]")
 	return s
 }
 
@@ -144,10 +147,6 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 			"ok":             true,
 			"now":            time.Now(),
 			"go":             runtime.Version(),
-			"config_path":    configPath,
-			"system_path":    SystemSettingsPath(),
-			"cache_dir":      cacheDir,
-			"mediaparser":    snapshotConfig(),
 			"runtime_status": snapshotRuntime(),
 		}
 		if extra != nil {
@@ -160,13 +159,14 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 	mux.HandleFunc("/api/mediaparser/config", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			writeJSON(w, map[string]any{"config": snapshotConfig(), "platforms": webPlatforms(), "safety_builtins": safetyBuiltinPayload()})
+			writeJSON(w, map[string]any{"config": configForWeb(), "platforms": webPlatforms(), "safety_builtins": safetyBuiltinPayload()})
 		case http.MethodPost:
 			var next config
 			if err := json.NewDecoder(r.Body).Decode(&next); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			preserveSecretConfigFields(&next, snapshotConfig())
 			normalizeConfig(&next)
 			stateMu.Lock()
 			currentConf = next
@@ -176,7 +176,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			writeJSON(w, map[string]any{"ok": true, "config": snapshotConfig()})
+			writeJSON(w, map[string]any{"ok": true, "config": configForWeb()})
 		default:
 			writeMethodNotAllowed(w)
 		}
@@ -227,7 +227,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 	handler := http.Handler(mux)
 	if auth.Enabled {
 		handler = withWebAuth(handler, auth)
-		logrus.Infof("[webui] auth enabled user=%s store_path=%s", auth.User, auth.StorePath)
+		logrus.Infof("[webui] auth enabled user=%s", auth.User)
 	}
 	go func() {
 		logrus.Infof("[webui] listening on %s", addr)
@@ -446,6 +446,77 @@ func webAuthEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
+func configForWeb() map[string]any {
+	data, err := json.Marshal(snapshotConfig())
+	if err != nil {
+		return map[string]any{}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return map[string]any{}
+	}
+	cfg := snapshotConfig()
+	for _, key := range []string{
+		"bilibili_cookie",
+		"xiaohongshu_cookie",
+		"youtube_cookie",
+		"instagram_cookie",
+		"keylol_cookie",
+		"yt_dlp_cookie_file",
+		"youtube_cookie_file",
+		"instagram_cookie_file",
+	} {
+		if raw, _ := out[key].(string); strings.TrimSpace(raw) != "" {
+			out[key+"_set"] = true
+		}
+		out[key] = ""
+	}
+	out["bilibili_cookie_set"] = strings.TrimSpace(cfg.BilibiliCookie) != ""
+	out["xiaohongshu_cookie_set"] = strings.TrimSpace(cfg.XiaohongshuCookie) != ""
+	out["youtube_cookie_set"] = strings.TrimSpace(cfg.YouTubeCookie) != ""
+	out["instagram_cookie_set"] = strings.TrimSpace(cfg.InstagramCookie) != ""
+	out["keylol_cookie_set"] = strings.TrimSpace(cfg.KeylolCookie) != ""
+	out["yt_dlp_cookie_file_set"] = strings.TrimSpace(cfg.YTDLPCookieFile) != ""
+	out["youtube_cookie_file_set"] = strings.TrimSpace(cfg.YouTubeCookieFile) != ""
+	out["instagram_cookie_file_set"] = strings.TrimSpace(cfg.InstagramCookieFile) != ""
+	return out
+}
+
+func preserveSecretConfigFields(next *config, old config) {
+	if strings.TrimSpace(next.BilibiliCookie) == "" {
+		next.BilibiliCookie = old.BilibiliCookie
+	}
+	if strings.TrimSpace(next.XiaohongshuCookie) == "" {
+		next.XiaohongshuCookie = old.XiaohongshuCookie
+	}
+	if strings.TrimSpace(next.YouTubeCookie) == "" {
+		next.YouTubeCookie = old.YouTubeCookie
+	}
+	if strings.TrimSpace(next.InstagramCookie) == "" {
+		next.InstagramCookie = old.InstagramCookie
+	}
+	if strings.TrimSpace(next.KeylolCookie) == "" {
+		next.KeylolCookie = old.KeylolCookie
+	}
+	if strings.TrimSpace(next.YTDLPCookieFile) == "" {
+		next.YTDLPCookieFile = old.YTDLPCookieFile
+	}
+	if strings.TrimSpace(next.YouTubeCookieFile) == "" {
+		next.YouTubeCookieFile = old.YouTubeCookieFile
+	}
+	if strings.TrimSpace(next.InstagramCookieFile) == "" {
+		next.InstagramCookieFile = old.InstagramCookieFile
+	}
+	if next.BilibiliCookie == "" {
+		next.BilibiliUseCookie = false
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 func defaultWebStatus() map[string]any {
 	accounts := webBotAccounts()
 	var selfID int64
@@ -591,7 +662,7 @@ func fetchOneBotGroups() ([]webGroup, int64, error) {
 func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, map[string]any{"settings": systemSettingsForWeb(), "path": SystemSettingsPath()})
+		writeJSON(w, map[string]any{"settings": systemSettingsForWeb()})
 	case http.MethodPost:
 		var payload SystemSettings
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
@@ -634,10 +705,12 @@ func serveWebAuthAPI(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		auth := loadWebAuthConfig()
 		writeJSON(w, map[string]any{
-			"ok":      true,
-			"enabled": auth.Enabled,
-			"user":    auth.User,
-			"path":    webAuthStorePath(),
+			"ok":            true,
+			"enabled":       auth.Enabled,
+			"user":          auth.User,
+			"stored":        auth.Store.Hash != "",
+			"env_managed":   strings.TrimSpace(os.Getenv("WEBUI_PASSWORD")) != "" || strings.TrimSpace(os.Getenv("WEBUI_TOKEN")) != "",
+			"auth_file_set": fileExists(webAuthStorePath()),
 		})
 	case http.MethodPost:
 		var payload struct {
@@ -667,7 +740,7 @@ func serveWebAuthAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, map[string]any{"ok": true, "user": store.User, "path": webAuthStorePath()})
+		writeJSON(w, map[string]any{"ok": true, "user": store.User, "stored": true})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -810,13 +883,13 @@ func serveLogoAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		path, err := savePlatformLogo(platform, img)
+		_, err = savePlatformLogo(platform, img)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		platformLogoCache.Delete(platform)
-		writeJSON(w, map[string]any{"ok": true, "path": path})
+		writeJSON(w, map[string]any{"ok": true, "url": "/api/mediaparser/logos/image?platform=" + url.QueryEscape(platform)})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -936,7 +1009,6 @@ func snapshotLogos() map[string]any {
 		st, err := os.Stat(path)
 		exists := err == nil && decodeLogoFile(path) != nil
 		item := map[string]any{
-			"path":    path,
 			"exists":  exists,
 			"builtin": true,
 			"url":     "/api/mediaparser/logos/image?platform=" + url.QueryEscape(p.Name),
@@ -1457,9 +1529,8 @@ async function refreshStatus(){
   infoLine('OneBot 策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
   infoLine('QQBot 策略', qqbotPolicyText()),
   infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
-  infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-'),
-  infoLine('路径', '配置 '+(st.config_path||'-')+' / 缓存 '+(st.cache_dir||'-'))
- ].join('');
+		infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-')
+	].join('');
  loadLogs();
 }
 function infoLine(k,v){return '<div class="infoLine"><b>'+escapeHTML(k)+'</b><span class="muted">'+escapeHTML(v)+'</span></div>'}
@@ -1532,7 +1603,11 @@ function render(){
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  $('proxy').value=cfg.proxy||'';
- $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
+ setSecretInput('bilibiliCookie', cfg.bilibili_cookie_set, 'SESSDATA=...; bili_jct=...');
+ setSecretInput('xiaohongshuCookie', cfg.xiaohongshu_cookie_set, 'a1=...; web_session=...');
+ setSecretInput('youtubeCookie', cfg.youtube_cookie_set, 'VISITOR_INFO1_LIVE=...; SID=...');
+ setSecretInput('instagramCookie', cfg.instagram_cookie_set, 'sessionid=...; ds_user_id=...');
+ setSecretInput('keylolCookie', cfg.keylol_cookie_set, 'key=value; key2=value2');
  $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderKeylolThemeSwitches();
  renderCacheStats();
@@ -1543,6 +1618,11 @@ function render(){
  renderSafetySettings();
  if(!groups.length) loadGroups(false); else renderGroupPickers();
  showPage((location.hash||'#overview').slice(1)||'overview');
+}
+function setSecretInput(id,set,placeholder){
+ const el=$(id); if(!el) return;
+ el.value='';
+ el.placeholder=set?'Already set; leave blank to keep, enter a new value to replace':placeholder;
 }
 function renderSystemSettings(){
  if(!sys) return;

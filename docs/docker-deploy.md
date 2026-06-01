@@ -8,6 +8,15 @@
 
 不要把 IP、账号、密码、Cookie、AppSecret 写进 Dockerfile、compose 文件或提交到 Git。生产配置请在 WebUI 里保存，或放在本机未提交的挂载目录中。
 
+WebUI 默认使用 HTTP Basic Auth。公网部署时请务必通过环境变量设置强密码，例如：
+
+```text
+WEBUI_USER 环境变量=admin
+WEBUI_PASSWORD 环境变量=请使用强密码！！！
+```
+
+`WEBUI_PASSWORD` 会在运行时用于鉴权；通过 WebUI 页面修改账号密码时，密码会以加盐哈希写入 `/app/data/mediaparser/webui_auth.json`，不会保存明文。
+
 ## QQBot 视频说明
 
 官方 QQBot 不是 OneBot 那种本地 `file://xxx.mp4` 直接发送模式。视频通常要走官方媒体上传/审核/格式限制流程，和现在的 Markdown 图片、公网图片 URL 不是一套能力。

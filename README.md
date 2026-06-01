@@ -190,6 +190,8 @@ ports:
 | :--- | :--- | :--- |
 | `TZ` | `Asia/Shanghai` | 容器时区，影响日志和定时任务时间 |
 | `WEBUI_ADDR` | `0.0.0.0:3000` | WebUI 监听地址 |
+| `WEBUI_USER` | `admin` | WebUI HTTP Basic Auth 用户名 |
+| `WEBUI_PASSWORD` | 空 | WebUI HTTP Basic Auth 密码；公网部署必须显式设置强密码 |
 | `ONEBOT_WS_URL` | 视 compose 文件而定 | OneBot / llbot 反向 WebSocket 地址；不用 OneBot 时可留空 |
 | `ONEBOT_WS_TOKEN` | 空 | OneBot WebSocket 鉴权 token；未启用鉴权时留空 |
 | `ONEBOT_DATA_DIR` | `${PWD}/data` | OneBot / llbot 可见的数据目录，用于本地文件路径映射 |
@@ -200,6 +202,7 @@ ports:
 
 常见配置建议：
 
+- WebUI 暴露到公网前必须配置鉴权，例如：`WEBUI_USER 环境变量=admin`，`WEBUI_PASSWORD 环境变量=请使用强密码！！！`。
 - 只使用 WebUI 或官方 QQBot 解析能力：`ONEBOT_WS_URL` 留空。
 - llbot 和本服务在同一台 Linux 主机：`ONEBOT_WS_URL` 填 llbot 实际监听地址。
 - 不需要本地 `file://` 路径映射时：`ONEBOT_DATA_DIR` 可以留空。
