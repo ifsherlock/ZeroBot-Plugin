@@ -1796,6 +1796,16 @@ func TestNormalizeSafetyWordsDeduplicatesAndTrims(t *testing.T) {
 
 func TestNormalizeConfigMigratesLegacyCustomWords(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories["minor_risk"] = true
+	cfg.SafetyGlobalCategories["custom_twitter_adult_scam"] = true
+	cfg.SafetyPlatformCategories["twitter"] = map[string]bool{
+		"adult_scam":                true,
+		"custom_twitter_adult_scam": true,
+	}
+	cfg.SafetyCustomCategories["custom_twitter_adult_scam"] = safetyCustomCategory{
+		Label: "Twitter legacy adult scam",
+		Words: []string{"legacy twitter adult", "t.co"},
+	}
 	cfg.SafetyCustomGlobal = map[string][]string{
 		"adult_scam": {"legacy adult ad"},
 	}
@@ -1813,11 +1823,48 @@ func TestNormalizeConfigMigratesLegacyCustomWords(t *testing.T) {
 	if len(cfg.SafetyCustomCategories[seedID].Words) == 0 {
 		t.Fatal("expected legacy adult words")
 	}
+	for _, word := range cfg.SafetyCustomCategories[seedID].Words {
+		if normalizeSafetyText(word) == "t co" {
+			t.Fatal("expected broad t.co legacy word to be dropped")
+		}
+	}
+	if _, ok := cfg.SafetyCustomCategories["custom_twitter_adult_scam"]; ok {
+		t.Fatal("expected legacy platform custom category to be removed")
+	}
+	if cfg.SafetyGlobalCategories["minor_risk"] || cfg.SafetyPlatformCategories["twitter"]["adult_scam"] || cfg.SafetyPlatformCategories["twitter"]["custom_twitter_adult_scam"] {
+		t.Fatal("expected legacy category switches to be migrated")
+	}
+	if !cfg.SafetyGlobalCategories[safetyCategoryAdult] || !cfg.SafetyGlobalCategories[seedID] || !cfg.SafetyPlatformCategories["twitter"][safetyCategoryAdult] || !cfg.SafetyPlatformCategories["twitter"][seedID] {
+		t.Fatal("expected legacy category switches to enable migrated adult categories")
+	}
 	politicsID := "custom_" + safetyCategoryPolitics
 	if len(cfg.SafetyCustomCategories[politicsID].Words) == 0 {
 		t.Fatal("expected legacy platform politics words to become global custom category")
 	}
 	if cfg.SafetyCustomPlatform == nil || len(cfg.SafetyCustomPlatform) != 0 {
 		t.Fatal("expected legacy platform custom words to be cleared")
+	}
+}
+
+func TestSafetyMigrationDoesNotBlockNormalXTCoLinks(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories["custom_twitter_adult_scam"] = true
+	cfg.SafetyPlatformCategories["twitter"] = map[string]bool{
+		"custom_twitter_adult_scam": true,
+	}
+	cfg.SafetyCustomCategories["custom_twitter_adult_scam"] = safetyCustomCategory{
+		Label: "Twitter legacy adult scam",
+		Words: []string{"t.co"},
+	}
+	if changed := normalizeConfig(&cfg); !changed {
+		t.Fatal("expected legacy category migration")
+	}
+	meta := mediaMeta{
+		Platform: "twitter",
+		Title:    "Serena 的推文",
+		Desc:     "Codex 中文内容创作者十大必装 Skills 来了 Github 链接 https://t.co/zncmfoVPun #codex #skill",
+	}
+	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatalf("expected normal X t.co link to pass, hit=%+v", hit)
 	}
 }

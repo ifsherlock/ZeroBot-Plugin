@@ -180,7 +180,7 @@ func mergeSafetyCustomCategorySeeds(cfg *config, seeds map[string][]string) bool
 			changed = true
 		}
 		before := len(item.Words)
-		item.Words = uniqueSafetyWords(append(item.Words, words...))
+		item.Words = uniqueSafetyWords(append(item.Words, filterMigratedSafetyWords(words)...))
 		if len(item.Words) != before {
 			changed = true
 		}
@@ -241,7 +241,7 @@ func migrateLegacySafetyCustomWords(cfg *config) bool {
 			changed = true
 		}
 		before := len(item.Excludes)
-		item.Excludes = uniqueSafetyWords(append(item.Excludes, words...))
+		item.Excludes = uniqueSafetyWords(append(item.Excludes, filterMigratedSafetyWords(words)...))
 		if len(item.Excludes) != before {
 			changed = true
 		}
@@ -276,7 +276,7 @@ func migrateLegacySafetyCustomWords(cfg *config) bool {
 				changed = true
 			}
 			before := len(item.Excludes)
-			item.Excludes = uniqueSafetyWords(append(item.Excludes, words...))
+			item.Excludes = uniqueSafetyWords(append(item.Excludes, filterMigratedSafetyWords(words)...))
 			if len(item.Excludes) != before {
 				changed = true
 			}
@@ -324,7 +324,7 @@ func migrateSafetyPlatformWords(cfg *config, src map[string]map[string][]string)
 				changed = true
 			}
 			before := len(item.Words)
-			item.Words = uniqueSafetyWords(append(item.Words, words...))
+			item.Words = uniqueSafetyWords(append(item.Words, filterMigratedSafetyWords(words)...))
 			if len(item.Words) != before {
 				changed = true
 			}
@@ -341,6 +341,19 @@ func migrateSafetyPlatformWords(cfg *config, src map[string]map[string][]string)
 		}
 	}
 	return changed
+}
+
+func filterMigratedSafetyWords(words []string) []string {
+	out := make([]string, 0, len(words))
+	for _, word := range words {
+		switch normalizeSafetyText(word) {
+		case "t co":
+			continue
+		default:
+			out = append(out, word)
+		}
+	}
+	return out
 }
 
 func platformDisplayName(name string) string {
@@ -414,21 +427,68 @@ func normalizeSafetyCustomCategories(in map[string]safetyCustomCategory) map[str
 		if id == "" || validSafetyCategory(id) {
 			continue
 		}
+		legacy := false
+		if target, ok := legacyCustomSafetyCategoryID(id); ok {
+			id = target
+			legacy = true
+		}
 		item.Label = strings.TrimSpace(item.Label)
 		if item.Label == "" {
 			item.Label = id
 		}
-		item.Words = uniqueSafetyWords(item.Words)
-		item.Excludes = uniqueSafetyWords(item.Excludes)
+		if legacy {
+			item.Words = uniqueSafetyWords(filterMigratedSafetyWords(item.Words))
+			item.Excludes = uniqueSafetyWords(filterMigratedSafetyWords(item.Excludes))
+		} else {
+			item.Words = uniqueSafetyWords(item.Words)
+			item.Excludes = uniqueSafetyWords(item.Excludes)
+		}
+		if existing, ok := out[id]; ok {
+			if strings.TrimSpace(existing.Label) == "" || strings.HasPrefix(existing.Label, "自定义-") {
+				existing.Label = item.Label
+			}
+			existing.Words = uniqueSafetyWords(append(existing.Words, item.Words...))
+			existing.Excludes = uniqueSafetyWords(append(existing.Excludes, item.Excludes...))
+			out[id] = existing
+			continue
+		}
 		out[id] = item
 	}
 	return out
 }
 
+func legacyCustomSafetyCategoryID(id string) (string, bool) {
+	id = normalizeCustomSafetyCategoryID(id)
+	if !strings.HasPrefix(id, "custom_") {
+		return "", false
+	}
+	rest := strings.TrimPrefix(id, "custom_")
+	for _, legacy := range []string{
+		"political_sensitive",
+		"illegal_url_ad",
+		"weapon_explosive",
+		"adult_scam",
+		"minor_risk",
+		"politics",
+		"violence",
+		"adult",
+		"ad",
+	} {
+		if rest == legacy || strings.HasSuffix(rest, "_"+legacy) {
+			return "custom_" + migrateSafetyCategoryID(legacy), true
+		}
+	}
+	return "", false
+}
+
 func normalizeSafetyMap(in map[string]bool) map[string]bool {
 	out := map[string]bool{}
 	for k, v := range in {
-		k = migrateSafetyCategoryID(k)
+		if target, ok := legacyCustomSafetyCategoryID(k); ok {
+			k = target
+		} else {
+			k = migrateSafetyCategoryID(k)
+		}
 		if validSafetyCategory(k) || k != "" {
 			out[k] = out[k] || v
 		}

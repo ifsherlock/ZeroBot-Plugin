@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -487,38 +488,68 @@ func normalizeConfig(cfg *config) bool {
 	}
 	if cfg.SafetyGlobalCategories == nil {
 		cfg.SafetyGlobalCategories = defaultSafetyGlobalCategories()
+		changed = true
 	} else {
-		cfg.SafetyGlobalCategories = normalizeSafetyMap(cfg.SafetyGlobalCategories)
+		normalized := normalizeSafetyMap(cfg.SafetyGlobalCategories)
+		if !reflect.DeepEqual(cfg.SafetyGlobalCategories, normalized) {
+			changed = true
+		}
+		cfg.SafetyGlobalCategories = normalized
 	}
 	if cfg.SafetyPlatformCategories == nil {
 		cfg.SafetyPlatformCategories = defaultSafetyPlatformCategories()
+		changed = true
 	} else {
-		cfg.SafetyPlatformCategories = normalizeSafetyPlatformCategories(cfg.SafetyPlatformCategories)
+		normalized := normalizeSafetyPlatformCategories(cfg.SafetyPlatformCategories)
+		if !reflect.DeepEqual(cfg.SafetyPlatformCategories, normalized) {
+			changed = true
+		}
+		cfg.SafetyPlatformCategories = normalized
 	}
 	if cfg.SafetyCustomGlobal == nil {
 		cfg.SafetyCustomGlobal = map[string][]string{}
 	} else {
-		cfg.SafetyCustomGlobal = normalizeSafetyCustom(cfg.SafetyCustomGlobal)
+		normalized := normalizeSafetyCustom(cfg.SafetyCustomGlobal)
+		if !reflect.DeepEqual(cfg.SafetyCustomGlobal, normalized) {
+			changed = true
+		}
+		cfg.SafetyCustomGlobal = normalized
 	}
 	if cfg.SafetyCustomPlatform == nil {
 		cfg.SafetyCustomPlatform = map[string]map[string][]string{}
 	} else {
-		cfg.SafetyCustomPlatform = normalizeSafetyCustomPlatform(cfg.SafetyCustomPlatform)
+		normalized := normalizeSafetyCustomPlatform(cfg.SafetyCustomPlatform)
+		if !reflect.DeepEqual(cfg.SafetyCustomPlatform, normalized) {
+			changed = true
+		}
+		cfg.SafetyCustomPlatform = normalized
 	}
 	if cfg.SafetyExcludeGlobal == nil {
 		cfg.SafetyExcludeGlobal = map[string][]string{}
 	} else {
-		cfg.SafetyExcludeGlobal = normalizeSafetyCustom(cfg.SafetyExcludeGlobal)
+		normalized := normalizeSafetyCustom(cfg.SafetyExcludeGlobal)
+		if !reflect.DeepEqual(cfg.SafetyExcludeGlobal, normalized) {
+			changed = true
+		}
+		cfg.SafetyExcludeGlobal = normalized
 	}
 	if cfg.SafetyExcludePlatform == nil {
 		cfg.SafetyExcludePlatform = map[string]map[string][]string{}
 	} else {
-		cfg.SafetyExcludePlatform = normalizeSafetyCustomPlatform(cfg.SafetyExcludePlatform)
+		normalized := normalizeSafetyCustomPlatform(cfg.SafetyExcludePlatform)
+		if !reflect.DeepEqual(cfg.SafetyExcludePlatform, normalized) {
+			changed = true
+		}
+		cfg.SafetyExcludePlatform = normalized
 	}
 	if cfg.SafetyCustomCategories == nil {
 		cfg.SafetyCustomCategories = map[string]safetyCustomCategory{}
 	} else {
-		cfg.SafetyCustomCategories = normalizeSafetyCustomCategories(cfg.SafetyCustomCategories)
+		normalized := normalizeSafetyCustomCategories(cfg.SafetyCustomCategories)
+		if !reflect.DeepEqual(cfg.SafetyCustomCategories, normalized) {
+			changed = true
+		}
+		cfg.SafetyCustomCategories = normalized
 	}
 	if migrateLegacySafetyCustomWords(cfg) {
 		changed = true
