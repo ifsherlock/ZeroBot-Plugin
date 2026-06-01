@@ -48,6 +48,7 @@ type systemSettingsResponse struct {
 	QQBotCardEnabled  bool     `json:"qqbot_card_enabled"`
 	QQBotMediaEnabled bool     `json:"qqbot_media_enabled"`
 	QQBotMarkdown     bool     `json:"qqbot_markdown"`
+	QQBotAvailable    bool     `json:"qqbot_available"`
 	PendingRestart    []string `json:"pending_restart"`
 }
 

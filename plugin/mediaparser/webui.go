@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -53,6 +54,8 @@ type webLogHook struct {
 var (
 	webLogs     = &webLogHook{limit: 240}
 	webLogsOnce sync.Once
+	webUIMu     sync.Mutex
+	webUIActive bool
 )
 
 func (h *webLogHook) Levels() []logrus.Level { return logrus.AllLevels }
@@ -98,6 +101,14 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 	if addr == "" || addr == "off" || addr == "0" {
 		return
 	}
+	webUIMu.Lock()
+	if webUIActive {
+		webUIMu.Unlock()
+		logrus.Infof("[webui] already running, skip start addr=%s", addr)
+		return
+	}
+	webUIActive = true
+	webUIMu.Unlock()
 	webLogsOnce.Do(func() { logrus.AddHook(webLogs) })
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveWebIndex)
@@ -118,13 +129,15 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		}
 		if extra != nil {
 			payload["bot"] = extra()
+		} else {
+			payload["bot"] = defaultWebStatus()
 		}
 		writeJSON(w, payload)
 	})
 	mux.HandleFunc("/api/mediaparser/config", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			writeJSON(w, map[string]any{"config": snapshotConfig(), "platforms": webPlatforms()})
+			writeJSON(w, map[string]any{"config": snapshotConfig(), "platforms": webPlatforms(), "safety_builtins": safetyBuiltinPayload()})
 		case http.MethodPost:
 			var next config
 			if err := json.NewDecoder(r.Body).Decode(&next); err != nil {
@@ -190,8 +203,49 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		logrus.Infof("[webui] listening on %s", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			logrus.Errorf("[webui] stopped: %v", err)
+			webUIMu.Lock()
+			webUIActive = false
+			webUIMu.Unlock()
 		}
 	}()
+}
+
+func webUIStatusText() string {
+	webUIMu.Lock()
+	active := webUIActive
+	webUIMu.Unlock()
+	if active {
+		return "运行中"
+	}
+	return "未运行"
+}
+
+func defaultWebStatus() map[string]any {
+	var selfID int64
+	zero.RangeBot(func(id int64, ctx *zero.Ctx) bool {
+		selfID = id
+		return false
+	})
+	return map[string]any{
+		"self_id":        selfID,
+		"nickname":       zero.BotConfig.NickName,
+		"super_users":    zero.BotConfig.SuperUsers,
+		"drivers":        len(zero.BotConfig.Driver),
+		"command_prefix": zero.BotConfig.CommandPrefix,
+	}
+}
+
+func qqBotDriverAvailable() bool {
+	for _, drv := range zero.BotConfig.Driver {
+		t := reflect.TypeOf(drv)
+		if t == nil {
+			continue
+		}
+		if strings.Contains(strings.ToLower(t.String()), "qqbotdriver") {
+			return true
+		}
+	}
+	return false
 }
 
 func serveLogsAPI(w http.ResponseWriter, r *http.Request) {
@@ -277,6 +331,18 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if strings.TrimSpace(payload.QQBotSecret) == "" {
 			payload.QQBotSecret = current.QQBotSecret
+		}
+		if !qqBotDriverAvailable() {
+			payload.QQBotEnabled = current.QQBotEnabled
+			payload.QQBotName = current.QQBotName
+			payload.QQBotAppID = current.QQBotAppID
+			payload.QQBotSecret = current.QQBotSecret
+			payload.QQBotOpenID = current.QQBotOpenID
+			payload.QQBotGroupOpenID = current.QQBotGroupOpenID
+			payload.QQBotPublicBase = current.QQBotPublicBase
+			payload.QQBotCardDisabled = current.QQBotCardDisabled
+			payload.QQBotMediaEnabled = current.QQBotMediaEnabled
+			payload.QQBotMarkdown = current.QQBotMarkdown
 		}
 		payload = normalizeSystemSettings(payload)
 		if err := saveSystemSettings(payload); err != nil {
@@ -367,6 +433,7 @@ func systemSettingsForWeb() systemSettingsResponse {
 		QQBotCardEnabled:  !settings.QQBotCardDisabled,
 		QQBotMediaEnabled: settings.QQBotMediaEnabled,
 		QQBotMarkdown:     settings.QQBotMarkdown,
+		QQBotAvailable:    qqBotDriverAvailable(),
 		PendingRestart:    pending,
 	}
 }
@@ -631,6 +698,18 @@ func webPlatforms() []webPlatform {
 	return out
 }
 
+func safetyBuiltinPayload() []map[string]any {
+	out := make([]map[string]any, 0, len(safetyCategoryDefs))
+	for _, def := range safetyCategoryDefs {
+		out = append(out, map[string]any{
+			"id":       def.ID,
+			"label":    def.Label,
+			"keywords": uniqueSafetyWords(def.Keywords),
+		})
+	}
+	return out
+}
+
 func platformLabel(name string) string {
 	switch name {
 	case "bilibili":
@@ -790,7 +869,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span class="ok">可配置</span></td><td>QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">基础群管理、欢迎语、提醒和精华消息能力。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -810,6 +889,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsStack">
 <div class="settingsCard">
 <div class="sectionTitle"><b>通道配置</b><span class="muted">AppID 和 Secret 保存后需要重启服务才会建立官方 Gateway 连接。</span></div>
+<div class="runtimeNote hidden" id="qqbotUnavailable">官方包无此功能。当前运行包没有加载 QQBot 驱动，下面配置仅在带 QQBot 驱动的私有运行包中可用。</div>
 <div class="settingsFields">
 <label class="field">启用官方 QQBot <span class="row"><label class="switch"><input id="qqbotEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">启用后会和 OneBot 通道并行监听。</span></span></label>
 <label class="field">通道名称 <input id="qqbotName" placeholder="qqbot"></label>
@@ -822,7 +902,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">媒体图片下载 <span class="row"><label class="switch"><input id="qqbotMediaEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">只逐张发送图片，不发送视频，也不使用合并转发。</span></span></label>
 <label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">开启后文本消息按 Markdown 载荷发送。</span></span></label>
 </div>
-<div class="row"><button class="primary" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted">公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。</span></div>
+<div class="row"><button class="primary" id="qqbotSaveButton" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted" id="qqbotSaveHint">公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。</span></div>
 </div>
 </div>
 <div class="settingsStack">
@@ -845,6 +925,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <button data-plugin-tab="platforms" onclick="showPluginSection('platforms')">平台设置</button>
 <button data-plugin-tab="access" onclick="showPluginSection('access')">黑白名单</button>
 <button data-plugin-tab="group-platform" onclick="showPluginSection('group-platform')">群平台开关</button>
+<button data-plugin-tab="safety" onclick="showPluginSection('safety')">内容安全</button>
 <button data-plugin-tab="runtime" onclick="showPluginSection('runtime')">运行配置</button>
 </div>
 </div>
@@ -886,6 +967,42 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
+<div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="safety" id="safety">
+<div class="sectionTitle"><b>内容安全</b><span class="muted">先维护分类词库，再在全局或平台启用分类。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="settingsGrid">
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>开关</b><span class="muted">命中后会停止发送卡片、媒体和合并转发。</span></div>
+<div class="controlPills"><label class="row">启用屏蔽 <span id="safetyEnabledSwitch"></span></label><label class="row">命中提示 <span id="safetyNoticeSwitch"></span></label></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>分类词库</b><span class="muted">内置分类只读，自定义分类可新建和编辑。</span><button onclick="addSafetyCustomCategory()">新建分类</button></div>
+<div class="groupList" id="safetyCategoryList"></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b id="safetyCategoryTitle">分类详情</b><span class="muted" id="safetyCategoryMeta">选择一个分类查看词库。</span><button class="danger" id="safetyDeleteCategory" onclick="deleteSafetyCustomCategory()">删除分类</button></div>
+<div class="settingsFields">
+<label class="field">分类 ID <input id="safetyCategoryID" placeholder="custom_bili_marketing" oninput="editSafetyCustomCategoryID()"></label>
+<label class="field">分类名称 <input id="safetyCategoryLabel" placeholder="哔哩哔哩营销号" oninput="collectSafetyCategoryEditor();markDirty()"></label>
+</div>
+<label class="field">内置词预览<textarea id="safetyBuiltinPreview" readonly placeholder="内置分类会在这里显示只读词库"></textarea></label>
+<label class="field">自定义屏蔽词<textarea id="safetyCustomWords" placeholder="一行一个屏蔽词" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
+<label class="field">排除词 / 白名单<textarea id="safetyCustomExcludes" placeholder="一行一个放行词；命中本分类时优先放行" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
+</div>
+</div>
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>全局启用分类</b><span class="muted">勾选后对所有平台生效。</span></div>
+<div class="groupList" id="safetyGlobalCategories"></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>平台启用分类</b><span class="muted">选择平台后勾选该平台额外启用的分类。</span></div>
+<select id="safetyPlatformSelect" onchange="renderSafetyPlatformCategories()"></select>
+<div class="groupList" id="safetyPlatformCategories"></div>
+</div>
+</div>
+</div>
+</div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="runtime" id="runtime">
 <div class="sectionTitle"><b>运行配置</b><span class="muted">这里集中管理下载规则、缓存、平台凭据和 Keylol 卡片样式；Keylol 日夜模式是卡片全局开关。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="settingsGrid">
@@ -901,6 +1018,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="settingsFields single">
 <label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
+<label class="field">海外平台代理 <input id="proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"><span class="muted">仅 X/TikTok/YouTube/Instagram 生效，不影响国内平台。</span></label>
 </div>
 </div>
 <div class="settingsCard">
@@ -939,7 +1057,15 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </main>
 </div>
 <script>
-let cfg=null, sys=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic';
+let cfg=null, sys=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic', safetyBuiltins=[], selectedSafetyCategory='adult';
+const safetyCategories=[
+ ['adult','色情/NSFW/R18'],
+ ['adult_scam','黄推诈骗/导流'],
+ ['minor_risk','未成年高风险成人词'],
+ ['violence','极端暴力/血腥'],
+ ['weapon_explosive','涉枪涉爆'],
+ ['illegal_url_ad','非法网址/广告导流']
+];
 const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
@@ -997,13 +1123,13 @@ async function refreshStatus(){
   infoLine('Go 版本', st.go||'-'),
   infoLine('WebUI 地址', (sys&&sys.webui_addr)||'-'),
   infoLine('OneBot WS', (sys&&sys.ws_url)||'-'),
-  infoLine('官方 QQBot', (sys&&sys.qqbot_enabled?'已启用':'未启用')+' / 图片 '+((sys&&sys.qqbot_public_base)?'已配置':'未配置')),
+  infoLine('官方 QQBot', qqbotStatusText()),
   infoLine('命令前缀', (sys&&sys.command_prefix)||'/')
  ].join('');
  $('overviewDetails').innerHTML=[
   infoLine('聚合解析', (cfg&&cfg.auto_parse?'已开启':'已关闭')+'，启用平台 '+enabled+'/'+platforms.length),
   infoLine('OneBot 策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
-  infoLine('QQBot 策略', (sys&&sys.qqbot_enabled?(sys.qqbot_card_enabled?'卡片开启':'卡片关闭'):'未启用')+' / 媒体图片 '+onText(sys&&sys.qqbot_media_enabled)),
+  infoLine('QQBot 策略', qqbotPolicyText()),
   infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
   infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-'),
   infoLine('路径', '配置 '+(st.config_path||'-')+' / 缓存 '+(st.cache_dir||'-'))
@@ -1013,6 +1139,32 @@ async function refreshStatus(){
 function infoLine(k,v){return '<div class="infoLine"><b>'+escapeHTML(k)+'</b><span class="muted">'+escapeHTML(v)+'</span></div>'}
 function onText(v){return v?'开启':'关闭'}
 function qualityText(v){return Number(v)>0 ? String(v)+'p' : '不限'}
+function qqbotAvailable(){return !!(sys&&sys.qqbot_available)}
+function qqbotUnavailableText(){return '官方包无此功能'}
+function qqbotStatusText(){
+ if(!qqbotAvailable()) return qqbotUnavailableText();
+ return (sys&&sys.qqbot_enabled?'已启用':'未启用')+' / 图片 '+((sys&&sys.qqbot_public_base)?'已配置':'未配置');
+}
+function qqbotPolicyText(){
+ if(!qqbotAvailable()) return qqbotUnavailableText();
+ return (sys&&sys.qqbot_enabled?(sys.qqbot_card_enabled?'卡片开启':'卡片关闭'):'未启用')+' / 媒体图片 '+onText(sys&&sys.qqbot_media_enabled);
+}
+function renderQQBotAvailability(){
+ const available=qqbotAvailable();
+ const status=$('qqbotPluginStatus');
+ if(status){
+  status.textContent=available?(sys&&sys.qqbot_enabled?'已启用':'可配置'):qqbotUnavailableText();
+  status.className=available?'ok':'muted';
+ }
+ if($('qqbotPluginDesc')) $('qqbotPluginDesc').textContent=available?'QQ 官方机器人通道，第一阶段接入媒体解析':'当前官方包未加载 QQBot 驱动，此功能不可用';
+ if($('qqbotUnavailable')) $('qqbotUnavailable').classList.toggle('hidden', available);
+ if($('qqbotSaveHint')) $('qqbotSaveHint').textContent=available?'公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。':qqbotUnavailableText();
+ if($('qqbotSaveButton')) $('qqbotSaveButton').disabled=!available;
+ ['qqbotEnabled','qqbotName','qqbotAppID','qqbotSecret','qqbotOpenID','qqbotGroupOpenID','qqbotPublicBase','qqbotCardEnabled','qqbotMediaEnabled','qqbotMarkdown'].forEach(id=>{
+  const el=$(id);
+  if(el) el.disabled=!available;
+ });
+}
 async function loadLogs(){
  try{
   const data=await (await fetch('/api/logs?limit=80')).json();
@@ -1025,7 +1177,7 @@ async function load(){
  const sysData=await (await fetch('/api/system/settings')).json();
  const logoData=await (await fetch('/api/mediaparser/logos')).json();
  await loadCacheStats(false);
- cfg=data.config; platforms=data.platforms;
+ cfg=data.config; platforms=data.platforms; safetyBuiltins=data.safety_builtins||[];
  sys=sysData.settings||{};
  logos=logoData.logos||{};
  await refreshStatus();
@@ -1043,6 +1195,7 @@ function render(){
  $('groupUserWhitelist').value=listText(cfg.group_user_whitelist); $('groupUserBlacklist').value=listText(cfg.group_user_blacklist);
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
+ $('proxy').value=cfg.proxy||'';
  $('bilibiliCookie').value=cfg.bilibili_cookie||''; $('xiaohongshuCookie').value=cfg.xiaohongshu_cookie||''; $('youtubeCookie').value=cfg.youtube_cookie||''; $('instagramCookie').value=cfg.instagram_cookie||''; $('keylolCookie').value=cfg.keylol_cookie||'';
  $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderKeylolThemeSwitches();
@@ -1051,6 +1204,7 @@ function render(){
  renderSystemSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
+ renderSafetySettings();
  if(!groups.length) loadGroups(false); else renderGroupPickers();
  showPage((location.hash||'#overview').slice(1)||'overview');
 }
@@ -1077,6 +1231,7 @@ function renderSystemSettings(){
   $('qqbotMediaEnabled').checked=!!sys.qqbot_media_enabled;
   $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
  }
+ renderQQBotAvailability();
  const pending=sys.pending_restart||[];
  $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
  if($('restartTop')){
@@ -1092,18 +1247,22 @@ async function saveSystemSettings(){
   onebot_data_dir:String($('onebotDataDir').value||'').trim(),
   nickname:String($('sysNick').value||'').trim(),
   command_prefix:String($('sysPrefix').value||'/').trim()||'/',
-  super_users:Object.keys(parseList($('sysSuperUsers').value)).map(x=>Number(x)),
-  qqbot_enabled:$('qqbotEnabled')?!!$('qqbotEnabled').checked:false,
-  qqbot_name:$('qqbotName')?String($('qqbotName').value||'qqbot').trim():'qqbot',
-  qqbot_app_id:$('qqbotAppID')?String($('qqbotAppID').value||'').trim():'',
-  qqbot_secret:$('qqbotSecret')?String($('qqbotSecret').value||'').trim():'',
-  qqbot_openid:$('qqbotOpenID')?String($('qqbotOpenID').value||'').trim():'',
-  qqbot_group_openid:$('qqbotGroupOpenID')?String($('qqbotGroupOpenID').value||'').trim():'',
-  qqbot_public_base:$('qqbotPublicBase')?String($('qqbotPublicBase').value||'').trim():'',
-  qqbot_card_disabled:$('qqbotCardEnabled')?!$('qqbotCardEnabled').checked:false,
-  qqbot_media_enabled:$('qqbotMediaEnabled')?!!$('qqbotMediaEnabled').checked:false,
-  qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
+  super_users:Object.keys(parseList($('sysSuperUsers').value)).map(x=>Number(x))
  };
+ if(qqbotAvailable()){
+  Object.assign(payload,{
+   qqbot_enabled:$('qqbotEnabled')?!!$('qqbotEnabled').checked:false,
+   qqbot_name:$('qqbotName')?String($('qqbotName').value||'qqbot').trim():'qqbot',
+   qqbot_app_id:$('qqbotAppID')?String($('qqbotAppID').value||'').trim():'',
+   qqbot_secret:$('qqbotSecret')?String($('qqbotSecret').value||'').trim():'',
+   qqbot_openid:$('qqbotOpenID')?String($('qqbotOpenID').value||'').trim():'',
+   qqbot_group_openid:$('qqbotGroupOpenID')?String($('qqbotGroupOpenID').value||'').trim():'',
+   qqbot_public_base:$('qqbotPublicBase')?String($('qqbotPublicBase').value||'').trim():'',
+   qqbot_card_disabled:$('qqbotCardEnabled')?!$('qqbotCardEnabled').checked:false,
+   qqbot_media_enabled:$('qqbotMediaEnabled')?!!$('qqbotMediaEnabled').checked:false,
+   qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
+  });
+ }
  const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  $('systemMsg').textContent=r.ok?'全局设置已保存':'全局设置保存失败';
  if(r.ok){const data=await r.json(); sys=data.settings||sys; renderSystemSettings(); await refreshStatus();}
@@ -1168,10 +1327,126 @@ function renderPlatformGroupBlock(){
  const list=platforms.filter(p=>!q||String(p.name).toLowerCase().includes(q)||String(p.label).toLowerCase().includes(q)||String(p.local||'').toLowerCase().includes(q));
  $('platformBlockPicker').innerHTML=list.map(p=>{const blocked=!!((cfg.platform_group_block[p.name]||{})[gid]); return '<label class="groupItem"><input type="checkbox" '+checked(blocked)+' data-platform="'+p.name+'" onchange="togglePlatformGroupBlock(this)"><span>'+escapeHTML(p.label)+'<small>'+(blocked?'已屏蔽':'未屏蔽')+' · '+escapeHTML(p.local||p.name)+'</small></span></label>'}).join('')||'<div class="muted">没有匹配的平台</div>';
 }
+function builtinSafetyCategories(){return (safetyBuiltins&&safetyBuiltins.length?safetyBuiltins:safetyCategories.map(c=>({id:c[0],label:c[1],keywords:[]})))}
+function ensureSafetyMaps(){
+ cfg.safety_global_categories=cfg.safety_global_categories||{};
+ cfg.safety_platform_categories=cfg.safety_platform_categories||{};
+ cfg.safety_custom_categories=cfg.safety_custom_categories||{};
+ cfg.safety_custom_global=cfg.safety_custom_global||{};
+ cfg.safety_custom_platform=cfg.safety_custom_platform||{};
+ cfg.safety_exclude_global=cfg.safety_exclude_global||{};
+ cfg.safety_exclude_platform=cfg.safety_exclude_platform||{};
+}
+function isBuiltinSafetyCategory(id){return builtinSafetyCategories().some(c=>c.id===id)}
+function safetyCategoryLabelByID(id){const b=builtinSafetyCategories().find(c=>c.id===id); if(b) return b.label; const c=(cfg.safety_custom_categories||{})[id]; return c&&c.label?c.label:id}
+function allSafetyCategories(){
+ const builtins=builtinSafetyCategories().map(c=>({id:c.id,label:c.label,builtin:true,keywords:c.keywords||[]}));
+ const customs=Object.keys(cfg.safety_custom_categories||{}).sort().map(id=>({id:id,label:(cfg.safety_custom_categories[id]&&cfg.safety_custom_categories[id].label)||id,builtin:false,keywords:(cfg.safety_custom_categories[id]&&cfg.safety_custom_categories[id].words)||[]}));
+ return builtins.concat(customs);
+}
+function renderSafetySettings(){
+ if(!cfg||!$('safetyEnabledSwitch')) return;
+ ensureSafetyMaps();
+ if(!allSafetyCategories().some(c=>c.id===selectedSafetyCategory)) selectedSafetyCategory=(allSafetyCategories()[0]||{}).id||'adult';
+ $('safetyEnabledSwitch').innerHTML=switchHTML('cfg.safety_filter_enabled', cfg.safety_filter_enabled!==false);
+ $('safetyNoticeSwitch').innerHTML=switchHTML('cfg.safety_filter_notice', !!cfg.safety_filter_notice);
+ const platformOptions=platforms.map(p=>'<option value="'+p.name+'">'+escapeHTML(p.label)+' / '+escapeHTML(p.name)+'</option>').join('');
+ $('safetyPlatformSelect').innerHTML=platformOptions;
+ renderSafetyCategoryList();
+ renderSafetyCategoryEditor();
+ renderSafetyGlobalCategories();
+ renderSafetyPlatformCategories();
+}
+function renderSafetyCategoryList(){
+ const list=allSafetyCategories();
+ $('safetyCategoryList').innerHTML=list.map(c=>{
+  const n=c.builtin?(c.keywords||[]).length:((cfg.safety_custom_categories[c.id]&&cfg.safety_custom_categories[c.id].words||[]).length);
+  return '<label class="groupItem" style="cursor:pointer;background:'+(selectedSafetyCategory===c.id?'#eef6ff':'transparent')+'" data-category="'+escapeHTML(c.id)+'" onclick="selectSafetyCategory(this.dataset.category)"><span><b>'+escapeHTML(c.label)+'</b><small>'+(c.builtin?'内置只读':'自定义')+' · '+escapeHTML(c.id)+' · '+n+' 词</small></span></label>';
+ }).join('')||'<div class="muted">暂无分类</div>';
+}
+function selectSafetyCategory(id){collectSafetyCategoryEditor(); selectedSafetyCategory=id; renderSafetySettings()}
+function renderSafetyGlobalCategories(){
+ const list=allSafetyCategories();
+ $('safetyGlobalCategories').innerHTML=list.map(c=>'<label class="groupItem"><input type="checkbox" '+checked(!!cfg.safety_global_categories[c.id])+' data-category="'+escapeHTML(c.id)+'" onchange="setSafetyGlobalCategory(this.dataset.category,this.checked)"><span>'+escapeHTML(c.label)+'<small>'+(c.builtin?'内置':'自定义')+' · '+escapeHTML(c.id)+'</small></span></label>').join('');
+}
+function setSafetyGlobalCategory(cat,on){ensureSafetyMaps(); cfg.safety_global_categories[cat]=on; markDirty(); renderSafetyCategoryList()}
+function setSafetyPlatformCategory(platform,cat,on){ensureSafetyMaps(); cfg.safety_platform_categories[platform]=cfg.safety_platform_categories[platform]||{}; cfg.safety_platform_categories[platform][cat]=on; markDirty(); renderSafetyCategoryList()}
+function renderSafetyPlatformCategories(){
+ if(!cfg||!$('safetyPlatformCategories')) return;
+ ensureSafetyMaps();
+ const platform=$('safetyPlatformSelect').value || (platforms[0]&&platforms[0].name) || '';
+ const map=cfg.safety_platform_categories[platform]||{};
+ $('safetyPlatformCategories').innerHTML=allSafetyCategories().map(c=>'<label class="groupItem"><input type="checkbox" '+checked(!!map[c.id])+' data-platform="'+escapeHTML(platform)+'" data-category="'+escapeHTML(c.id)+'" onchange="setSafetyPlatformCategory(this.dataset.platform,this.dataset.category,this.checked)"><span>'+escapeHTML(c.label)+'<small>'+(c.builtin?'内置':'自定义')+' · '+escapeHTML(c.id)+'</small></span></label>').join('');
+}
+function splitWords(text){return String(text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean)}
+function renderSafetyCategoryEditor(){
+ ensureSafetyMaps();
+ const id=selectedSafetyCategory;
+ const builtin=builtinSafetyCategories().find(c=>c.id===id);
+ const custom=cfg.safety_custom_categories[id]||{label:'',words:[],excludes:[]};
+ $('safetyCategoryTitle').textContent=builtin?builtin.label:(custom.label||id);
+ $('safetyCategoryMeta').textContent=builtin?'内置分类，只能预览词库；排除词用于处理误杀。':'自定义分类，可编辑名称、屏蔽词和排除词。';
+ $('safetyCategoryID').value=id||'';
+ $('safetyCategoryID').disabled=!!builtin;
+ $('safetyCategoryLabel').value=builtin?builtin.label:(custom.label||'');
+ $('safetyCategoryLabel').disabled=!!builtin;
+ $('safetyDeleteCategory').style.display=builtin?'none':'inline-block';
+ $('safetyBuiltinPreview').value=builtin?(builtin.keywords||[]).join('\n'):'';
+ $('safetyBuiltinPreview').style.display=builtin?'block':'none';
+ $('safetyCustomWords').value=builtin?'':(custom.words||[]).join('\n');
+ $('safetyCustomWords').disabled=!!builtin;
+ $('safetyCustomExcludes').value=builtin?((cfg.safety_exclude_global&&cfg.safety_exclude_global[id])||[]).join('\n'):(custom.excludes||[]).join('\n');
+}
+function normalizeSafetyID(raw){return String(raw||'').toLowerCase().trim().replace(/[^a-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')}
+function collectSafetyCategoryEditor(){
+ if(!cfg||!$('safetyCategoryID')||!selectedSafetyCategory) return;
+ ensureSafetyMaps();
+ const oldID=selectedSafetyCategory;
+ if(isBuiltinSafetyCategory(oldID)){
+  cfg.safety_exclude_global[oldID]=splitWords($('safetyCustomExcludes').value);
+  return;
+ }
+ const item=cfg.safety_custom_categories[oldID]||{};
+ item.label=String($('safetyCategoryLabel').value||oldID).trim()||oldID;
+ item.words=splitWords($('safetyCustomWords').value);
+ item.excludes=splitWords($('safetyCustomExcludes').value);
+ cfg.safety_custom_categories[oldID]=item;
+ cfg.safety_custom_global={}; cfg.safety_custom_platform={}; cfg.safety_exclude_platform={};
+}
+function editSafetyCustomCategoryID(){
+ if(isBuiltinSafetyCategory(selectedSafetyCategory)) return;
+ const next=normalizeSafetyID($('safetyCategoryID').value);
+ if(!next||next===selectedSafetyCategory||isBuiltinSafetyCategory(next)) return;
+ ensureSafetyMaps();
+ if(cfg.safety_custom_categories[next]) return;
+ const old=selectedSafetyCategory;
+ cfg.safety_custom_categories[next]=cfg.safety_custom_categories[old]||{label:next,words:[],excludes:[]};
+ delete cfg.safety_custom_categories[old];
+ if(Object.prototype.hasOwnProperty.call(cfg.safety_global_categories,old)){cfg.safety_global_categories[next]=cfg.safety_global_categories[old]; delete cfg.safety_global_categories[old]}
+ Object.values(cfg.safety_platform_categories||{}).forEach(m=>{if(Object.prototype.hasOwnProperty.call(m,old)){m[next]=m[old]; delete m[old]}});
+ selectedSafetyCategory=next; markDirty(); renderSafetySettings();
+}
+function addSafetyCustomCategory(){
+ ensureSafetyMaps();
+ let i=1,id='custom_category';
+ while(cfg.safety_custom_categories[id]||isBuiltinSafetyCategory(id)){id='custom_category_'+i++}
+ cfg.safety_custom_categories[id]={label:'新分类',words:[],excludes:[]};
+ selectedSafetyCategory=id; markDirty(); renderSafetySettings();
+}
+function deleteSafetyCustomCategory(){
+ if(isBuiltinSafetyCategory(selectedSafetyCategory)) return;
+ const id=selectedSafetyCategory;
+ delete cfg.safety_custom_categories[id];
+ delete cfg.safety_global_categories[id];
+ Object.values(cfg.safety_platform_categories||{}).forEach(m=>delete m[id]);
+ selectedSafetyCategory=(allSafetyCategories()[0]||{}).id||'adult';
+ markDirty(); renderSafetySettings();
+}
 function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function save(){
+ collectSafetyCategoryEditor();
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
- cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim();
+ cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim();
  cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
  cfg.keylol_theme=String(cfg.keylol_theme||'auto').trim()||'auto';

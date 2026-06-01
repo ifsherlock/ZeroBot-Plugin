@@ -78,39 +78,49 @@ var (
 )
 
 type config struct {
-	AutoParse           bool                      `json:"auto_parse"`
-	Keywords            []string                  `json:"keywords"`
-	AdminID             int64                     `json:"admin_id"`
-	AccessMode          string                    `json:"access_mode"`
-	PrivateAccessMode   string                    `json:"private_access_mode"`
-	GroupAccessMode     string                    `json:"group_access_mode"`
-	GroupUserAccessMode string                    `json:"group_user_access_mode"`
-	UserBlacklist       map[int64]bool            `json:"user_blacklist"`
-	GroupBlacklist      map[int64]bool            `json:"group_blacklist"`
-	GroupUserBlacklist  map[int64]bool            `json:"group_user_blacklist"`
-	UserWhitelist       map[int64]bool            `json:"user_whitelist"`
-	GroupWhitelist      map[int64]bool            `json:"group_whitelist"`
-	GroupUserWhitelist  map[int64]bool            `json:"group_user_whitelist"`
-	WhitelistMode       bool                      `json:"whitelist_mode"`
-	PlatformEnabled     map[string]bool           `json:"platform_enabled"`
-	PlatformInfoCard    map[string]bool           `json:"platform_info_card"`
-	PlatformSendMedia   map[string]bool           `json:"platform_send_media"`
-	PlatformDownload    map[string]bool           `json:"platform_download_video"`
-	PlatformGroupBlock  map[string]map[int64]bool `json:"platform_group_block"`
-	OutputMode          map[string]string         `json:"output_mode"`
-	SendInfoCard        bool                      `json:"send_info_card"`
-	SendMedia           bool                      `json:"send_media"`
-	DownloadVideo       bool                      `json:"download_video"`
-	MaxVideoMB          int64                     `json:"max_video_mb"`
-	VideoMaxResolution  int                       `json:"video_max_resolution"`
-	PlatformResolution  map[string]int            `json:"platform_video_resolution"`
-	CacheTTLMinutes     int                       `json:"cache_ttl_minutes"`
-	TimeoutSeconds      int                       `json:"timeout_seconds"`
-	Proxy               string                    `json:"proxy"`
-	Debug               bool                      `json:"debug"`
-	ParseReaction       bool                      `json:"parse_reaction"`
-	ParseReactionEmoji  string                    `json:"parse_reaction_emoji"`
-	FailReactionEmoji   string                    `json:"fail_reaction_emoji"`
+	AutoParse                bool                            `json:"auto_parse"`
+	Keywords                 []string                        `json:"keywords"`
+	AdminID                  int64                           `json:"admin_id"`
+	AccessMode               string                          `json:"access_mode"`
+	PrivateAccessMode        string                          `json:"private_access_mode"`
+	GroupAccessMode          string                          `json:"group_access_mode"`
+	GroupUserAccessMode      string                          `json:"group_user_access_mode"`
+	UserBlacklist            map[int64]bool                  `json:"user_blacklist"`
+	GroupBlacklist           map[int64]bool                  `json:"group_blacklist"`
+	GroupUserBlacklist       map[int64]bool                  `json:"group_user_blacklist"`
+	UserWhitelist            map[int64]bool                  `json:"user_whitelist"`
+	GroupWhitelist           map[int64]bool                  `json:"group_whitelist"`
+	GroupUserWhitelist       map[int64]bool                  `json:"group_user_whitelist"`
+	WhitelistMode            bool                            `json:"whitelist_mode"`
+	PlatformEnabled          map[string]bool                 `json:"platform_enabled"`
+	PlatformInfoCard         map[string]bool                 `json:"platform_info_card"`
+	PlatformSendMedia        map[string]bool                 `json:"platform_send_media"`
+	PlatformDownload         map[string]bool                 `json:"platform_download_video"`
+	PlatformGroupBlock       map[string]map[int64]bool       `json:"platform_group_block"`
+	OutputMode               map[string]string               `json:"output_mode"`
+	SendInfoCard             bool                            `json:"send_info_card"`
+	SendMedia                bool                            `json:"send_media"`
+	DownloadVideo            bool                            `json:"download_video"`
+	MaxVideoMB               int64                           `json:"max_video_mb"`
+	VideoMaxResolution       int                             `json:"video_max_resolution"`
+	PlatformResolution       map[string]int                  `json:"platform_video_resolution"`
+	CacheTTLMinutes          int                             `json:"cache_ttl_minutes"`
+	TimeoutSeconds           int                             `json:"timeout_seconds"`
+	Proxy                    string                          `json:"proxy"`
+	Debug                    bool                            `json:"debug"`
+	ParseReaction            bool                            `json:"parse_reaction"`
+	ParseReactionEmoji       string                          `json:"parse_reaction_emoji"`
+	FailReactionEmoji        string                          `json:"fail_reaction_emoji"`
+	SafetyFilterEnabled      bool                            `json:"safety_filter_enabled"`
+	SafetyFilterNotice       bool                            `json:"safety_filter_notice"`
+	SafetyGlobalCategories   map[string]bool                 `json:"safety_global_categories"`
+	SafetyPlatformCategories map[string]map[string]bool      `json:"safety_platform_categories"`
+	SafetyCustomGlobal       map[string][]string             `json:"safety_custom_global"`
+	SafetyCustomPlatform     map[string]map[string][]string  `json:"safety_custom_platform"`
+	SafetyExcludeGlobal      map[string][]string             `json:"safety_exclude_global"`
+	SafetyExcludePlatform    map[string]map[string][]string  `json:"safety_exclude_platform"`
+	SafetyCustomCategories   map[string]safetyCustomCategory `json:"safety_custom_categories"`
+	SafetyCustomSeedVersion  int                             `json:"safety_custom_seed_version"`
 
 	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
 	BilibiliCookie     string `json:"bilibili_cookie"`
@@ -229,6 +239,7 @@ func init() {
 		ctx.SendChain(message.Text(formatStatus()))
 	})
 	zero.OnMessage().SetBlock(false).Handle(handleAutoParse)
+	startPluginWebUI()
 }
 
 func defaultConfig() config {
@@ -247,45 +258,59 @@ func defaultConfig() config {
 		output[p.Name] = outputAll
 	}
 	return config{
-		AutoParse:            true,
-		Keywords:             []string{"视频解析", "解析视频", "解析", "parse"},
-		AdminID:              10000,
-		AccessMode:           accessNone,
-		PrivateAccessMode:    accessNone,
-		GroupAccessMode:      accessNone,
-		GroupUserAccessMode:  accessNone,
-		UserBlacklist:        map[int64]bool{},
-		GroupBlacklist:       map[int64]bool{},
-		GroupUserBlacklist:   map[int64]bool{},
-		UserWhitelist:        map[int64]bool{},
-		GroupWhitelist:       map[int64]bool{},
-		GroupUserWhitelist:   map[int64]bool{},
-		PlatformEnabled:      enabled,
-		PlatformInfoCard:     infoCard,
-		PlatformSendMedia:    sendMedia,
-		PlatformDownload:     download,
-		PlatformGroupBlock:   platformGroupBlock,
-		OutputMode:           output,
-		SendInfoCard:         true,
-		SendMedia:            true,
-		DownloadVideo:        true,
-		MaxVideoMB:           defaultMaxVideoMB,
-		VideoMaxResolution:   0,
-		PlatformResolution:   map[string]int{},
-		CacheTTLMinutes:      defaultTTLMinutes,
-		TimeoutSeconds:       defaultTimeoutSec,
-		Debug:                true,
-		ParseReaction:        true,
-		ParseReactionEmoji:   "🍉",
-		FailReactionEmoji:    "❌",
-		AvoidAV1:             true,
-		BilibiliMaxQuality:   "不限制",
-		UseYTDLPFallback:     false,
-		YTDLPPath:            "yt-dlp",
-		YouTubeExtractorArgs: "youtube:player_client=default,android;formats=missing_pot",
-		KeylolFooter:         "Keylol 帖子截图 · 浏览器渲染 · {time}",
-		KeylolTheme:          "auto",
-		KeylolASFForward:     true,
+		AutoParse:           true,
+		Keywords:            []string{"视频解析", "解析视频", "解析", "parse"},
+		AdminID:             10000,
+		AccessMode:          accessNone,
+		PrivateAccessMode:   accessNone,
+		GroupAccessMode:     accessNone,
+		GroupUserAccessMode: accessNone,
+		UserBlacklist:       map[int64]bool{},
+		GroupBlacklist:      map[int64]bool{},
+		GroupUserBlacklist:  map[int64]bool{},
+		UserWhitelist:       map[int64]bool{},
+		GroupWhitelist:      map[int64]bool{},
+		GroupUserWhitelist:  map[int64]bool{},
+		PlatformEnabled:     enabled,
+		PlatformInfoCard:    infoCard,
+		PlatformSendMedia:   sendMedia,
+		PlatformDownload:    download,
+		PlatformGroupBlock:  platformGroupBlock,
+		OutputMode:          output,
+		SendInfoCard:        true,
+		SendMedia:           true,
+		DownloadVideo:       true,
+		MaxVideoMB:          defaultMaxVideoMB,
+		VideoMaxResolution:  0,
+		PlatformResolution:  map[string]int{},
+		CacheTTLMinutes:     defaultTTLMinutes,
+		TimeoutSeconds:      defaultTimeoutSec,
+		Debug:               true,
+		ParseReaction:       true,
+		ParseReactionEmoji:  "🍉",
+		FailReactionEmoji:   "❌",
+		SafetyFilterEnabled: true,
+		SafetyFilterNotice:  false,
+		SafetyGlobalCategories: map[string]bool{
+			safetyCategoryAdult:    true,
+			safetyCategoryMinor:    true,
+			safetyCategoryViolence: true,
+		},
+		SafetyPlatformCategories: defaultSafetyPlatformCategories(),
+		SafetyCustomGlobal:       map[string][]string{},
+		SafetyCustomPlatform:     map[string]map[string][]string{},
+		SafetyExcludeGlobal:      map[string][]string{},
+		SafetyExcludePlatform:    map[string]map[string][]string{},
+		SafetyCustomCategories:   map[string]safetyCustomCategory{},
+		SafetyCustomSeedVersion:  0,
+		AvoidAV1:                 true,
+		BilibiliMaxQuality:       "不限制",
+		UseYTDLPFallback:         false,
+		YTDLPPath:                "yt-dlp",
+		YouTubeExtractorArgs:     "youtube:player_client=default,android;formats=missing_pot",
+		KeylolFooter:             "Keylol 帖子截图 · 浏览器渲染 · {time}",
+		KeylolTheme:              "auto",
+		KeylolASFForward:         true,
 	}
 }
 
@@ -302,14 +327,18 @@ func loadConfig() error {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return err
 	}
-	normalizeConfig(&cfg)
+	changed := normalizeConfig(&cfg)
 	stateMu.Lock()
 	currentConf = cfg
 	stateMu.Unlock()
+	if changed {
+		return saveConfig()
+	}
 	return nil
 }
 
-func normalizeConfig(cfg *config) {
+func normalizeConfig(cfg *config) bool {
+	changed := false
 	if cfg.UserBlacklist == nil {
 		cfg.UserBlacklist = map[int64]bool{}
 	}
@@ -457,7 +486,53 @@ func normalizeConfig(cfg *config) {
 	if strings.TrimSpace(cfg.FailReactionEmoji) == "" {
 		cfg.FailReactionEmoji = "❌"
 	}
+	if cfg.SafetyGlobalCategories == nil {
+		cfg.SafetyGlobalCategories = defaultSafetyGlobalCategories()
+	} else {
+		cfg.SafetyGlobalCategories = normalizeSafetyMap(cfg.SafetyGlobalCategories)
+	}
+	if cfg.SafetyPlatformCategories == nil {
+		cfg.SafetyPlatformCategories = defaultSafetyPlatformCategories()
+	} else {
+		cfg.SafetyPlatformCategories = normalizeSafetyPlatformCategories(cfg.SafetyPlatformCategories)
+	}
+	if cfg.SafetyCustomGlobal == nil {
+		cfg.SafetyCustomGlobal = map[string][]string{}
+	} else {
+		cfg.SafetyCustomGlobal = normalizeSafetyCustom(cfg.SafetyCustomGlobal)
+	}
+	if cfg.SafetyCustomPlatform == nil {
+		cfg.SafetyCustomPlatform = map[string]map[string][]string{}
+	} else {
+		cfg.SafetyCustomPlatform = normalizeSafetyCustomPlatform(cfg.SafetyCustomPlatform)
+	}
+	if cfg.SafetyExcludeGlobal == nil {
+		cfg.SafetyExcludeGlobal = map[string][]string{}
+	} else {
+		cfg.SafetyExcludeGlobal = normalizeSafetyCustom(cfg.SafetyExcludeGlobal)
+	}
+	if cfg.SafetyExcludePlatform == nil {
+		cfg.SafetyExcludePlatform = map[string]map[string][]string{}
+	} else {
+		cfg.SafetyExcludePlatform = normalizeSafetyCustomPlatform(cfg.SafetyExcludePlatform)
+	}
+	if cfg.SafetyCustomCategories == nil {
+		cfg.SafetyCustomCategories = map[string]safetyCustomCategory{}
+	} else {
+		cfg.SafetyCustomCategories = normalizeSafetyCustomCategories(cfg.SafetyCustomCategories)
+	}
+	if migrateLegacySafetyCustomWords(cfg) {
+		changed = true
+	}
+	if cfg.SafetyCustomSeedVersion < currentSafetyCustomSeedVersion {
+		if seedSafetyCustomWords(cfg) {
+			changed = true
+		}
+		cfg.SafetyCustomSeedVersion = currentSafetyCustomSeedVersion
+		changed = true
+	}
 	cfg.BilibiliMaxQuality = biliQualityFromResolution(platformMaxResolution(*cfg, "bilibili"))
+	return changed
 }
 
 func saveConfig() error {
@@ -517,11 +592,19 @@ func handleCommand(ctx *zero.Ctx) {
 		ctx.SendChain(message.Text(formatStatus()))
 		return
 	}
+	if args[0] == "webui" || args[0] == "控制台" || args[0] == "网页" {
+		handleWebUICommand(ctx, args[1:])
+		return
+	}
 
 	stateMu.Lock()
 	defer stateMu.Unlock()
 
 	switch args[0] {
+	case "安全", "safety":
+		if ok := handleSafetyCommand(ctx, args[1:]); !ok {
+			return
+		}
 	case "开启", "启用", "打开", "on":
 		currentConf.AutoParse = true
 	case "关闭", "禁用", "off":
@@ -771,6 +854,44 @@ func handleCommand(ctx *zero.Ctx) {
 	ctx.SendChain(message.Text("媒体解析配置已更新\n", formatStatusLocked()))
 }
 
+func startPluginWebUI() {
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		settings := LoadSystemSettings()
+		if settings.WebUIAddr != "" {
+			SetRuntimeSystemSettings(settings)
+		}
+		addr := firstNonEmpty(os.Getenv("ZBP_BUILTIN_WEBUI"), os.Getenv("WEBUI_ADDR"), settings.WebUIAddr)
+		StartWebUI(addr, nil)
+	}()
+}
+
+func handleWebUICommand(ctx *zero.Ctx, args []string) {
+	addr := ""
+	if len(args) > 0 {
+		switch strings.ToLower(args[0]) {
+		case "状态", "status":
+			ctx.SendChain(message.Text("WebUI 状态: ", webUIStatusText()))
+			return
+		case "开启", "启动", "start", "on":
+			if len(args) > 1 {
+				addr = args[1]
+			}
+		case "关闭", "停止", "stop", "off":
+			ctx.SendChain(message.Text("WebUI 暂不支持运行时关闭；可把监听地址设为 off 后重启。"))
+			return
+		default:
+			addr = args[0]
+		}
+	}
+	if addr == "" {
+		settings := systemSettingsForSave()
+		addr = firstNonEmpty(os.Getenv("ZBP_BUILTIN_WEBUI"), os.Getenv("WEBUI_ADDR"), settings.WebUIAddr, "0.0.0.0:3000")
+	}
+	StartWebUI(addr, nil)
+	ctx.SendChain(message.Text("WebUI 启动请求已提交: ", addr, "\n", webUIStatusText()))
+}
+
 func handleAutoParse(ctx *zero.Ctx) {
 	cfg := snapshotConfig()
 	raw := ctx.Event.RawMessage
@@ -811,7 +932,7 @@ func handleAutoParse(ctx *zero.Ctx) {
 	}
 	sendParseReaction(ctx, cfg)
 	for _, link := range activeLinks {
-		if err := processLink(ctx, cfg, link); err != nil {
+		if err := processLink(ctx, cfg, link, raw); err != nil {
 			addRuntimeParse(false)
 			sendFailReaction(ctx, cfg)
 			logrus.Warnf("[mediaparser] parse_failed platform=%s url=%s error=%v", link.Platform, link.URL, err)
@@ -900,7 +1021,7 @@ func snapshotRuntime() RuntimeStatus {
 	return runtimeInfo
 }
 
-func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
+func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) error {
 	started := time.Now()
 	cfg = configForPlatform(cfg, link.Platform)
 	logrus.Infof("[mediaparser] parsing platform=%s url=%s", link.Platform, link.URL)
@@ -913,6 +1034,13 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink) error {
 		return err
 	}
 	meta.Author = cardDisplayAuthor(meta.Author)
+	if hit, blocked := safetyBlocked(cfg, meta, rawMessage); blocked {
+		logrus.Warnf("[mediaparser] safety_blocked platform=%s category=%s source=%s keyword_sha1=%s title=%q", meta.Platform, hit.Category, hit.Source, safetyKeywordDigest(hit.Keyword), truncate(meta.Title, 80))
+		if cfg.SafetyFilterNotice {
+			ctx.SendChain(message.Text("内容触发安全屏蔽，已停止解析。"))
+		}
+		return nil
+	}
 	applyOutputFlags(cfg, &meta)
 	qqbotEvent := isOfficialQQBotEvent(ctx)
 
@@ -1223,7 +1351,7 @@ func processQQBotImageDownloads(cfg config, meta *mediaMeta) error {
 				return
 			}
 			sem <- struct{}{}
-			path, _, err := downloadHTTPFile(cfg, group[0], meta.ImageHeads, cacheFile(meta, "qqbot_image", i, ".jpg"))
+			path, _, err := downloadHTTPFile(cfg, meta.Platform, group[0], meta.ImageHeads, cacheFile(meta, "qqbot_image", i, ".jpg"))
 			<-sem
 			if err != nil {
 				meta.ImageModes[i] = "skip"
@@ -1439,7 +1567,7 @@ func processDownloads(cfg config, meta *mediaMeta) error {
 		needLocal := meta.ForceLocal || strings.HasPrefix(group[0], "dash:") || strings.HasPrefix(group[0], "m3u8:")
 		if !needLocal {
 			stage := time.Now()
-			size, status := probeSize(group[0], meta.VideoHeads)
+			size, status := probeSize(cfg, meta.Platform, group[0], meta.VideoHeads)
 			logrus.Infof("[mediaparser] download_stage platform=%s title=%q mode=direct stage=probe elapsed=%s status=%d size_mb=%.1f", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), status, float64(size)/1024/1024)
 			if status == 403 {
 				meta.HasAccessDenied = true
@@ -1495,7 +1623,7 @@ func processDownloads(cfg config, meta *mediaMeta) error {
 				return
 			}
 			imageSem <- struct{}{}
-			path, _, err := downloadHTTPFile(cfg, group[0], meta.ImageHeads, cacheFile(meta, "image", i, ".jpg"))
+			path, _, err := downloadHTTPFile(cfg, meta.Platform, group[0], meta.ImageHeads, cacheFile(meta, "image", i, ".jpg"))
 			<-imageSem
 			if err != nil {
 				meta.ImageModes[i] = "skip"
@@ -1523,7 +1651,7 @@ func downloadMediaGroup(cfg config, meta *mediaMeta, index int, group []string) 
 			return "", 0, errors.New("DASH 视频流为空")
 		}
 		stage := time.Now()
-		videoTmp, _, err := downloadHTTPFile(cfg, stripMediaPrefix(parts[0]), meta.VideoHeads, cacheFile(meta, "video", index, ".m4s"))
+		videoTmp, _, err := downloadHTTPFile(cfg, meta.Platform, stripMediaPrefix(parts[0]), meta.VideoHeads, cacheFile(meta, "video", index, ".m4s"))
 		if err != nil {
 			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=dash stage=video elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
@@ -1533,7 +1661,7 @@ func downloadMediaGroup(cfg config, meta *mediaMeta, index int, group []string) 
 			return videoTmp, fileSizeMB(videoTmp), nil
 		}
 		stage = time.Now()
-		audioTmp, _, err := downloadHTTPFile(cfg, stripMediaPrefix(parts[1]), meta.VideoHeads, cacheFile(meta, "audio", index, ".m4s"))
+		audioTmp, _, err := downloadHTTPFile(cfg, meta.Platform, stripMediaPrefix(parts[1]), meta.VideoHeads, cacheFile(meta, "audio", index, ".m4s"))
 		if err != nil {
 			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=dash stage=audio elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
@@ -1553,7 +1681,7 @@ func downloadMediaGroup(cfg config, meta *mediaMeta, index int, group []string) 
 	if strings.HasPrefix(raw, "m3u8:") {
 		out := cacheFile(meta, "m3u8", index, ".mp4")
 		stage := time.Now()
-		if err := ffmpegM3U8(cfg, strings.TrimPrefix(raw, "m3u8:"), meta.VideoHeads, out); err != nil {
+		if err := ffmpegM3U8(cfg, meta.Platform, strings.TrimPrefix(raw, "m3u8:"), meta.VideoHeads, out); err != nil {
 			logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=m3u8 stage=ffmpeg_pull elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 			return "", 0, err
 		}
@@ -1571,7 +1699,7 @@ func downloadMediaGroup(cfg config, meta *mediaMeta, index int, group []string) 
 		return path, sizeMB, nil
 	}
 	stage := time.Now()
-	path, sizeMB, err := downloadHTTPFile(cfg, stripMediaPrefix(raw), meta.VideoHeads, cacheFile(meta, "video", index, ".mp4"))
+	path, sizeMB, err := downloadHTTPFile(cfg, meta.Platform, stripMediaPrefix(raw), meta.VideoHeads, cacheFile(meta, "video", index, ".mp4"))
 	if err != nil {
 		logrus.Warnf("[mediaparser] download_stage_failed platform=%s title=%q mode=http stage=download elapsed=%s error=%v", meta.Platform, meta.Title, time.Since(stage).Round(time.Millisecond), err)
 		return "", 0, err
@@ -1580,7 +1708,7 @@ func downloadMediaGroup(cfg config, meta *mediaMeta, index int, group []string) 
 	return path, sizeMB, nil
 }
 
-func downloadHTTPFile(cfg config, raw string, headers map[string]string, out string) (string, float64, error) {
+func downloadHTTPFile(cfg config, platform, raw string, headers map[string]string, out string) (string, float64, error) {
 	req, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
 		return "", 0, err
@@ -1591,10 +1719,11 @@ func downloadHTTPFile(cfg config, raw string, headers map[string]string, out str
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", defaultUA)
 	}
-	httpClient := client
-	if cfg.TimeoutSeconds > 0 {
-		httpClient = &http.Client{Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second}
+	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
+	if cfg.TimeoutSeconds <= 0 {
+		timeout = 45 * time.Second
 	}
+	httpClient := httpClientForPlatform(cfg, platform, timeout, true)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", 0, err
@@ -1634,7 +1763,7 @@ func ffmpegMerge(cfg config, video, audio, out string) error {
 	return nil
 }
 
-func ffmpegM3U8(cfg config, raw string, headers map[string]string, out string) error {
+func ffmpegM3U8(cfg config, platform, raw string, headers map[string]string, out string) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
 		return err
 	}
@@ -1650,6 +1779,9 @@ func ffmpegM3U8(cfg config, raw string, headers map[string]string, out string) e
 	}
 	args = append(args, "-i", raw, "-c", "copy", "-bsf:a", "aac_adtstoasc", "-movflags", "+faststart", out)
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	if proxy := proxyForPlatform(cfg, platform); proxy != "" {
+		cmd.Env = append(os.Environ(), "http_proxy="+proxy, "https_proxy="+proxy, "HTTP_PROXY="+proxy, "HTTPS_PROXY="+proxy)
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -1658,7 +1790,7 @@ func ffmpegM3U8(cfg config, raw string, headers map[string]string, out string) e
 	return nil
 }
 
-func probeSize(raw string, headers map[string]string) (int64, int) {
+func probeSize(cfg config, platform, raw string, headers map[string]string) (int64, int) {
 	raw = stripMediaPrefix(raw)
 	req, err := http.NewRequest(http.MethodHead, raw, nil)
 	if err != nil {
@@ -1670,7 +1802,7 @@ func probeSize(raw string, headers map[string]string) (int64, int) {
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", defaultUA)
 	}
-	resp, err := client.Do(req)
+	resp, err := httpClientForPlatform(cfg, platform, 25*time.Second, true).Do(req)
 	if err != nil {
 		return 0, 0
 	}
@@ -1685,7 +1817,7 @@ func parseOpenGraph(cfg config, link parsedLink) (mediaMeta, error) {
 		return mediaMeta{}, err
 	}
 	req.Header.Set("User-Agent", defaultUA)
-	resp, err := client.Do(req)
+	resp, err := httpClientForPlatform(cfg, link.Platform, 45*time.Second, true).Do(req)
 	if err != nil {
 		return mediaMeta{}, err
 	}
@@ -1819,8 +1951,8 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
 	defer cancel()
 	args := []string{"-J", "--no-playlist", "--no-warnings", "--skip-download"}
-	if cfg.Proxy != "" {
-		args = append(args, "--proxy", cfg.Proxy)
+	if proxy := proxyForPlatform(cfg, link.Platform); proxy != "" {
+		args = append(args, "--proxy", proxy)
 	}
 	if cfg.BilibiliUseCookie && cfg.BilibiliCookie != "" {
 		args = append(args, "--add-header", "Cookie:"+cfg.BilibiliCookie)
@@ -1870,7 +2002,7 @@ func parseWithYTDLP(cfg config, link parsedLink) (mediaMeta, error) {
 func resolveYTDLPAvatar(cfg config, platform, title, webpageURL, channelURL, uploaderURL, uploaderID, channelID string) string {
 	switch platform {
 	case "youtube":
-		return resolveYouTubeAvatar(firstNonEmpty(channelURL, uploaderURL, youtubeChannelURL(uploaderID), youtubeChannelURL(channelID)))
+		return resolveYouTubeAvatar(cfg, firstNonEmpty(channelURL, uploaderURL, youtubeChannelURL(uploaderID), youtubeChannelURL(channelID)))
 	case "instagram":
 		return resolveInstagramAvatar(cfg, instagramUsernameFromYTDLP(title, uploaderURL, uploaderID))
 	default:
@@ -1892,7 +2024,7 @@ func youtubeChannelURL(id string) string {
 	return "https://www.youtube.com/@" + id
 }
 
-func resolveYouTubeAvatar(raw string) string {
+func resolveYouTubeAvatar(cfg config, raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
@@ -1902,7 +2034,7 @@ func resolveYouTubeAvatar(raw string) string {
 		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 		"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 	}
-	body, _, _, err := fetchText(raw, headers, true)
+	body, _, _, err := fetchTextWithPlatform(cfg, "youtube", raw, headers, true)
 	if err != nil {
 		return ""
 	}
@@ -1948,7 +2080,7 @@ func resolveInstagramAvatar(cfg config, username string) string {
 		headers["Cookie"] = cfg.InstagramCookie
 	}
 	api := "https://www.instagram.com/api/v1/users/web_profile_info/?username=" + url.QueryEscape(username)
-	body, _, status, err := fetchText(api, headers, true)
+	body, _, status, err := fetchTextWithPlatform(cfg, "instagram", api, headers, true)
 	if err == nil && status < 400 {
 		if avatar := firstNonEmpty(
 			firstRegexGroup(body, `"profile_pic_url_hd"\s*:\s*"([^"]+)`),
@@ -1993,8 +2125,8 @@ func downloadWithYTDLP(cfg config, meta *mediaMeta, raw string) (string, float64
 		"--merge-output-format", "mp4",
 		"-o", out,
 	}
-	if cfg.Proxy != "" {
-		args = append(args, "--proxy", cfg.Proxy)
+	if proxy := proxyForPlatform(cfg, meta.Platform); proxy != "" {
+		args = append(args, "--proxy", proxy)
 	}
 	if cfg.BilibiliUseCookie && cfg.BilibiliCookie != "" {
 		args = append(args, "--add-header", "Cookie:"+cfg.BilibiliCookie)

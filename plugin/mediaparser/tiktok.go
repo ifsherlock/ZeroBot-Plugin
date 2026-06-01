@@ -20,12 +20,12 @@ func parseTikTok(cfg config, raw string) (mediaMeta, error) {
 		"Referer":         tiktokReferer,
 		"Accept-Language": "en-US,en;q=0.9",
 	}
-	pageURL, err := redirectURL(raw, headers)
+	pageURL, err := redirectURLWithPlatform(cfg, "tiktok", raw, headers)
 	if err != nil {
 		pageURL = raw
 	}
 	pageURL = stripQueryFragment(pageURL)
-	html, finalURL, status, err := fetchText(pageURL, headers, true)
+	html, finalURL, status, err := fetchTextWithPlatform(cfg, "tiktok", pageURL, headers, true)
 	if err != nil {
 		return mediaMeta{}, err
 	}

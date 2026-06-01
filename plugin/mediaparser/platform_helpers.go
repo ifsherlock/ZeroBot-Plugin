@@ -1,17 +1,29 @@
 package mediaparser
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	xproxy "golang.org/x/net/proxy"
 )
 
 func fetchText(raw string, headers map[string]string, redirects bool) (string, string, int, error) {
+	return fetchTextWithClient(raw, headers, redirects, nil)
+}
+
+func fetchTextWithPlatform(cfg config, platform, raw string, headers map[string]string, redirects bool) (string, string, int, error) {
+	return fetchTextWithClient(raw, headers, redirects, httpClientForPlatform(cfg, platform, 45*time.Second, redirects))
+}
+
+func fetchTextWithClient(raw string, headers map[string]string, redirects bool, c *http.Client) (string, string, int, error) {
 	req, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
 		return "", raw, 0, err
@@ -22,7 +34,9 @@ func fetchText(raw string, headers map[string]string, redirects bool) (string, s
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", defaultUA)
 	}
-	c := &http.Client{Timeout: 45 * time.Second}
+	if c == nil {
+		c = &http.Client{Timeout: 45 * time.Second}
+	}
 	if !redirects {
 		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -41,6 +55,14 @@ func fetchText(raw string, headers map[string]string, redirects bool) (string, s
 }
 
 func redirectURL(raw string, headers map[string]string) (string, error) {
+	return redirectURLWithClient(raw, headers, nil)
+}
+
+func redirectURLWithPlatform(cfg config, platform, raw string, headers map[string]string) (string, error) {
+	return redirectURLWithClient(raw, headers, httpClientForPlatform(cfg, platform, 25*time.Second, true))
+}
+
+func redirectURLWithClient(raw string, headers map[string]string, c *http.Client) (string, error) {
 	req, err := http.NewRequest(http.MethodGet, raw, nil)
 	if err != nil {
 		return "", err
@@ -51,7 +73,9 @@ func redirectURL(raw string, headers map[string]string) (string, error) {
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", defaultUA)
 	}
-	c := &http.Client{Timeout: 25 * time.Second}
+	if c == nil {
+		c = &http.Client{Timeout: 25 * time.Second}
+	}
 	resp, err := c.Do(req)
 	if err != nil {
 		return "", err
@@ -61,6 +85,98 @@ func redirectURL(raw string, headers map[string]string) (string, error) {
 		return resp.Request.URL.String(), nil
 	}
 	return raw, nil
+}
+
+func proxyAllowedPlatform(platform string) bool {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "twitter", "tiktok", "youtube", "instagram":
+		return true
+	default:
+		return false
+	}
+}
+
+func proxyForPlatform(cfg config, platform string) string {
+	if !proxyAllowedPlatform(platform) {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Proxy)
+}
+
+func httpClientForPlatform(cfg config, platform string, timeout time.Duration, redirects bool) *http.Client {
+	if timeout <= 0 {
+		timeout = 45 * time.Second
+	}
+	c := &http.Client{Timeout: timeout}
+	if !redirects {
+		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+	rawProxy := proxyForPlatform(cfg, platform)
+	if rawProxy == "" {
+		return c
+	}
+	transport, err := transportForProxy(rawProxy)
+	if err != nil {
+		logDebug(cfg, "proxy ignored platform=%s proxy=%q error=%v", platform, rawProxy, err)
+		return c
+	}
+	c.Transport = transport
+	return c
+}
+
+func transportForProxy(rawProxy string) (*http.Transport, error) {
+	u, err := url.Parse(strings.TrimSpace(rawProxy))
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme == "" {
+		u, err = url.Parse("http://" + strings.TrimSpace(rawProxy))
+		if err != nil {
+			return nil, err
+		}
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+		transport.Proxy = http.ProxyURL(u)
+	case "socks5", "socks5h":
+		if strings.EqualFold(u.Scheme, "socks5h") {
+			u.Scheme = "socks5"
+		}
+		dialer, err := xproxy.FromURL(u, xproxy.Direct)
+		if err != nil {
+			return nil, err
+		}
+		transport.Proxy = nil
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			type contextDialer interface {
+				DialContext(context.Context, string, string) (net.Conn, error)
+			}
+			if d, ok := dialer.(contextDialer); ok {
+				return d.DialContext(ctx, network, address)
+			}
+			type dialResult struct {
+				conn net.Conn
+				err  error
+			}
+			ch := make(chan dialResult, 1)
+			go func() {
+				conn, err := dialer.Dial(network, address)
+				ch <- dialResult{conn: conn, err: err}
+			}()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case res := <-ch:
+				return res.conn, res.err
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unsupported proxy scheme %q", u.Scheme)
+	}
+	return transport, nil
 }
 
 func extractAssignedJSONObject(html, marker string) (map[string]any, error) {

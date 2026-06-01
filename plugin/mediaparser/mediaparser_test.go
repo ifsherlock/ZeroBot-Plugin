@@ -797,6 +797,43 @@ func TestAppendYTDLPPlatformArgs(t *testing.T) {
 	}
 }
 
+func TestProxyOnlyAppliesToOverseasPlatforms(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.Proxy = "socks5://127.0.0.1:7890"
+
+	for _, platform := range []string{"twitter", "tiktok", "youtube", "instagram"} {
+		if got := proxyForPlatform(cfg, platform); got != cfg.Proxy {
+			t.Fatalf("proxyForPlatform(%q)=%q, want %q", platform, got, cfg.Proxy)
+		}
+	}
+	for _, platform := range []string{"bilibili", "douyin", "xiaohongshu", "weibo", ""} {
+		if got := proxyForPlatform(cfg, platform); got != "" {
+			t.Fatalf("proxyForPlatform(%q)=%q, want empty", platform, got)
+		}
+	}
+}
+
+func TestYTDLPProxyIsScopedToOverseasPlatforms(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.Proxy = "http://127.0.0.1:7890"
+
+	ytArgs := []string{"-J"}
+	if proxy := proxyForPlatform(cfg, "youtube"); proxy != "" {
+		ytArgs = append(ytArgs, "--proxy", proxy)
+	}
+	if !containsArgPair(ytArgs, "--proxy", cfg.Proxy) {
+		t.Fatalf("youtube proxy missing: %#v", ytArgs)
+	}
+
+	biliArgs := []string{"-J"}
+	if proxy := proxyForPlatform(cfg, "bilibili"); proxy != "" {
+		biliArgs = append(biliArgs, "--proxy", proxy)
+	}
+	if containsArgPair(biliArgs, "--proxy", cfg.Proxy) {
+		t.Fatalf("bilibili should not use proxy: %#v", biliArgs)
+	}
+}
+
 func TestOneBotLocalMediaTargetPrefersLoopbackCacheURL(t *testing.T) {
 	oldCacheDir := cacheDir
 	oldSystem := runtimeSystem
@@ -1654,4 +1691,120 @@ func testGradientImage(w, h int, a, b color.RGBA) image.Image {
 		}
 	}
 	return img
+}
+
+func TestSafetyBlockedUsesGlobalCategories(t *testing.T) {
+	cfg := defaultConfig()
+	meta := mediaMeta{Platform: "bilibili", Title: "normal title", Desc: "contains NSFW marker"}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked {
+		t.Fatal("expected global adult category to block")
+	}
+	if hit.Category != safetyCategoryAdult {
+		t.Fatalf("category=%s", hit.Category)
+	}
+}
+
+func TestSafetyBlockedUsesPlatformCategoriesOnlyForPlatform(t *testing.T) {
+	cfg := defaultConfig()
+	meta := mediaMeta{Platform: "twitter", Desc: "dm for menu"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
+		t.Fatal("expected twitter adult_scam category to block")
+	}
+	meta.Platform = "bilibili"
+	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatal("did not expect platform-only category to block bilibili")
+	}
+}
+
+func TestSafetyBlockedUsesCustomWords(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomCategories["custom_marketing"] = safetyCustomCategory{
+		Label: "Marketing",
+		Words: []string{"custom-secret"},
+	}
+	cfg.SafetyGlobalCategories["custom_marketing"] = true
+	meta := mediaMeta{Platform: "xiaohongshu", Title: "this has CUSTOM-secret text"}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked {
+		t.Fatal("expected custom word to block")
+	}
+	if hit.Source != "custom_category" {
+		t.Fatalf("source=%s", hit.Source)
+	}
+}
+
+func TestSafetyBlockedUsesCustomCategoryOnPlatform(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomCategories["custom_bili_marketing"] = safetyCustomCategory{
+		Label: "Bilibili marketing",
+		Words: []string{"三连抽奖"},
+	}
+	cfg.SafetyPlatformCategories["bilibili"] = map[string]bool{"custom_bili_marketing": true}
+	meta := mediaMeta{Platform: "bilibili", Title: "关注三连抽奖"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
+		t.Fatal("expected custom platform category to block bilibili")
+	}
+	meta.Platform = "twitter"
+	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatal("did not expect custom platform category to block twitter")
+	}
+}
+
+func TestSafetyBlockedUsesGlobalExcludes(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyExcludeGlobal[safetyCategoryAdult] = []string{"nsfw art contest"}
+	meta := mediaMeta{Platform: "bilibili", Title: "NSFW art contest recap"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatal("expected global exclude to allow matching builtin word")
+	}
+}
+
+func TestSafetyBlockedUsesPlatformExcludesOnlyForPlatform(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyExcludePlatform["twitter"] = map[string][]string{
+		safetyCategoryAdultScam: {"dm for menu archive"},
+	}
+	meta := mediaMeta{Platform: "twitter", Desc: "dm for menu archive"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatal("expected twitter platform exclude to allow matching platform category")
+	}
+	meta.Platform = "instagram"
+	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
+		t.Fatal("expected platform exclude not to affect instagram")
+	}
+}
+
+func TestNormalizeSafetyWordsDeduplicatesAndTrims(t *testing.T) {
+	got := uniqueSafetyWords([]string{" NSFW ", "nsfw", "", "R-18"})
+	if len(got) != 2 {
+		t.Fatalf("len=%d got=%v", len(got), got)
+	}
+}
+
+func TestNormalizeConfigSeedsCustomWordsOnce(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomGlobal = map[string][]string{}
+	cfg.SafetyCustomPlatform = map[string]map[string][]string{}
+	cfg.SafetyCustomSeedVersion = 0
+	if changed := normalizeConfig(&cfg); !changed {
+		t.Fatal("expected first seed migration to mark config changed")
+	}
+	if cfg.SafetyCustomSeedVersion != currentSafetyCustomSeedVersion {
+		t.Fatalf("seed version=%d", cfg.SafetyCustomSeedVersion)
+	}
+	seedID := "custom_" + safetyCategoryAdult
+	if len(cfg.SafetyCustomCategories[seedID].Words) == 0 {
+		t.Fatal("expected adult custom seed words")
+	}
+
+	item := cfg.SafetyCustomCategories[seedID]
+	item.Words = nil
+	cfg.SafetyCustomCategories[seedID] = item
+	if changed := normalizeConfig(&cfg); changed {
+		t.Fatal("did not expect seeded config to migrate again")
+	}
+	if len(cfg.SafetyCustomCategories[seedID].Words) != 0 {
+		t.Fatal("expected deleted custom seed words to stay deleted")
+	}
 }

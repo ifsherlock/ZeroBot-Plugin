@@ -36,7 +36,7 @@ func parseInstagram(cfg config, raw string) (mediaMeta, error) {
 	if cfg.InstagramCookie != "" {
 		headers["Cookie"] = cfg.InstagramCookie
 	}
-	body, _, status, err := fetchText("https://i.instagram.com/api/v1/media/"+pk+"/info/", headers, true)
+	body, _, status, err := fetchTextWithPlatform(cfg, "instagram", "https://i.instagram.com/api/v1/media/"+pk+"/info/", headers, true)
 	if err != nil {
 		return mediaMeta{}, err
 	}

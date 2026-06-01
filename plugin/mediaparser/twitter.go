@@ -16,7 +16,7 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, fmt.Errorf("无法解析 Twitter/X 推文ID: %s", raw)
 	}
 	tweetID := m[1]
-	info, err := fetchFxTwitter(tweetID)
+	info, err := fetchFxTwitter(cfg, tweetID)
 	if err != nil {
 		return mediaMeta{}, err
 	}
@@ -83,13 +83,14 @@ type twitterVideo struct {
 	Duration any
 }
 
-func fetchFxTwitter(tweetID string) (twitterInfo, error) {
+func fetchFxTwitter(cfg config, tweetID string) (twitterInfo, error) {
 	api := "https://api.fxtwitter.com/status/" + tweetID
+	httpClient := httpClientForPlatform(cfg, "twitter", 45*time.Second, true)
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		req, _ := http.NewRequest(http.MethodGet, api, nil)
 		req.Header.Set("User-Agent", defaultUA)
-		resp, err := client.Do(req)
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			time.Sleep(time.Duration(attempt+1) * time.Second)
