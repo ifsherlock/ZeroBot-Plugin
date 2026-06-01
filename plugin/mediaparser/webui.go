@@ -3,6 +3,9 @@ package mediaparser
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -27,6 +30,13 @@ import (
 )
 
 type WebStatusProvider func() map[string]any
+
+type webAuthConfig struct {
+	User     string
+	Pass     string
+	PassPath string
+	Enabled  bool
+}
 
 type webPlatform struct {
 	Name  string `json:"name"`
@@ -199,9 +209,15 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 	mux.HandleFunc("/api/mediaparser/logos/image", serveLogoImageAPI)
 	mux.HandleFunc("/api/onebot/groups", serveGroupListAPI)
 	mux.HandleFunc("/api/logs", serveLogsAPI)
+	auth := loadWebAuthConfig()
+	handler := http.Handler(mux)
+	if auth.Enabled {
+		handler = withWebAuth(handler, auth)
+		logrus.Infof("[webui] auth enabled user=%s token_path=%s", auth.User, auth.PassPath)
+	}
 	go func() {
 		logrus.Infof("[webui] listening on %s", addr)
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := http.ListenAndServe(addr, handler); err != nil {
 			logrus.Errorf("[webui] stopped: %v", err)
 			webUIMu.Lock()
 			webUIActive = false
@@ -218,6 +234,63 @@ func webUIStatusText() string {
 		return "运行中"
 	}
 	return "未运行"
+}
+
+func loadWebAuthConfig() webAuthConfig {
+	user := strings.TrimSpace(os.Getenv("WEBUI_USER"))
+	if user == "" {
+		user = "admin"
+	}
+	pass := strings.TrimSpace(os.Getenv("WEBUI_PASSWORD"))
+	passPath := filepath.Join(engine.DataFolder(), "webui_auth_token")
+	if pass == "" {
+		pass = strings.TrimSpace(os.Getenv("WEBUI_TOKEN"))
+	}
+	if pass == "" {
+		if data, err := os.ReadFile(passPath); err == nil {
+			pass = strings.TrimSpace(string(data))
+		}
+	}
+	if pass == "" {
+		pass = newWebAuthToken()
+		if err := os.MkdirAll(filepath.Dir(passPath), 0755); err != nil {
+			logrus.Warnf("[webui] create auth token dir failed: %v", err)
+		} else if err := os.WriteFile(passPath, []byte(pass+"\n"), 0600); err != nil {
+			logrus.Warnf("[webui] save auth token failed: %v", err)
+		}
+	}
+	if strings.EqualFold(pass, "off") || strings.EqualFold(pass, "disabled") {
+		return webAuthConfig{Enabled: false}
+	}
+	return webAuthConfig{User: user, Pass: pass, PassPath: passPath, Enabled: pass != ""}
+}
+
+func newWebAuthToken() string {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(buf)
+}
+
+func withWebAuth(next http.Handler, auth webAuthConfig) http.Handler {
+	realm := `Basic realm="ZeroBot WebUI", charset="UTF-8"`
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok || !webAuthEqual(user, auth.User) || !webAuthEqual(pass, auth.Pass) {
+			w.Header().Set("WWW-Authenticate", realm)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func webAuthEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 func defaultWebStatus() map[string]any {
