@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -574,7 +575,7 @@ func uniqueSafetyWords(words []string) []string {
 		if word == "" {
 			continue
 		}
-		key := normalizeSafetyText(word)
+		key := safetyWordKey(word)
 		if key == "" || seen[key] {
 			continue
 		}
@@ -582,7 +583,7 @@ func uniqueSafetyWords(words []string) []string {
 		out = append(out, word)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return normalizeSafetyText(out[i]) < normalizeSafetyText(out[j])
+		return safetyWordKey(out[i]) < safetyWordKey(out[j])
 	})
 	return out
 }
@@ -682,8 +683,78 @@ func safetyScanText(meta mediaMeta, raw string) string {
 }
 
 func safetyTextContains(normalizedText, word string) bool {
+	word = cleanSafetyWord(word)
+	if word == "" {
+		return false
+	}
+	if pattern, ok := safetyRegexPattern(word); ok {
+		re, err := regexp.Compile("(?i)" + pattern)
+		return err == nil && re.MatchString(normalizedText)
+	}
+	if safetyWildcardWord(word) {
+		re, err := regexp.Compile("(?i)" + safetyWildcardPattern(word))
+		return err == nil && re.MatchString(normalizedText)
+	}
 	word = normalizeSafetyText(word)
 	return word != "" && strings.Contains(normalizedText, word)
+}
+
+func safetyWordKey(word string) string {
+	word = cleanSafetyWord(word)
+	if word == "" {
+		return ""
+	}
+	if _, ok := safetyRegexPattern(word); ok || safetyWildcardWord(word) {
+		return strings.ToLower(word)
+	}
+	return normalizeSafetyText(word)
+}
+
+func safetyRegexPattern(word string) (string, bool) {
+	word = strings.TrimSpace(word)
+	switch {
+	case strings.HasPrefix(word, "re:"):
+		return strings.TrimSpace(strings.TrimPrefix(word, "re:")), true
+	case strings.HasPrefix(word, "regexp:"):
+		return strings.TrimSpace(strings.TrimPrefix(word, "regexp:")), true
+	default:
+		return "", false
+	}
+}
+
+func safetyWildcardWord(word string) bool {
+	if _, ok := safetyRegexPattern(word); ok {
+		return false
+	}
+	return strings.ContainsAny(word, "*?")
+}
+
+func safetyWildcardPattern(word string) string {
+	word = strings.ToLower(strings.TrimSpace(word))
+	var b strings.Builder
+	lastSpace := false
+	for _, r := range word {
+		switch {
+		case r == '*':
+			b.WriteString(".*")
+			lastSpace = false
+		case r == '?':
+			b.WriteString(".")
+			lastSpace = false
+		case r == '+' || r == '-' || r == '_' || r == '#' || r == '@':
+			b.WriteString(regexp.QuoteMeta(string(r)))
+			lastSpace = false
+		case unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r):
+			if !lastSpace {
+				b.WriteString(`\s+`)
+				lastSpace = true
+			}
+		default:
+			b.WriteString(regexp.QuoteMeta(string(r)))
+			lastSpace = false
+		}
+	}
+	return b.String()
 }
 
 func normalizeSafetyText(s string) string {

@@ -1398,8 +1398,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">分类名称 <input id="safetyCategoryLabel" placeholder="哔哩哔哩营销号" oninput="collectSafetyCategoryEditor();markDirty()"></label>
 </div>
 <label class="field">内置词预览<textarea id="safetyBuiltinPreview" readonly placeholder="内置分类会在这里显示只读词库"></textarea></label>
-<label class="field">自定义屏蔽词<textarea id="safetyCustomWords" placeholder="一行一个屏蔽词" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
-<label class="field">排除词 / 白名单<textarea id="safetyCustomExcludes" placeholder="一行一个放行词；命中本分类时优先放行" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
+<label class="field">自定义屏蔽词<textarea id="safetyCustomWords" placeholder="一行一个；支持普通词、* / ? 通配、re:正则" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
+<label class="field">排除词 / 白名单<textarea id="safetyCustomExcludes" placeholder="一行一个；支持普通词、* / ? 通配、re:正则；命中本分类时优先放行" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
 </div>
 <div class="settingsCard reviewCard">
 <div class="sectionTitle"><b>全局启用分类</b><span class="muted">勾选后对所有平台生效。</span></div>

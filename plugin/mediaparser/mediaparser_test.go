@@ -1749,6 +1749,49 @@ func TestSafetyBlockedUsesCustomWords(t *testing.T) {
 	}
 }
 
+func TestSafetyBlockedSupportsRegexCustomWords(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomCategories["custom_regex"] = safetyCustomCategory{
+		Label: "Regex",
+		Words: []string{`re:foo\s*bar`},
+	}
+	cfg.SafetyGlobalCategories["custom_regex"] = true
+	meta := mediaMeta{Platform: "twitter", Title: "foo bar"}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked {
+		t.Fatal("expected regex custom word to block")
+	}
+	if hit.Keyword != `re:foo\s*bar` {
+		t.Fatalf("keyword=%q", hit.Keyword)
+	}
+}
+
+func TestSafetyBlockedSupportsWildcardCustomWords(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomCategories["custom_wildcard"] = safetyCustomCategory{
+		Label: "Wildcard",
+		Words: []string{"foo*bar"},
+	}
+	cfg.SafetyGlobalCategories["custom_wildcard"] = true
+	meta := mediaMeta{Platform: "twitter", Title: "foo---bar"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
+		t.Fatal("expected wildcard custom word to block")
+	}
+}
+
+func TestSafetyInvalidRegexDoesNotBlock(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomCategories["custom_bad_regex"] = safetyCustomCategory{
+		Label: "Bad regex",
+		Words: []string{`re:[`},
+	}
+	cfg.SafetyGlobalCategories["custom_bad_regex"] = true
+	meta := mediaMeta{Platform: "twitter", Title: "anything"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatal("did not expect invalid regex to block")
+	}
+}
+
 func TestSafetyBlockedUsesCustomCategoryOnPlatform(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SafetyCustomCategories["custom_bili_marketing"] = safetyCustomCategory{
