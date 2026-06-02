@@ -952,6 +952,31 @@ func TestOneBotUploadFilePathPrefersMappedHostPath(t *testing.T) {
 	}
 }
 
+func TestMergeSystemSettingsForStartupKeepsRuntimeDataDir(t *testing.T) {
+	current := SystemSettings{
+		WebUIAddr:     "0.0.0.0:3000",
+		WSURL:         "ws://127.0.0.1:3001",
+		OneBotDataDir: "/host/data",
+	}
+	saved := SystemSettings{
+		WebUIAddr:     "127.0.0.1:3000",
+		WSURL:         "ws://old:3001",
+		OneBotDataDir: "/app/data",
+		QQBotName:     "saved",
+	}
+
+	got := mergeSystemSettingsForStartup(current, saved)
+	if got.OneBotDataDir != current.OneBotDataDir {
+		t.Fatalf("onebot data dir=%q, want runtime %q", got.OneBotDataDir, current.OneBotDataDir)
+	}
+	if got.WSURL != current.WSURL {
+		t.Fatalf("ws url=%q, want runtime %q", got.WSURL, current.WSURL)
+	}
+	if got.QQBotName != saved.QQBotName {
+		t.Fatalf("qqbot name=%q, want saved fallback %q", got.QQBotName, saved.QQBotName)
+	}
+}
+
 func TestBiliQualityFollowsGlobalResolution(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.VideoMaxResolution = 720

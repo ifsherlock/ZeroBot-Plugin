@@ -931,11 +931,38 @@ func startPluginWebUI() {
 		time.Sleep(300 * time.Millisecond)
 		settings := LoadSystemSettings()
 		if settings.WebUIAddr != "" {
-			SetRuntimeSystemSettings(settings)
+			systemMu.RLock()
+			current := runtimeSystem
+			systemMu.RUnlock()
+			SetRuntimeSystemSettings(mergeSystemSettingsForStartup(current, settings))
 		}
 		addr := firstNonEmpty(os.Getenv("ZBP_BUILTIN_WEBUI"), os.Getenv("WEBUI_ADDR"), settings.WebUIAddr)
 		StartWebUI(addr, nil)
 	}()
+}
+
+func mergeSystemSettingsForStartup(current, saved SystemSettings) SystemSettings {
+	merged := saved
+	merged.WebUIAddr = firstNonEmpty(current.WebUIAddr, saved.WebUIAddr)
+	merged.WSURL = firstNonEmpty(current.WSURL, saved.WSURL)
+	merged.WSToken = firstNonEmpty(current.WSToken, saved.WSToken)
+	merged.OneBotDataDir = firstNonEmpty(current.OneBotDataDir, saved.OneBotDataDir)
+	merged.Nickname = firstNonEmpty(current.Nickname, saved.Nickname)
+	merged.CommandPrefix = firstNonEmpty(current.CommandPrefix, saved.CommandPrefix)
+	if len(current.SuperUsers) > 0 {
+		merged.SuperUsers = current.SuperUsers
+	}
+	merged.QQBotName = firstNonEmpty(current.QQBotName, saved.QQBotName)
+	merged.QQBotAppID = firstNonEmpty(current.QQBotAppID, saved.QQBotAppID)
+	merged.QQBotSecret = firstNonEmpty(current.QQBotSecret, saved.QQBotSecret)
+	merged.QQBotOpenID = firstNonEmpty(current.QQBotOpenID, saved.QQBotOpenID)
+	merged.QQBotGroupOpenID = firstNonEmpty(current.QQBotGroupOpenID, saved.QQBotGroupOpenID)
+	merged.QQBotPublicBase = firstNonEmpty(current.QQBotPublicBase, saved.QQBotPublicBase)
+	merged.QQBotMarkdown = current.QQBotMarkdown || saved.QQBotMarkdown
+	merged.QQBotMediaEnabled = current.QQBotMediaEnabled || saved.QQBotMediaEnabled
+	merged.QQBotCardDisabled = current.QQBotCardDisabled || saved.QQBotCardDisabled
+	merged.QQBotEnabled = current.QQBotEnabled || saved.QQBotEnabled
+	return normalizeSystemSettings(merged)
 }
 
 func handleWebUICommand(ctx *zero.Ctx, args []string) {
