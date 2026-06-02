@@ -1289,7 +1289,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">基础群管理、欢迎语、提醒和精华消息能力。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -1484,6 +1484,50 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 </div>
+<div class="panel span4 page" data-page="mediashield" id="mediashield">
+<div class="pluginHead"><div><div class="crumb">插件中心 / MediaShield</div><div class="sectionTitle"><b>MediaShield</b><span class="muted">X 平台专属：成人命中或主动词命中时，打码预览并发送带密码的媒体压缩包。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="settingsGrid">
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>触发开关</b><span class="muted">总开关默认关闭；关闭时不会接管内容安全屏蔽，也不会监听主动触发词。</span></div>
+<div class="controlPills"><label class="row">总开关 <span id="mediaShieldEnabledSwitch"></span></label><label class="row">被动检测 <span id="mediaShieldPassiveSwitch"></span></label><label class="row">主动触发 <span id="mediaShieldActiveSwitch"></span></label></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>群开关</b><span class="muted">只在勾选的群里启用；私聊不受群开关限制。</span></div>
+<div class="row"><input id="mediaShieldGroupSearch" placeholder="搜索群名或群号" oninput="renderMediaShieldGroups()"><button onclick="loadGroups(true)">刷新群列表</button></div>
+<div class="groupList compact" id="mediaShieldGroupPicker"></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>回复文案</b><span class="muted">{password} 会替换成随机 6 位解压密码；文案里没有密码时会自动追加一行。</span></div>
+<div class="settingsFields single">
+<label class="field">密码回复文案 <input id="mediaShieldReplyText" placeholder="已打包，解压密码：{password}" oninput="cfg.media_shield_reply_text=this.value;markDirty()"></label>
+<label class="field">主动回应 emoji <input id="mediaShieldEmoji" maxlength="12" placeholder="😏" oninput="cfg.media_shield_emoji=this.value;markDirty()"></label>
+</div>
+</div>
+</div>
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>主动监听词</b><span class="muted">同一条消息里包含 X 链接和这些词时触发；一行一个，支持普通词、* / ? 通配、re:正则。</span></div>
+<label class="field">关键词<textarea id="mediaShieldKeywords" placeholder="一行一个；例如 色色、打包、setu、大雷" oninput="cfg.media_shield_keywords=splitWords(this.value);markDirty()"></textarea></label>
+<div class="row"><button class="primary" onclick="save()">保存 MediaShield 配置</button><span class="muted">仅作用于 X / Twitter 平台。</span></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>被动检测词库</b><span class="muted">这是 MediaShield 自己的词库，首次从成人内置/扩展词复制一份，之后和内容安全插件互不影响。</span></div>
+<div class="settingsFields">
+<label class="field">被动检测词<textarea id="mediaShieldPassiveWords" placeholder="一行一个；支持普通词、* / ? 通配、re:正则" oninput="cfg.media_shield_passive_words=splitWords(this.value);markDirty()"></textarea></label>
+<label class="field">排除词 / 白名单<textarea id="mediaShieldPassiveExcludes" placeholder="一行一个；命中这些词时不触发 MediaShield" oninput="cfg.media_shield_passive_excludes=splitWords(this.value);markDirty()"></textarea></label>
+</div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>当前链路</b><span class="muted">复用聚合解析的 X 解析、代理、媒体下载和缓存清理能力。</span></div>
+<div class="overviewList">
+<div class="infoLine"><b>被动检测</b><span class="muted">成人类安全命中后接管；政治、暴恐、广告等非成人命中仍走普通屏蔽。</span></div>
+<div class="infoLine"><b>主动触发</b><span class="muted">未被其他安全分类屏蔽时才触发，避免绕过高风险屏蔽。</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
 <div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">显示当前进程捕获到的程序日志，敏感 Cookie 会做基础脱敏。</span><button class="right" onclick="loadLogs()">刷新日志</button></div><div class="logList" id="logSummary">-</div></div>
 <div class="panel span4 page" data-page="maintenance" id="maintenance"><div class="sectionTitle"><b>数据维护</b><span class="muted">缓存、Logo、本地配置文件维护。</span></div><div class="row"><button class="danger" onclick="clearCache()">清理媒体缓存</button><span class="muted" id="maintenanceMsg">配置文件只保存在本机 data 目录，不会上传到 GitHub。</span></div></div>
 </section>
@@ -1501,7 +1545,7 @@ const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
- const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot')?'plugins':page;
+ const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='mediashield')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
  const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
@@ -1625,6 +1669,7 @@ async function load(){
 }
 function render(){
  const items=[['auto_parse','解析卡片'],['download_video','媒体下载'],['parse_reaction','解析回应'],['debug','调试日志'],['avoid_av1','禁用 AV1'],['use_yt_dlp_fallback','yt-dlp 备用']];
+ renderMediaShieldSettings();
  $('globalControls').innerHTML=items.map(x=>'<label class="row">'+x[1]+switchHTML('cfg.'+x[0],!!cfg[x[0]])+'</label>').join('');
  cfg.platform_video_resolution=cfg.platform_video_resolution||{};
  $('platformRows').innerHTML=platforms.map(p=>'<tr><td><b>'+p.label+'</b><div class="muted">'+(p.local||p.name)+'</div></td><td>'+bindParseCardSwitch(p.name)+'</td><td>'+bindMediaDownloadSwitch(p.name)+'</td><td>'+resolutionCell(p.name)+'</td><td>'+logoCell(p)+'</td></tr>').join('');
@@ -1750,6 +1795,7 @@ function renderGroupPickers(){
  renderGroupPicker('groupWhitePicker','groupWhiteSearch','groupWhitelist');
  renderGroupPicker('groupBlackPicker','groupBlackSearch','groupBlacklist');
  renderPlatformGroupBlock();
+ renderMediaShieldGroups();
 }
 function renderGroupPicker(container,searchID,textarea){
  const q=String($(searchID).value||'').toLowerCase().trim();
@@ -1823,6 +1869,49 @@ function renderSafetySettings(){
  renderSafetyCategoryEditor();
  renderSafetyGlobalCategories();
  renderSafetyPlatformCategories();
+}
+function renderMediaShieldSettings(){
+ if(!cfg) return;
+ cfg.media_shield_group_enabled=cfg.media_shield_group_enabled||{};
+ if($('mediaShieldPluginStatus')){
+  $('mediaShieldPluginStatus').textContent=cfg.media_shield_enabled?'已启用':'未启用';
+  $('mediaShieldPluginStatus').className=cfg.media_shield_enabled?'ok':'muted';
+ }
+ if($('mediaShieldEnabledSwitch')) $('mediaShieldEnabledSwitch').innerHTML=switchHTML('cfg.media_shield_enabled', !!cfg.media_shield_enabled);
+ if($('mediaShieldPassiveSwitch')) $('mediaShieldPassiveSwitch').innerHTML=switchHTML('cfg.media_shield_passive', cfg.media_shield_passive!==false);
+ if($('mediaShieldActiveSwitch')) $('mediaShieldActiveSwitch').innerHTML=switchHTML('cfg.media_shield_active', cfg.media_shield_active!==false);
+ if($('mediaShieldReplyText')) $('mediaShieldReplyText').value=cfg.media_shield_reply_text||'已打包，解压密码：{password}';
+ if($('mediaShieldEmoji')) $('mediaShieldEmoji').value=cfg.media_shield_emoji||'😏';
+ if($('mediaShieldKeywords')) $('mediaShieldKeywords').value=(cfg.media_shield_keywords||[]).join('\n');
+ if($('mediaShieldPassiveWords')) $('mediaShieldPassiveWords').value=(cfg.media_shield_passive_words||[]).join('\n');
+ if($('mediaShieldPassiveExcludes')) $('mediaShieldPassiveExcludes').value=(cfg.media_shield_passive_excludes||[]).join('\n');
+ renderMediaShieldGroups();
+}
+function mediaShieldGroupIDs(){
+ const ids={}; groups.forEach(g=>ids[String(g.id)]=true);
+ Object.keys((cfg&&cfg.media_shield_group_enabled)||{}).forEach(id=>{if(cfg.media_shield_group_enabled[id]) ids[String(id)]=true});
+ return Object.keys(ids).sort((a,b)=>{
+  const av=!!cfg.media_shield_group_enabled[a], bv=!!cfg.media_shield_group_enabled[b];
+  if(av!==bv) return bv-av;
+  return groupLabel(a).localeCompare(groupLabel(b),'zh-CN');
+ });
+}
+function toggleMediaShieldGroup(el){
+ cfg.media_shield_group_enabled=cfg.media_shield_group_enabled||{};
+ if(el.checked) cfg.media_shield_group_enabled[String(el.dataset.id)]=true;
+ else delete cfg.media_shield_group_enabled[String(el.dataset.id)];
+ markDirty();
+ renderMediaShieldGroups();
+}
+function renderMediaShieldGroups(){
+ if(!cfg||!$('mediaShieldGroupPicker')) return;
+ cfg.media_shield_group_enabled=cfg.media_shield_group_enabled||{};
+ const q=String(($('mediaShieldGroupSearch')&&$('mediaShieldGroupSearch').value)||'').toLowerCase().trim();
+ const ids=mediaShieldGroupIDs().filter(id=>!q||String(id).includes(q)||groupLabel(id).toLowerCase().includes(q));
+ $('mediaShieldGroupPicker').innerHTML=ids.map(id=>{
+  const on=!!cfg.media_shield_group_enabled[id];
+  return '<label class="groupItem"><input type="checkbox" '+checked(on)+' data-id="'+escapeHTML(id)+'" onchange="toggleMediaShieldGroup(this)"><span>'+escapeHTML(groupLabel(id))+'<small>'+(on?'MediaShield 已启用':'未启用')+'</small></span></label>';
+ }).join('')||'<div class="muted">没有可显示的群；先刷新群列表。</div>';
 }
 function renderSafetyCategorySelect(){
  const list=allSafetyCategories();
@@ -1919,6 +2008,11 @@ function deleteSafetyCustomCategory(){
 function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function save(){
  collectSafetyCategoryEditor();
+ if($('mediaShieldReplyText')) cfg.media_shield_reply_text=String($('mediaShieldReplyText').value||'').trim();
+ if($('mediaShieldEmoji')) cfg.media_shield_emoji=String($('mediaShieldEmoji').value||'').trim();
+ if($('mediaShieldKeywords')) cfg.media_shield_keywords=splitWords($('mediaShieldKeywords').value);
+ if($('mediaShieldPassiveWords')) cfg.media_shield_passive_words=splitWords($('mediaShieldPassiveWords').value);
+ if($('mediaShieldPassiveExcludes')) cfg.media_shield_passive_excludes=splitWords($('mediaShieldPassiveExcludes').value);
  if($('safetyNoticeText')) cfg.safety_filter_notice_text=String($('safetyNoticeText').value||'').trim();
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim();

@@ -79,53 +79,63 @@ var (
 )
 
 type config struct {
-	AutoParse                bool                            `json:"auto_parse"`
-	Keywords                 []string                        `json:"keywords"`
-	AdminID                  int64                           `json:"admin_id"`
-	AccessMode               string                          `json:"access_mode"`
-	PrivateAccessMode        string                          `json:"private_access_mode"`
-	GroupAccessMode          string                          `json:"group_access_mode"`
-	GroupUserAccessMode      string                          `json:"group_user_access_mode"`
-	UserBlacklist            map[int64]bool                  `json:"user_blacklist"`
-	GroupBlacklist           map[int64]bool                  `json:"group_blacklist"`
-	GroupUserBlacklist       map[int64]bool                  `json:"group_user_blacklist"`
-	UserWhitelist            map[int64]bool                  `json:"user_whitelist"`
-	GroupWhitelist           map[int64]bool                  `json:"group_whitelist"`
-	GroupUserWhitelist       map[int64]bool                  `json:"group_user_whitelist"`
-	WhitelistMode            bool                            `json:"whitelist_mode"`
-	PlatformEnabled          map[string]bool                 `json:"platform_enabled"`
-	PlatformInfoCard         map[string]bool                 `json:"platform_info_card"`
-	PlatformSendMedia        map[string]bool                 `json:"platform_send_media"`
-	PlatformDownload         map[string]bool                 `json:"platform_download_video"`
-	PlatformGroupBlock       map[string]map[int64]bool       `json:"platform_group_block"`
-	OutputMode               map[string]string               `json:"output_mode"`
-	SendInfoCard             bool                            `json:"send_info_card"`
-	SendMedia                bool                            `json:"send_media"`
-	DownloadVideo            bool                            `json:"download_video"`
-	MaxVideoMB               int64                           `json:"max_video_mb"`
-	VideoMaxResolution       int                             `json:"video_max_resolution"`
-	PlatformResolution       map[string]int                  `json:"platform_video_resolution"`
-	CacheTTLMinutes          int                             `json:"cache_ttl_minutes"`
-	TimeoutSeconds           int                             `json:"timeout_seconds"`
-	Proxy                    string                          `json:"proxy"`
-	Debug                    bool                            `json:"debug"`
-	ParseReaction            bool                            `json:"parse_reaction"`
-	ParseReactionEmoji       string                          `json:"parse_reaction_emoji"`
-	FailReactionEmoji        string                          `json:"fail_reaction_emoji"`
-	SafetyFilterEnabled      bool                            `json:"safety_filter_enabled"`
-	SafetyFilterNotice       bool                            `json:"safety_filter_notice"`
-	SafetyFilterNoticeText   string                          `json:"safety_filter_notice_text"`
-	SafetyTwitterSensitive   bool                            `json:"safety_twitter_sensitive_block"`
-	SafetyGlobalCategories   map[string]bool                 `json:"safety_global_categories"`
-	SafetyPlatformCategories map[string]map[string]bool      `json:"safety_platform_categories"`
-	SafetyCustomGlobal       map[string][]string             `json:"safety_custom_global"`
-	SafetyCustomPlatform     map[string]map[string][]string  `json:"safety_custom_platform"`
-	SafetyExcludeGlobal      map[string][]string             `json:"safety_exclude_global"`
-	SafetyExcludePlatform    map[string]map[string][]string  `json:"safety_exclude_platform"`
-	SafetyCustomCategories   map[string]safetyCustomCategory `json:"safety_custom_categories"`
-	SafetyCustomSeedVersion  int                             `json:"safety_custom_seed_version"`
-	SafetyDefaultVersion     int                             `json:"safety_default_version"`
-	SafetyTwitterVersion     int                             `json:"safety_twitter_version"`
+	AutoParse                  bool                            `json:"auto_parse"`
+	Keywords                   []string                        `json:"keywords"`
+	AdminID                    int64                           `json:"admin_id"`
+	AccessMode                 string                          `json:"access_mode"`
+	PrivateAccessMode          string                          `json:"private_access_mode"`
+	GroupAccessMode            string                          `json:"group_access_mode"`
+	GroupUserAccessMode        string                          `json:"group_user_access_mode"`
+	UserBlacklist              map[int64]bool                  `json:"user_blacklist"`
+	GroupBlacklist             map[int64]bool                  `json:"group_blacklist"`
+	GroupUserBlacklist         map[int64]bool                  `json:"group_user_blacklist"`
+	UserWhitelist              map[int64]bool                  `json:"user_whitelist"`
+	GroupWhitelist             map[int64]bool                  `json:"group_whitelist"`
+	GroupUserWhitelist         map[int64]bool                  `json:"group_user_whitelist"`
+	WhitelistMode              bool                            `json:"whitelist_mode"`
+	PlatformEnabled            map[string]bool                 `json:"platform_enabled"`
+	PlatformInfoCard           map[string]bool                 `json:"platform_info_card"`
+	PlatformSendMedia          map[string]bool                 `json:"platform_send_media"`
+	PlatformDownload           map[string]bool                 `json:"platform_download_video"`
+	PlatformGroupBlock         map[string]map[int64]bool       `json:"platform_group_block"`
+	OutputMode                 map[string]string               `json:"output_mode"`
+	SendInfoCard               bool                            `json:"send_info_card"`
+	SendMedia                  bool                            `json:"send_media"`
+	DownloadVideo              bool                            `json:"download_video"`
+	MaxVideoMB                 int64                           `json:"max_video_mb"`
+	VideoMaxResolution         int                             `json:"video_max_resolution"`
+	PlatformResolution         map[string]int                  `json:"platform_video_resolution"`
+	CacheTTLMinutes            int                             `json:"cache_ttl_minutes"`
+	TimeoutSeconds             int                             `json:"timeout_seconds"`
+	Proxy                      string                          `json:"proxy"`
+	Debug                      bool                            `json:"debug"`
+	ParseReaction              bool                            `json:"parse_reaction"`
+	ParseReactionEmoji         string                          `json:"parse_reaction_emoji"`
+	FailReactionEmoji          string                          `json:"fail_reaction_emoji"`
+	SafetyFilterEnabled        bool                            `json:"safety_filter_enabled"`
+	SafetyFilterNotice         bool                            `json:"safety_filter_notice"`
+	SafetyFilterNoticeText     string                          `json:"safety_filter_notice_text"`
+	SafetyTwitterSensitive     bool                            `json:"safety_twitter_sensitive_block"`
+	SafetyGlobalCategories     map[string]bool                 `json:"safety_global_categories"`
+	SafetyPlatformCategories   map[string]map[string]bool      `json:"safety_platform_categories"`
+	SafetyCustomGlobal         map[string][]string             `json:"safety_custom_global"`
+	SafetyCustomPlatform       map[string]map[string][]string  `json:"safety_custom_platform"`
+	SafetyExcludeGlobal        map[string][]string             `json:"safety_exclude_global"`
+	SafetyExcludePlatform      map[string]map[string][]string  `json:"safety_exclude_platform"`
+	SafetyCustomCategories     map[string]safetyCustomCategory `json:"safety_custom_categories"`
+	SafetyCustomSeedVersion    int                             `json:"safety_custom_seed_version"`
+	SafetyDefaultVersion       int                             `json:"safety_default_version"`
+	SafetyTwitterVersion       int                             `json:"safety_twitter_version"`
+	MediaShieldEnabled         bool                            `json:"media_shield_enabled"`
+	MediaShieldPassive         bool                            `json:"media_shield_passive"`
+	MediaShieldActive          bool                            `json:"media_shield_active"`
+	MediaShieldReplyText       string                          `json:"media_shield_reply_text"`
+	MediaShieldEmoji           string                          `json:"media_shield_emoji"`
+	MediaShieldKeywords        []string                        `json:"media_shield_keywords"`
+	MediaShieldPassiveWords    []string                        `json:"media_shield_passive_words"`
+	MediaShieldPassiveExcludes []string                        `json:"media_shield_passive_excludes"`
+	MediaShieldGroupEnabled    map[int64]bool                  `json:"media_shield_group_enabled"`
+	MediaShieldSeedVersion     int                             `json:"media_shield_seed_version"`
 
 	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
 	BilibiliCookie     string `json:"bilibili_cookie"`
@@ -263,59 +273,69 @@ func defaultConfig() config {
 		output[p.Name] = outputAll
 	}
 	return config{
-		AutoParse:                true,
-		Keywords:                 []string{"视频解析", "解析视频", "解析", "parse"},
-		AdminID:                  10000,
-		AccessMode:               accessNone,
-		PrivateAccessMode:        accessNone,
-		GroupAccessMode:          accessNone,
-		GroupUserAccessMode:      accessNone,
-		UserBlacklist:            map[int64]bool{},
-		GroupBlacklist:           map[int64]bool{},
-		GroupUserBlacklist:       map[int64]bool{},
-		UserWhitelist:            map[int64]bool{},
-		GroupWhitelist:           map[int64]bool{},
-		GroupUserWhitelist:       map[int64]bool{},
-		PlatformEnabled:          enabled,
-		PlatformInfoCard:         infoCard,
-		PlatformSendMedia:        sendMedia,
-		PlatformDownload:         download,
-		PlatformGroupBlock:       platformGroupBlock,
-		OutputMode:               output,
-		SendInfoCard:             true,
-		SendMedia:                true,
-		DownloadVideo:            true,
-		MaxVideoMB:               defaultMaxVideoMB,
-		VideoMaxResolution:       0,
-		PlatformResolution:       map[string]int{},
-		CacheTTLMinutes:          defaultTTLMinutes,
-		TimeoutSeconds:           defaultTimeoutSec,
-		Debug:                    true,
-		ParseReaction:            true,
-		ParseReactionEmoji:       "🍉",
-		FailReactionEmoji:        "❌",
-		SafetyFilterEnabled:      true,
-		SafetyFilterNotice:       false,
-		SafetyFilterNoticeText:   "内容触发安全屏蔽，已停止解析。",
-		SafetyTwitterSensitive:   true,
-		SafetyGlobalCategories:   defaultSafetyGlobalCategories(),
-		SafetyPlatformCategories: defaultSafetyPlatformCategories(),
-		SafetyCustomGlobal:       map[string][]string{},
-		SafetyCustomPlatform:     map[string]map[string][]string{},
-		SafetyExcludeGlobal:      map[string][]string{},
-		SafetyExcludePlatform:    map[string]map[string][]string{},
-		SafetyCustomCategories:   map[string]safetyCustomCategory{},
-		SafetyCustomSeedVersion:  0,
-		SafetyDefaultVersion:     currentSafetyDefaultVersion,
-		SafetyTwitterVersion:     currentSafetyTwitterVersion,
-		AvoidAV1:                 true,
-		BilibiliMaxQuality:       "不限制",
-		UseYTDLPFallback:         false,
-		YTDLPPath:                "yt-dlp",
-		YouTubeExtractorArgs:     "youtube:player_client=default,android;formats=missing_pot",
-		KeylolFooter:             "Keylol 帖子截图 · 浏览器渲染 · {time}",
-		KeylolTheme:              "auto",
-		KeylolASFForward:         true,
+		AutoParse:                  true,
+		Keywords:                   []string{"视频解析", "解析视频", "解析", "parse"},
+		AdminID:                    10000,
+		AccessMode:                 accessNone,
+		PrivateAccessMode:          accessNone,
+		GroupAccessMode:            accessNone,
+		GroupUserAccessMode:        accessNone,
+		UserBlacklist:              map[int64]bool{},
+		GroupBlacklist:             map[int64]bool{},
+		GroupUserBlacklist:         map[int64]bool{},
+		UserWhitelist:              map[int64]bool{},
+		GroupWhitelist:             map[int64]bool{},
+		GroupUserWhitelist:         map[int64]bool{},
+		PlatformEnabled:            enabled,
+		PlatformInfoCard:           infoCard,
+		PlatformSendMedia:          sendMedia,
+		PlatformDownload:           download,
+		PlatformGroupBlock:         platformGroupBlock,
+		OutputMode:                 output,
+		SendInfoCard:               true,
+		SendMedia:                  true,
+		DownloadVideo:              true,
+		MaxVideoMB:                 defaultMaxVideoMB,
+		VideoMaxResolution:         0,
+		PlatformResolution:         map[string]int{},
+		CacheTTLMinutes:            defaultTTLMinutes,
+		TimeoutSeconds:             defaultTimeoutSec,
+		Debug:                      true,
+		ParseReaction:              true,
+		ParseReactionEmoji:         "🍉",
+		FailReactionEmoji:          "❌",
+		SafetyFilterEnabled:        true,
+		SafetyFilterNotice:         false,
+		SafetyFilterNoticeText:     "内容触发安全屏蔽，已停止解析。",
+		SafetyTwitterSensitive:     true,
+		SafetyGlobalCategories:     defaultSafetyGlobalCategories(),
+		SafetyPlatformCategories:   defaultSafetyPlatformCategories(),
+		SafetyCustomGlobal:         map[string][]string{},
+		SafetyCustomPlatform:       map[string]map[string][]string{},
+		SafetyExcludeGlobal:        map[string][]string{},
+		SafetyExcludePlatform:      map[string]map[string][]string{},
+		SafetyCustomCategories:     map[string]safetyCustomCategory{},
+		SafetyCustomSeedVersion:    0,
+		SafetyDefaultVersion:       currentSafetyDefaultVersion,
+		SafetyTwitterVersion:       currentSafetyTwitterVersion,
+		MediaShieldEnabled:         false,
+		MediaShieldPassive:         true,
+		MediaShieldActive:          true,
+		MediaShieldReplyText:       defaultMediaShieldReplyText,
+		MediaShieldEmoji:           defaultMediaShieldEmoji,
+		MediaShieldKeywords:        defaultMediaShieldKeywords(),
+		MediaShieldPassiveWords:    []string{},
+		MediaShieldPassiveExcludes: []string{},
+		MediaShieldGroupEnabled:    map[int64]bool{},
+		MediaShieldSeedVersion:     0,
+		AvoidAV1:                   true,
+		BilibiliMaxQuality:         "不限制",
+		UseYTDLPFallback:           false,
+		YTDLPPath:                  "yt-dlp",
+		YouTubeExtractorArgs:       "youtube:player_client=default,android;formats=missing_pot",
+		KeylolFooter:               "Keylol 帖子截图 · 浏览器渲染 · {time}",
+		KeylolTheme:                "auto",
+		KeylolASFForward:           true,
 	}
 }
 
@@ -574,6 +594,9 @@ func normalizeConfig(cfg *config) bool {
 			changed = true
 		}
 		cfg.SafetyCustomSeedVersion = currentSafetyCustomSeedVersion
+		changed = true
+	}
+	if normalizeMediaShieldConfig(cfg) {
 		changed = true
 	}
 	cfg.BilibiliMaxQuality = biliQualityFromResolution(platformMaxResolution(*cfg, "bilibili"))
@@ -1079,7 +1102,26 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		return err
 	}
 	meta.Author = cardDisplayAuthor(meta.Author)
-	if hit, blocked := safetyBlocked(cfg, meta, rawMessage); blocked {
+	hit, blocked := safetyBlocked(cfg, meta, rawMessage)
+	groupID := int64(0)
+	if ctx != nil && ctx.Event != nil {
+		groupID = ctx.Event.GroupID
+	}
+	if mediaShieldShouldHandle(cfg, meta, rawMessage, hit, blocked, groupID) {
+		if err := sendMediaShieldPackage(ctx, cfg, &meta, mediaShieldReason(cfg, meta, rawMessage, hit, blocked, groupID)); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
+			if blocked {
+				if cfg.SafetyFilterNotice {
+					ctx.SendChain(message.Text(safetyNoticeText(cfg, meta, hit)))
+				}
+				return nil
+			}
+			return err
+		}
+		logrus.Infof("[mediaparser] media_shield_sent platform=%s title=%q elapsed=%s", meta.Platform, truncate(meta.Title, 80), time.Since(started).Round(time.Millisecond))
+		return nil
+	}
+	if blocked {
 		logrus.Warnf("[mediaparser] safety_blocked platform=%s category=%s source=%s keyword_sha1=%s title=%q", meta.Platform, hit.Category, hit.Source, safetyKeywordDigest(hit.Keyword), truncate(meta.Title, 80))
 		if cfg.SafetyFilterNotice {
 			ctx.SendChain(message.Text(safetyNoticeText(cfg, meta, hit)))

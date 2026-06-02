@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/FloatTech/gg"
+	zip "github.com/alexmullins/zip"
 	"github.com/disintegration/imaging"
 )
 
@@ -2135,6 +2137,151 @@ func TestSafetyBuiltinWordsExcludeBroadDiscussionTerms(t *testing.T) {
 	}
 	if !safetyWordsContain(normalizeSafetyText("https://t.me/example"), adWords) {
 		t.Fatal("expected t.me links to remain in ad builtin words")
+	}
+}
+
+func TestMediaShieldDefaultsDisabledWithActiveKeywords(t *testing.T) {
+	cfg := defaultConfig()
+	if cfg.MediaShieldEnabled {
+		t.Fatalf("media shield should default off")
+	}
+	if !cfg.MediaShieldPassive || !cfg.MediaShieldActive {
+		t.Fatalf("media shield passive/active defaults should be ready when enabled")
+	}
+	if !mediaShieldActiveTriggered(cfg, "https://x.com/i/status/1 setu") {
+		t.Fatalf("expected default active keyword to trigger")
+	}
+}
+
+func TestMediaShieldShouldHandleTwitterAdultOnlyWhenEnabled(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MediaShieldPassiveWords = []string{"nsfw"}
+	meta := mediaMeta{Platform: "twitter"}
+	hit := safetyHit{Category: safetyCategoryAdult, Keyword: "nsfw", Source: "builtin"}
+	if mediaShieldShouldHandle(cfg, meta, "", hit, true, 0) {
+		t.Fatalf("disabled media shield should not handle")
+	}
+	cfg.MediaShieldEnabled = true
+	if !mediaShieldShouldHandle(cfg, meta, "nsfw", hit, true, 0) {
+		t.Fatalf("enabled media shield should handle twitter adult hit with shield passive word")
+	}
+	meta.Platform = "bilibili"
+	if mediaShieldShouldHandle(cfg, meta, "setu", hit, true, 0) {
+		t.Fatalf("media shield must stay twitter-only")
+	}
+}
+
+func TestMediaShieldPassiveWordsAreIndependentFromSafety(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MediaShieldEnabled = true
+	cfg.MediaShieldPassiveWords = []string{"shield-only-word"}
+	cfg.SafetyGlobalCategories = map[string]bool{}
+	meta := mediaMeta{Platform: "twitter", Title: "shield-only-word"}
+	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatalf("safety should not block shield-only word, hit=%+v", hit)
+	}
+	if !mediaShieldShouldHandle(cfg, meta, "", safetyHit{}, false, 0) {
+		t.Fatalf("media shield should use its own passive words")
+	}
+	cfg.MediaShieldPassiveExcludes = []string{"shield-only-word"}
+	if mediaShieldShouldHandle(cfg, meta, "", safetyHit{}, false, 0) {
+		t.Fatalf("media shield exclude words should suppress passive trigger")
+	}
+}
+
+func TestMediaShieldSensitiveMarkerOnlyChecksRiskCategories(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MediaShieldEnabled = true
+	cfg.MediaShieldPassiveWords = []string{"shield-adult-word"}
+	cfg.SafetyTwitterSensitive = true
+	cfg.SafetyGlobalCategories = map[string]bool{safetyCategoryPolitics: true}
+	meta := mediaMeta{
+		Platform:   "twitter",
+		AccessText: safetyMarkerTwitterSensitive,
+		Title:      "regular title",
+	}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked || hit.Source != "platform_sensitive" {
+		t.Fatalf("expected twitter sensitive safety hit, hit=%+v blocked=%v", hit, blocked)
+	}
+	if !mediaShieldShouldHandle(cfg, meta, "", hit, blocked, 0) {
+		t.Fatalf("sensitive marker should trigger shield without adult keyword")
+	}
+
+	meta.Title = "re:politics-risk-test"
+	cfg.SafetyCustomCategories = map[string]safetyCustomCategory{
+		"custom_politics": {Words: []string{"re:politics-risk-test"}},
+	}
+	cfg.SafetyGlobalCategories["custom_politics"] = true
+	if mediaShieldShouldHandle(cfg, meta, "", hit, blocked, 0) {
+		t.Fatalf("politics risk should prevent shield takeover")
+	}
+}
+
+func TestMediaShieldGroupSwitch(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MediaShieldEnabled = true
+	cfg.MediaShieldPassiveWords = []string{"nsfw"}
+	meta := mediaMeta{Platform: "twitter", Title: "nsfw"}
+	if mediaShieldShouldHandle(cfg, meta, "", safetyHit{}, false, 123) {
+		t.Fatalf("group message should not trigger until the group is enabled")
+	}
+	cfg.MediaShieldGroupEnabled = map[int64]bool{123: true}
+	if !mediaShieldShouldHandle(cfg, meta, "", safetyHit{}, false, 123) {
+		t.Fatalf("enabled group should trigger media shield")
+	}
+	if !mediaShieldShouldHandle(cfg, meta, "", safetyHit{}, false, 0) {
+		t.Fatalf("private message should not require group switch")
+	}
+}
+
+func TestMediaShieldActiveTriggeredSupportsCustomKeywords(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MediaShieldKeywords = []string{"re:s[e3]tu", "大*奶"}
+	if !mediaShieldActiveTriggered(cfg, "给我来点 s3tu") {
+		t.Fatalf("expected regex active keyword to trigger")
+	}
+	if !mediaShieldActiveTriggered(cfg, "想看大大的奶") {
+		t.Fatalf("expected wildcard active keyword to trigger")
+	}
+	if mediaShieldActiveTriggered(cfg, "普通 X 链接") {
+		t.Fatalf("unexpected active trigger")
+	}
+}
+
+func TestCreateMediaShieldZipRequiresPassword(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "media.txt")
+	if err := os.WriteFile(src, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "media.zip")
+	if err := createMediaShieldZip([]string{src}, out, "123456"); err != nil {
+		t.Fatalf("create zip: %v", err)
+	}
+	r, err := zip.OpenReader(out)
+	if err != nil {
+		t.Fatalf("open zip: %v", err)
+	}
+	defer r.Close()
+	if len(r.File) != 1 {
+		t.Fatalf("zip files=%d", len(r.File))
+	}
+	if !r.File[0].IsEncrypted() {
+		t.Fatalf("zip entry should be encrypted")
+	}
+	r.File[0].SetPassword("123456")
+	rc, err := r.File[0].Open()
+	if err != nil {
+		t.Fatalf("open encrypted entry: %v", err)
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("read encrypted entry: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("zip content=%q", data)
 	}
 }
 

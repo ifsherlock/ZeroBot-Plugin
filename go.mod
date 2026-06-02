@@ -15,6 +15,7 @@ require (
 	github.com/RomiChan/syncx v0.0.0-20240418144900-b7402ffdebc7
 	github.com/RomiChan/websocket v1.4.3-0.20251002072000-d3eb41798438
 	github.com/Tnze/go-mc v1.20.2
+	github.com/alexmullins/zip v0.0.0-20180717182244-4affb64b04d0
 	github.com/antchfx/htmlquery v1.3.5
 	github.com/corona10/goimagehash v1.1.1-0.20240121134706-d8115886f360
 	github.com/davidscholberg/go-durationfmt v0.0.0-20170122144659-64843a2083d3
@@ -97,6 +98,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

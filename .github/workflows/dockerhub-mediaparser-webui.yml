@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - codex/mediaparser-playground-webui-dockerhub
+      - codex/mediashield
     paths:
       - "Dockerfile"
       - ".dockerignore"
@@ -90,7 +90,7 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=test
+            type=raw,value=shield
 
       - name: Build and push
         uses: docker/build-push-action@v6
