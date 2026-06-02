@@ -1827,6 +1827,24 @@ func TestSafetyBlockedUsesCustomWords(t *testing.T) {
 	}
 }
 
+func TestSafetyBlockedUsesBuiltinCategorySupplementWords(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories[safetyCategoryAdult] = true
+	cfg.SafetyCustomGlobal[safetyCategoryAdult] = []string{"custom-adult-extra"}
+	meta := mediaMeta{Platform: "twitter", Title: "this has custom-adult-extra text"}
+	hit, blocked := safetyBlocked(cfg, meta, "")
+	if !blocked {
+		t.Fatal("expected builtin category supplement word to block")
+	}
+	if hit.Category != safetyCategoryAdult || hit.Source != "builtin_custom" {
+		t.Fatalf("unexpected hit=%+v", hit)
+	}
+	cfg.SafetyGlobalCategories[safetyCategoryAdult] = false
+	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatalf("did not expect supplement word to block when category is disabled, hit=%+v", hit)
+	}
+}
+
 func TestSafetyBlockedSupportsRegexCustomWords(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SafetyCustomCategories["custom_regex"] = safetyCustomCategory{
@@ -1872,18 +1890,18 @@ func TestSafetyInvalidRegexDoesNotBlock(t *testing.T) {
 
 func TestSafetyBlockedUsesCustomCategoryOnPlatform(t *testing.T) {
 	cfg := defaultConfig()
-	cfg.SafetyCustomCategories["custom_bili_marketing"] = safetyCustomCategory{
-		Label: "Bilibili marketing",
+	cfg.SafetyCustomCategories["custom_adult_extra"] = safetyCustomCategory{
+		Label: "成人扩展",
 		Words: []string{"三连抽奖"},
 	}
-	cfg.SafetyPlatformCategories["bilibili"] = map[string]bool{"custom_bili_marketing": true}
-	meta := mediaMeta{Platform: "bilibili", Title: "关注三连抽奖"}
+	cfg.SafetyPlatformCategories["twitter"] = map[string]bool{"custom_adult_extra": true}
+	meta := mediaMeta{Platform: "twitter", Title: "关注三连抽奖"}
 	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
-		t.Fatal("expected custom platform category to block bilibili")
+		t.Fatal("expected custom platform category to block twitter")
 	}
-	meta.Platform = "twitter"
+	meta.Platform = "bilibili"
 	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
-		t.Fatal("did not expect custom platform category to block twitter")
+		t.Fatal("did not expect custom platform category to block bilibili")
 	}
 }
 
@@ -2002,6 +2020,37 @@ func TestNormalizeConfigMigratesLegacyCustomWords(t *testing.T) {
 	}
 }
 
+func TestSeedSafetyCustomWordsAddsTwitterAdultExtension(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyCustomSeedVersion = 0
+	if changed := normalizeConfig(&cfg); !changed {
+		t.Fatal("expected seed migration to mark config changed")
+	}
+	item := cfg.SafetyCustomCategories["custom_adult_extra"]
+	if item.Label != "成人扩展" {
+		t.Fatalf("label=%q", item.Label)
+	}
+	for _, want := range []string{"福利姬", "裸聊", "intercourse", "裏垢", "섹트"} {
+		if !containsString(item.Words, want) {
+			t.Fatalf("expected adult extension to contain %q", want)
+		}
+	}
+	if cfg.SafetyGlobalCategories["custom_adult_extra"] {
+		t.Fatal("did not expect adult extension to be enabled globally")
+	}
+	if !cfg.SafetyPlatformCategories["twitter"]["custom_adult_extra"] {
+		t.Fatal("expected adult extension to be enabled on twitter")
+	}
+	meta := mediaMeta{Platform: "twitter", Title: "裸聊"}
+	if _, blocked := safetyBlocked(cfg, meta, ""); !blocked {
+		t.Fatal("expected twitter adult extension to block")
+	}
+	meta.Platform = "bilibili"
+	if _, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatal("did not expect twitter adult extension to block bilibili")
+	}
+}
+
 func TestSafetyMigrationDoesNotBlockNormalXTCoLinks(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SafetyGlobalCategories["custom_twitter_adult_scam"] = true
@@ -2054,6 +2103,38 @@ func TestDecodeSafetyBuiltinWordsTrimsLeadingHash(t *testing.T) {
 	}
 	if !containsString(got, "NSFW") || !containsString(got, "男菩萨") {
 		t.Fatalf("expected decoded words without hash, got %v", got)
+	}
+}
+
+func TestSafetyBuiltinWordsExcludeBroadDiscussionTerms(t *testing.T) {
+	var adultWords, adWords, violenceWords []string
+	for _, def := range safetyCategoryDefs {
+		switch def.ID {
+		case safetyCategoryAdult:
+			adultWords = safetyBuiltinWords(def)
+		case safetyCategoryAd:
+			adWords = safetyBuiltinWords(def)
+		case safetyCategoryViolence:
+			violenceWords = safetyBuiltinWords(def)
+		}
+	}
+	for _, word := range decodeSafetyBuiltinWords([]string{"5pOm6L65", "6buE5o6o", "56aP5Yip5aes", "56eB5oi/", "57qm54Ku"}) {
+		if safetyWordsContain(normalizeSafetyText(word), adultWords) {
+			t.Fatalf("adult builtin should not include broad discussion term %q", word)
+		}
+	}
+	for _, word := range decodeSafetyBuiltinWords([]string{"5byV5rWB", "5pyA5paw5Zyw5Z2A", "6Ziy6LWw5aSx", "5aSH55So5Z+f5ZCN", "6Lez6L2s6ZO+5o6l"}) {
+		if safetyWordsContain(normalizeSafetyText(word), adWords) {
+			t.Fatalf("ad builtin should not include broad discussion term %q", word)
+		}
+	}
+	for _, word := range decodeSafetyBuiltinWords([]string{"6KGA6IWl", "5rWB6KGA", "Z29yZQ==", "44Kw44Ot", "6rOg7Ja0", "7Jyg7ZiI"}) {
+		if safetyWordsContain(normalizeSafetyText(word), violenceWords) {
+			t.Fatalf("violence builtin should not include broad gore term %q", word)
+		}
+	}
+	if !safetyWordsContain(normalizeSafetyText("https://t.me/example"), adWords) {
+		t.Fatal("expected t.me links to remain in ad builtin words")
 	}
 }
 

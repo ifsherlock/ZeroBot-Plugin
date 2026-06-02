@@ -1231,7 +1231,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .hidden,.page{display:none!important}.page.active{display:block!important}.page.active.metric{display:flex!important}.controlPills{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlPills>label{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:180px}.accessGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin-top:12px}.accessGrid .field{min-width:0}.accessGrid label{font-weight:650}.accessGrid textarea{font-weight:400}
 .settingsGrid{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;margin-top:12px}.settingsCard{border:1px solid var(--line);border-radius:10px;background:#fbfdff;padding:14px;display:flex;flex-direction:column;gap:12px}.settingsCard .sectionTitle{margin-bottom:0}.settingsCard .field{min-width:0}.settingsCard textarea{min-height:132px}.settingsFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.settingsFields.single{grid-template-columns:1fr}.settingsStack{display:grid;gap:14px}.reviewGrid{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(420px,1.1fr);gap:14px;align-items:stretch}.reviewColumn{display:grid;gap:14px;grid-auto-rows:minmax(0,auto)}.reviewCard{min-height:172px;overflow:hidden}.reviewCard.tall{min-height:376px}.reviewCard .groupList{max-height:236px;border:1px solid #edf2f7;border-radius:8px;background:#fff}.reviewCard.tall .groupList{max-height:520px}.reviewCard textarea{min-height:116px}.reviewCard .sectionTitle{min-height:36px}.safetyControlCard{min-height:0;padding:12px 14px}.safetyControlRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.safetyControlTitle{display:grid;gap:3px}.safetyControlTitle b{font-size:15px}.safetyNoticeField input{width:100%}.proxySummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.proxyBadge{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:9px 10px}.proxyBadge b{display:block;font-size:12px;margin-bottom:3px}.proxyBadge span{color:var(--muted);font-size:12px}.cacheCard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:center}.cacheStat{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px}.cacheStat span{display:block;font-size:12px;color:var(--muted)}.cacheStat b{font-size:20px}.runtimeNote{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;color:var(--muted)}
-.safetyGrid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(460px,1.14fr) minmax(300px,.82fr);gap:14px;align-items:start}.safetyColumn{display:grid;gap:14px;align-content:start}.safetyEditorHead{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.safetyEditorHead .field{gap:5px}.safetyEditorHead select{width:100%}.safetyEditorCard textarea{min-height:96px}.safetyEditorCard #safetyBuiltinPreview{min-height:132px}.safetyEditorCard #safetyCustomWords,.safetyEditorCard #safetyCustomExcludes{min-height:128px}.safetyEnableCard .groupList{max-height:300px}
+.safetyGrid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(460px,1.14fr) minmax(300px,.82fr);gap:14px;align-items:start}.safetyColumn{display:grid;gap:14px;align-content:start}.safetyEditorHead{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.safetyEditorHead .field{gap:5px}.safetyEditorHead select{width:100%}.safetyEditorCard textarea{min-height:96px}.safetyEditorCard #safetyBuiltinPreview{min-height:170px}.safetyWordGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.safetyWordGrid .wide{grid-column:1/-1}.safetyWordGrid textarea{min-height:148px}.safetyEnableCard{padding:12px}.safetyEnableCard .sectionTitle{align-items:flex-start}.safetyEnableCard .groupList{max-height:210px}.safetyEnableCard select{width:100%}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
@@ -1407,13 +1407,14 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <button onclick="addSafetyCustomCategory()">新建分类</button>
 <button class="danger" id="safetyDeleteCategory" onclick="deleteSafetyCustomCategory()">删除分类</button>
 </div>
-<div class="settingsFields">
-<label class="field">分类 ID <input id="safetyCategoryID" placeholder="custom_bili_marketing" oninput="editSafetyCustomCategoryID()"></label>
-<label class="field">分类名称 <input id="safetyCategoryLabel" placeholder="哔哩哔哩营销号" oninput="collectSafetyCategoryEditor();markDirty()"></label>
+<div class="settingsFields" id="safetyCategoryIdentity">
+<label class="field">分类 ID <input id="safetyCategoryID" placeholder="custom_adult_extra" oninput="editSafetyCustomCategoryID()"></label>
+<label class="field">分类名称 <input id="safetyCategoryLabel" placeholder="成人扩展" oninput="collectSafetyCategoryEditor();markDirty()"></label>
 </div>
-<label class="field">内置词预览<textarea id="safetyBuiltinPreview" readonly placeholder="内置分类会在这里显示只读词库"></textarea></label>
-<label class="field">自定义屏蔽词<textarea id="safetyCustomWords" placeholder="一行一个；支持普通词、* / ? 通配、re:正则" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
-<label class="field">排除词 / 白名单<textarea id="safetyCustomExcludes" placeholder="一行一个；支持普通词、* / ? 通配、re:正则；命中本分类时优先放行" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
+<div class="safetyWordGrid">
+<label class="field wide" id="safetyBuiltinPreviewWrap">内置词预览<textarea id="safetyBuiltinPreview" readonly placeholder="内置分类会在这里显示只读词库"></textarea></label>
+<label class="field"><span id="safetyCustomWordsLabel">自定义屏蔽词</span><textarea id="safetyCustomWords" placeholder="一行一个；支持普通词、* / ? 通配、re:正则" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
+<label class="field"><span id="safetyCustomExcludesLabel">排除词 / 白名单</span><textarea id="safetyCustomExcludes" placeholder="一行一个；支持普通词、* / ? 通配、re:正则；命中本分类时优先放行" oninput="collectSafetyCategoryEditor();markDirty()"></textarea></label>
 </div>
 </div>
 </div>
@@ -1860,10 +1861,13 @@ function renderSafetyCategoryEditor(){
  $('safetyCategoryLabel').value=builtin?builtin.label:(custom.label||'');
  $('safetyCategoryLabel').disabled=!!builtin;
  $('safetyDeleteCategory').style.display=builtin?'none':'inline-block';
+ $('safetyCategoryIdentity').style.display=builtin?'none':'grid';
+ $('safetyBuiltinPreviewWrap').style.display=builtin?'flex':'none';
+ $('safetyCustomWordsLabel').textContent=builtin?'补充屏蔽词':'自定义屏蔽词';
+ $('safetyCustomExcludesLabel').textContent=builtin?'本分类排除词 / 白名单':'排除词 / 白名单';
  $('safetyBuiltinPreview').value=builtin?(builtin.hidden?'此分类内置词已隐藏，仅后端匹配使用。':(builtin.keywords||[]).join('\n')):'';
- $('safetyBuiltinPreview').style.display=builtin?'block':'none';
- $('safetyCustomWords').value=builtin?'':(custom.words||[]).join('\n');
- $('safetyCustomWords').disabled=!!builtin;
+ $('safetyCustomWords').value=builtin?((cfg.safety_custom_global&&cfg.safety_custom_global[id])||[]).join('\n'):(custom.words||[]).join('\n');
+ $('safetyCustomWords').disabled=false;
  $('safetyCustomExcludes').value=builtin?((cfg.safety_exclude_global&&cfg.safety_exclude_global[id])||[]).join('\n'):(custom.excludes||[]).join('\n');
 }
 function normalizeSafetyID(raw){return String(raw||'').toLowerCase().trim().replace(/[^a-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')}
@@ -1872,6 +1876,7 @@ function collectSafetyCategoryEditor(){
  ensureSafetyMaps();
  const oldID=selectedSafetyCategory;
  if(isBuiltinSafetyCategory(oldID)){
+  cfg.safety_custom_global[oldID]=splitWords($('safetyCustomWords').value);
   cfg.safety_exclude_global[oldID]=splitWords($('safetyCustomExcludes').value);
   return;
  }
@@ -1880,7 +1885,7 @@ function collectSafetyCategoryEditor(){
  item.words=splitWords($('safetyCustomWords').value);
  item.excludes=splitWords($('safetyCustomExcludes').value);
  cfg.safety_custom_categories[oldID]=item;
- cfg.safety_custom_global={}; cfg.safety_custom_platform={}; cfg.safety_exclude_platform={};
+ cfg.safety_custom_platform={}; cfg.safety_exclude_platform={};
 }
 function editSafetyCustomCategoryID(){
  if(isBuiltinSafetyCategory(selectedSafetyCategory)) return;

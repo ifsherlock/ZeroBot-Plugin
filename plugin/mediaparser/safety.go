@@ -22,7 +22,7 @@ const (
 
 	safetyMarkerTwitterSensitive = "__mediaparser_twitter_possibly_sensitive__"
 
-	currentSafetyCustomSeedVersion = 3
+	currentSafetyCustomSeedVersion = 4
 	currentSafetyDefaultVersion    = 3
 	currentSafetyTwitterVersion    = 1
 )
@@ -52,18 +52,17 @@ var safetyCategoryDefs = []safetyCategoryDef{
 		KeywordsB64: []string{
 			"bnNmdw==", "cjE4", "ci0xOA==", "MTgr", "YWR1bHQgY29udGVudA==", "ZXhwbGljaXQ=",
 			"cG9ybg==", "eHh4", "bnVkZQ==", "bnVkaXR5", "bGV3ZA==", "aGVudGFp",
-			"ZWNjaGk=", "b25seWZhbnM=", "ZmFuc2x5", "56aP5Yip5aes", "6buE5o6o", "5pOm6L65",
-			"5oiQ5Lq65YaF5a65", "6Zyy6aqo", "56eB5oi/", "6KO46IGK", "57qm54Ku", "5oiQ5Lq65ZCR",
-			"55S36I+p6JCo", "5aWz6I+p6JCo", "I+iFueiCjA==", "I+iWhOiCjA==", "I05TRlc=", "I+eUt+iPqeiQqA==",
-			"I+Wls+iPqeiQqA==", "5oiQ5Lq65ZCR44GR", "44Ko44Ot", "44GI44KN", "44OY44Oz44K/44Kk", "5aSJ5oWL",
-			"44OM44O844OJ", "44K744Oz44K344OG44Kj44OW", "7ISx7J24", "7ISx7J2466y8", "MTnquIg=", "7JW87Kek",
-			"7ZuE67Cp7KO87J2Y", "7J2M656A", "64W47Lac", "64iE65Oc",
+			"ZWNjaGk=", "b25seWZhbnM=", "ZmFuc2x5",
+			"5oiQ5Lq65YaF5a65", "6KO46IGK", "5oiQ5Lq65ZCR",
+			"I05TRlc=", "5oiQ5Lq65ZCR44GR", "44Ko44Ot", "44GI44KN", "44OY44Oz44K/44Kk",
+			"44OM44O844OJ", "7ISx7J2466y8", "MTnquIg=", "7JW87Kek",
+			"7ZuE67Cp7KO87J2Y", "7J2M656A", "64iE65Oc",
 			"d2F0dGE=", "Y2h1ZGFp", "Z29vbg==", "Z29vbmVy", "amF2", "d2F0YWE=",
-			"Z29vbmV0dGU=", "c3BpdA==", "amVyaw==",
-			"am9p", "Ym9w", "Z29vbmluZw==", "bnV0dHk=", "YmFiZWNvY2s=", "bnNmd3R3dA==",
-			"Y2hhdg==", "aG9ybnk=", "YW5pbWU=", "Y3Vt", "bWlsZg==", "Y3Vtc2x1dA==",
+			"Z29vbmV0dGU=",
+			"am9p", "Z29vbmluZw==", "YmFiZWNvY2s=", "bnNmd3R3dA==",
+			"Y3Vt", "bWlsZg==", "Y3Vtc2x1dA==",
 			"c2x1dA==", "Y3Vjaw==", "d2Fua2NoYXQ=", "bGV3ZHJw", "YmlnZGljaw==", "cHVzc3k=",
-			"YmlnYXNz", "YmJj", "c2V4",
+			"c2V4",
 			"X19tZWRpYXBhcnNlcl90d2l0dGVyX3Bvc3NpYmx5X3NlbnNpdGl2ZV9f",
 		},
 	},
@@ -71,23 +70,22 @@ var safetyCategoryDefs = []safetyCategoryDef{
 		ID:    safetyCategoryAd,
 		Label: "广告",
 		KeywordsB64: []string{
-			"dGVsZWdyYW0=", "dGfnpo/liKk=", "5byV5rWB", "56eB5L+h5Y+R6LWE5rqQ", "5LuY6LS556eB6IGK", "bGluayBpbiBiaW8=",
-			"ZG0gZm9yIG1lbnU=", "dW5sb2NrIGNvbnRlbnQ=", "cHJlbWl1bSBzbmFw", "b25seWZhbnMuY29t", "ZmFuc2x5LmNvbQ==", "bGlua3RyLmVl",
-			"ZnJlZSBvbmx5ZmFucyBsZWFr", "bGVha2VkIG51ZGVz", "5Y2a5b2p5bmz5Y+w", "572R6LWM", "5pyA5paw5Zyw5Z2A", "6Ziy6LWw5aSx",
-			"5aSH55So5Z+f5ZCN", "6Lez6L2s6ZO+5o6l", "5oiQ5Lq65a+86Iiq", "55yL54mH572R5Z2A", "Y3J5cHRvIGdpdmVhd2F5", "YWlyZHJvcCBzY2Ft",
-			"5Ye65Lya44GE57O7", "6KOP5Z6i5aWz5a2Q", "54Sh5L+u5q2j44Oq44Oz44Kv", "7ISx7J247IKs7J207Yq4", "67aI67KV7Yag7Yag", "64+E67CV7IKs7J207Yq4",
+			"dC5tZQ==", "dGfnpo/liKk=", "ZG0gZm9yIG1lbnU=", "b25seWZhbnMuY29t", "ZmFuc2x5LmNvbQ==",
+			"ZnJlZSBvbmx5ZmFucyBsZWFr", "bGVha2VkIG51ZGVz", "5Y2a5b2p5bmz5Y+w", "572R6LWM",
+			"5oiQ5Lq65a+86Iiq", "55yL54mH572R5Z2A", "Y3J5cHRvIGdpdmVhd2F5", "YWlyZHJvcCBzY2Ft",
+			"54Sh5L+u5q2j44Oq44Oz44Kv", "7ISx7J247IKs7J207Yq4", "67aI67KV7Yag7Yag", "64+E67CV7IKs7J207Yq4",
 		},
 	},
 	{
 		ID:    safetyCategoryViolence,
 		Label: "暴恐",
 		KeywordsB64: []string{
-			"5p6B56uv5pq05Yqb", "6KGA6IWl", "6JmQ5p2A", "5pap6aaW", "5YiG5bC4", "6IKi6Kej",
-			"5aSE5Yaz6KeG6aKR", "6Ieq5q6L55u05pKt", "5p6q5pSv5Lqk5piT", "5Lmw5p6q", "5Y2W5p6q", "54K46I2v6YWN5pa5",
-			"54iG54K454mp5Yi25L2c", "6Ieq5Yi254K45by5", "566h5Yi25YiA5YW35Lqk5piT", "Z29yZQ==", "Z3JhcGhpYyB2aW9sZW5jZQ==", "YmVoZWFkaW5n",
-			"ZGlzbWVtYmVybWVudA==", "ZXhlY3V0aW9uIHZpZGVv", "YnV5IGd1bg==", "Z2hvc3QgZ3Vu", "aG9tZW1hZGUgZXhwbG9zaXZl", "Ym9tYiBtYWtpbmc=",
-			"aWVkIHR1dG9yaWFs", "44Kw44Ot", "5q6L6JmQ", "5rWB6KGA", "5pas6aaW", "6YqD6LKp5aOy",
-			"54iG6Jas5L2c5oiQ", "54iG5by+5L2c5oiQ", "6rOg7Ja0", "7J6U7Zi5", "7LC47IiY", "7Jyg7ZiI",
+			"6JmQ5p2A", "5pap6aaW", "5YiG5bC4", "6IKi6Kej",
+			"5aSE5Yaz6KeG6aKR", "6Ieq5q6L55u05pKt", "5p6q5pSv5Lqk5piT", "54K46I2v6YWN5pa5",
+			"54iG54K454mp5Yi25L2c", "6Ieq5Yi254K45by5", "566h5Yi25YiA5YW35Lqk5piT", "Z3JhcGhpYyB2aW9sZW5jZQ==", "YmVoZWFkaW5n",
+			"ZGlzbWVtYmVybWVudA==", "ZXhlY3V0aW9uIHZpZGVv", "Z2hvc3QgZ3Vu", "aG9tZW1hZGUgZXhwbG9zaXZl", "Ym9tYiBtYWtpbmc=",
+			"aWVkIHR1dG9yaWFs", "5pas6aaW", "6YqD6LKp5aOy",
+			"54iG6Jas5L2c5oiQ", "54iG5by+5L2c5oiQ", "7LC47IiY",
 			"7LSd6riw6rGw656Y", "7Y+t7YOE7KCc7KGw", "7Y+t67Cc66y87KCc7KGw",
 		},
 	},
@@ -116,7 +114,64 @@ func defaultSafetyGlobalCategories() map[string]bool {
 }
 
 func seedSafetyCustomWords(cfg *config) bool {
-	return false
+	const id = "custom_adult_extra"
+	words := decodeSafetyBuiltinWords([]string{
+		"56aP5Yip5aes", "5aSW5Zu0", "5L+u6L2m", "5Zu95Lqn5Lmx5Lym", "5o6i6Iqx", "6KO46IGK",
+		"6Imy5Zu+", "6buE54mH", "55Wq5Y+3", "6KOP5Z6i", "6KOP5Z6i5aWz5a2Q", "6KOP5Z6i55S35a2Q",
+		"44Kq44OK44Oa", "44OR44Kk5Ye4", "44Oe44Oz5Ye4", "7J287YOI", "7J287YOI6rOE", "7IS57Yq4",
+		"7Jik7ZSE", "7KGw6rG0", "7IK07IOJ6rOE", "7JW87Kek", "5oCn5Lqk", "5YGa54ix",
+		"5ZWq5ZWq5ZWq", "5omT54Ku", "5YaF5bCE", "5Y+j5Lqk", "6IKb5Lqk", "6Ieq5oWw",
+		"5omT6aOe5py6", "6auY5r2u", "5Za35rC0", "5r2u5ZC5", "6aKc5bCE", "5Lit5Ye6",
+		"6L+35aW4", "5by65aW4", "6L2u5aW4", "aW50ZXJjb3Vyc2U=", "ZnVjaw==", "Ymxvd2pvYg==",
+		"Ymo=", "Y3VubmlsaW5ndXM=", "YW5hbA==", "Y3JlYW1waWU=", "b3JnYXNt", "c3F1aXJ0",
+		"bWFzdHVyYmF0aW9u", "aGFuZGpvYg==", "ZmFjaWFs", "Z2FuZ2Jhbmc=", "cmFwZQ==",
+		"44K744OD44Kv44K5", "5Lit5Ye644GX", "44OP44Oh5pKu44KK", "44OV44Kn44Op", "44Kv44Oz44OL",
+		"44Ki44OK44Or", "44Kq44OK44OL44O8", "5omL44Kz44Kt", "5pys55Wq", "5r2u5ZC544GN",
+		"44OR44Kk44K644Oq", "6aiO5LmX5L2N", "44Os44Kk44OX", "7IS57Iqk", "7ISx6rSA6rOE",
+		"7KeI64K07IKs7KCV", "7Jik656E", "7Y6g6528", "7L+g64uI", "7JWg64SQ", "7J6Q7JyE",
+		"65S465S47J20", "7Jik64KY64uI", "7KCI7KCV", "67aE7IiY", "7Ja87Iu4", "7YyM7J207KaI66as",
+		"6rCV6rCE", "6Zi06IyO", "6Zi06YGT", "6Zi06JKC", "552+5Li4", "6bih5be0",
+		"5bGM", "5bGE", "5Lmz5oi/", "5aW25aS0", "5Lmz5aS0", "5beo5Lmz",
+		"54iG5Lmz", "6Zyy54K5", "6Zyy6Zi0", "cGVuaXM=", "dmFnaW5h", "Y2xpdG9yaXM=",
+		"ZGljaw==", "Y29jaw==", "Y3VudA==", "Ym9vYnM=", "dGl0cw==", "bmlwcGxl",
+		"YnJlYXN0cw==", "Ym9vdHk=", "6Zmw6IyO", "44Gh44KT44GT", "44GK44Gh44KT44Gh44KT",
+		"6Zmw5qC4", "44Kv44Oq44OI44Oq44K5", "6Iaj", "44G+44KT44GT", "44GK44G+44KT44GT",
+		"44GK44Gj44Gx44GE", "5Lmz6aaW", "44Ot44O844Ki44Oz44Kw44Or", "7J2M6rK9", "7J6Q7KeA",
+		"6rys7LaU", "7J2M7Iic", "67O07KeA", "7JS5", "7YG066as", "7KCW6ryt7KeA",
+		"7Jyg65GQ", "6rGw7Jyg", "7Y+t7Jyg", "6LCD5pWZ", "5oCn5aW0", "57u/5bi9",
+		"5Li75LuG", "5o2G57uR", "6IKJ5L6/5Zmo", "5Y6f56WeaA==", "5ZCM5Lq6aA==", "6YeM55Wq",
+		"YmRzbQ==", "Ym9uZGFnZQ==", "ZmV0aXNo", "c3VibWlzc2l2ZQ==", "ZG9taW5hbnQ=", "Y3Vja29sZA==",
+		"ZXJvdGlj", "bnNmd2FydA==", "aGVudGFpYXJ0", "6Kq/5pWZ", "5aW06Zq3", "5a+d5Y+W44KJ44KM",
+		"bnRy", "57eK57ib", "44Ko44Ot44Ki44OL44Oh", "44Ko44Ot5ryr55S7", "5ZCM5Lq66KqM",
+		"44Ko44Ot44OR44Ot", "6rWs7IaN", "7IOI7JeE66eI", "6re87Lmc", "64ql7JqV", "7Y6o64+U",
+		"66mc64+U", "7JW87JWg64uI", "7JW866eM7ZmU", "64+Z7J247KeA",
+	})
+	if cfg.SafetyCustomCategories == nil {
+		cfg.SafetyCustomCategories = map[string]safetyCustomCategory{}
+	}
+	item := cfg.SafetyCustomCategories[id]
+	changed := false
+	if strings.TrimSpace(item.Label) == "" {
+		item.Label = "成人扩展"
+		changed = true
+	}
+	before := len(item.Words)
+	item.Words = uniqueSafetyWords(append(item.Words, words...))
+	if len(item.Words) != before {
+		changed = true
+	}
+	cfg.SafetyCustomCategories[id] = item
+	if cfg.SafetyPlatformCategories == nil {
+		cfg.SafetyPlatformCategories = map[string]map[string]bool{}
+	}
+	if cfg.SafetyPlatformCategories["twitter"] == nil {
+		cfg.SafetyPlatformCategories["twitter"] = map[string]bool{}
+	}
+	if !cfg.SafetyPlatformCategories["twitter"][id] {
+		cfg.SafetyPlatformCategories["twitter"][id] = true
+		changed = true
+	}
+	return changed
 }
 
 func safetyBuiltinWords(def safetyCategoryDef) []string {
@@ -239,8 +294,10 @@ func cloneSafetyCustomMap(in map[string][]string) map[string][]string {
 }
 
 func migrateLegacySafetyCustomWords(cfg *config) bool {
-	changed := mergeSafetyCustomCategorySeeds(cfg, cfg.SafetyCustomGlobal)
-	for cat, words := range cfg.SafetyExcludeGlobal {
+	legacyCustomGlobal, keptCustomGlobal := splitLegacyBuiltinWordMap(cfg.SafetyCustomGlobal)
+	legacyExcludeGlobal, keptExcludeGlobal := splitLegacyBuiltinWordMap(cfg.SafetyExcludeGlobal)
+	changed := mergeSafetyCustomCategorySeeds(cfg, legacyCustomGlobal)
+	for cat, words := range legacyExcludeGlobal {
 		cat = migrateSafetyCategoryID(cat)
 		if len(words) == 0 {
 			continue
@@ -300,14 +357,29 @@ func migrateLegacySafetyCustomWords(cfg *config) bool {
 			}
 		}
 	}
-	if len(cfg.SafetyCustomGlobal) > 0 || len(cfg.SafetyCustomPlatform) > 0 || len(cfg.SafetyExcludeGlobal) > 0 || len(cfg.SafetyExcludePlatform) > 0 {
-		cfg.SafetyCustomGlobal = map[string][]string{}
+	if len(legacyCustomGlobal) > 0 || len(cfg.SafetyCustomPlatform) > 0 || len(legacyExcludeGlobal) > 0 || len(cfg.SafetyExcludePlatform) > 0 {
+		cfg.SafetyCustomGlobal = keptCustomGlobal
 		cfg.SafetyCustomPlatform = map[string]map[string][]string{}
-		cfg.SafetyExcludeGlobal = map[string][]string{}
+		cfg.SafetyExcludeGlobal = keptExcludeGlobal
 		cfg.SafetyExcludePlatform = map[string]map[string][]string{}
 		changed = true
 	}
 	return changed
+}
+
+func splitLegacyBuiltinWordMap(in map[string][]string) (legacy map[string][]string, kept map[string][]string) {
+	legacy = map[string][]string{}
+	kept = map[string][]string{}
+	for cat, words := range in {
+		raw := normalizeSafetyCategory(cat)
+		migrated := migrateSafetyCategoryID(raw)
+		if raw != "" && raw == migrated && validSafetyCategory(raw) {
+			kept[raw] = uniqueSafetyWords(words)
+			continue
+		}
+		legacy[cat] = words
+	}
+	return legacy, kept
 }
 
 func migrateSafetyPlatformWords(cfg *config, src map[string]map[string][]string) bool {
@@ -635,6 +707,14 @@ func safetyBlocked(cfg config, meta mediaMeta, raw string) (safetyHit, bool) {
 					continue
 				}
 				return safetyHit{Category: def.ID, Keyword: word, Source: "builtin"}, true
+			}
+		}
+		for _, word := range cfg.SafetyCustomGlobal[def.ID] {
+			if safetyTextContains(normalized, word) {
+				if safetyExcluded(cfg, platform, def.ID, normalized) {
+					continue
+				}
+				return safetyHit{Category: def.ID, Keyword: word, Source: "builtin_custom"}, true
 			}
 		}
 	}
