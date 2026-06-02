@@ -1568,6 +1568,13 @@ function showPluginSection(name,updateHash=true){
 }
 function markDirty(){dirty=true; $('saveMsg').textContent='有未保存修改'}
 function checked(v){return v?' checked':''}
+function apiURL(path){
+ const u=new URL(path, location.origin);
+ u.username='';
+ u.password='';
+ return u.pathname+u.search+u.hash;
+}
+function apiFetch(path, options){return fetch(apiURL(path), options)}
 function switchHTML(expr,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+expr+'=this.checked;markDirty()"><span class="slider"></span></label>'}
 function actionSwitchHTML(fn,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+fn+'(this.checked)"><span class="slider"></span></label>'}
 function bindSwitch(map,key,name){return switchHTML("cfg."+key+"['"+name+"']", !!map[name])}
@@ -1608,7 +1615,7 @@ function updateAccessVisibility(){
  $('groupMsg').textContent=hasGroupMode?'群列表用于快速勾选当前群名单':'群聊名单已关闭，需要时选择白名单或黑名单';
 }
 async function refreshStatus(){
- const st=await (await fetch('/api/status')).json();
+ const st=await (await apiFetch('/api/status')).json();
  $('svc').innerHTML='<span class="ok">运行中</span>'; $('topState').textContent=dirty?'有未保存修改':'WebUI 已连接';
  const rt=st.runtime_status||{}; const bot=st.bot||{};
  $('self').innerHTML=botAccountsHTML(bot, rt); $('okn').textContent=rt.parse_success||0; $('failn').textContent=rt.parse_failed||0;
@@ -1670,16 +1677,16 @@ function renderQQBotAvailability(){
 }
 async function loadLogs(){
  try{
-  const data=await (await fetch('/api/logs?limit=80')).json();
+  const data=await (await apiFetch('/api/logs?limit=80')).json();
   const logs=data.logs||[];
   $('logSummary').innerHTML=logs.map(l=>'<div class="logLine"><b>'+escapeHTML(l.time+' '+String(l.level||'').toUpperCase())+'</b>'+escapeHTML(l.message||'')+'</div>').join('')||'<div class="muted">暂无程序日志</div>';
  }catch(e){$('logSummary').innerHTML='<div class="bad">日志读取失败：'+escapeHTML(e)+'</div>'}
 }
 async function load(){
- const data=await (await fetch('/api/mediaparser/config')).json();
- const sysData=await (await fetch('/api/system/settings')).json();
- const logoData=await (await fetch('/api/mediaparser/logos')).json();
- const authData=await (await fetch('/api/system/auth')).json();
+ const data=await (await apiFetch('/api/mediaparser/config')).json();
+ const sysData=await (await apiFetch('/api/system/settings')).json();
+ const logoData=await (await apiFetch('/api/mediaparser/logos')).json();
+ const authData=await (await apiFetch('/api/system/auth')).json();
  await loadCacheStats(false);
  cfg=data.config; platforms=data.platforms; safetyBuiltins=data.safety_builtins||[];
  sys=sysData.settings||{};
@@ -1779,7 +1786,7 @@ async function saveSystemSettings(){
    qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
   });
  }
- const r=await fetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ const r=await apiFetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  $('systemMsg').textContent=r.ok?'全局设置已保存':'全局设置保存失败';
  if(r.ok){const data=await r.json(); sys=data.settings||sys; renderSystemSettings(); await refreshStatus();}
 }
@@ -1790,7 +1797,7 @@ async function saveWebAuth(){
  if(!user){$('webAuthMsg').textContent='用户名不能为空'; return}
  if(!pass){$('webAuthMsg').textContent='新密码不能为空'; return}
  if(pass!==pass2){$('webAuthMsg').textContent='两次密码不一致'; return}
- const r=await fetch('/api/system/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:user,password:pass})});
+ const r=await apiFetch('/api/system/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:user,password:pass})});
  if(r.ok){
   $('webAuthPass').value=''; $('webAuthPass2').value='';
   $('webAuthMsg').textContent='登录账户已保存；刷新页面后使用新账户重新登录';
@@ -1801,12 +1808,12 @@ async function saveWebAuth(){
 async function restartSystem(){
  if(!confirm('确定重启机器人进程吗？systemd 会自动拉起新进程。')) return;
  $('systemMsg').textContent='正在重启进程...';
- try{await fetch('/api/system/restart',{method:'POST'}); setTimeout(()=>{location.reload()},5000)}catch(e){$('systemMsg').textContent='重启请求发送失败：'+e}
+ try{await apiFetch('/api/system/restart',{method:'POST'}); setTimeout(()=>{location.reload()},5000)}catch(e){$('systemMsg').textContent='重启请求发送失败：'+e}
 }
 async function loadGroups(force){
  try{
   $('groupMsg').textContent=force?'正在拉取群列表...':'正在读取群列表...';
-  const data=await (await fetch('/api/onebot/groups')).json();
+  const data=await (await apiFetch('/api/onebot/groups')).json();
   groups=data.groups||[]; $('groupMsg').textContent='已拉取 '+groups.length+' 个群';
   renderGroupPickers();
  }catch(e){$('groupMsg').textContent='群列表拉取失败：'+e}
@@ -2052,25 +2059,25 @@ async function save(){
  cfg.user_whitelist=parseList($('userWhitelist').value); cfg.user_blacklist=parseList($('userBlacklist').value);
  cfg.group_whitelist=parseList($('groupWhitelist').value); cfg.group_blacklist=parseList($('groupBlacklist').value);
  cfg.group_user_whitelist=parseList($('groupUserWhitelist').value); cfg.group_user_blacklist=parseList($('groupUserBlacklist').value);
- const r=await fetch('/api/mediaparser/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+ const r=await apiFetch('/api/mediaparser/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
  dirty=!r.ok; $('saveMsg').textContent=r.ok?'已保存':'保存失败';
  if(r.ok) await load();
 }
 function formatBytes(n){n=Number(n||0);if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
 function renderCacheStats(){if(!$('cacheFiles'))return;$('cacheFiles').textContent=cacheInfo?String(cacheInfo.files||0):'-';$('cacheSize').textContent=cacheInfo?formatBytes(cacheInfo.bytes||0):'-'}
-async function loadCacheStats(showMsg=true){try{cacheInfo=await (await fetch('/api/mediaparser/cache/stats')).json();renderCacheStats();if(showMsg&&$('cacheMsg'))$('cacheMsg').textContent='缓存统计已刷新'}catch(e){if(showMsg&&$('cacheMsg'))$('cacheMsg').textContent='缓存统计读取失败'}}
-async function clearCache(){const r=await (await fetch('/api/mediaparser/cache/clear',{method:'POST'})).json(); $('saveMsg').textContent='已清理 '+(r.removed||0)+' 个缓存目录'; if($('cacheMsg'))$('cacheMsg').textContent='已清理 '+(r.removed||0)+' 个缓存目录'; await loadCacheStats(false)}
+async function loadCacheStats(showMsg=true){try{cacheInfo=await (await apiFetch('/api/mediaparser/cache/stats')).json();renderCacheStats();if(showMsg&&$('cacheMsg'))$('cacheMsg').textContent='缓存统计已刷新'}catch(e){if(showMsg&&$('cacheMsg'))$('cacheMsg').textContent='缓存统计读取失败'}}
+async function clearCache(){const r=await (await apiFetch('/api/mediaparser/cache/clear',{method:'POST'})).json(); $('saveMsg').textContent='已清理 '+(r.removed||0)+' 个缓存目录'; if($('cacheMsg'))$('cacheMsg').textContent='已清理 '+(r.removed||0)+' 个缓存目录'; await loadCacheStats(false)}
 async function uploadLogo(platform){
  const input=$('logo-'+platform); if(!input.files||!input.files[0]) return;
  const fd=new FormData(); fd.append('file', input.files[0]);
- const r=await fetch('/api/mediaparser/logos?platform='+encodeURIComponent(platform),{method:'POST',body:fd});
+ const r=await apiFetch('/api/mediaparser/logos?platform='+encodeURIComponent(platform),{method:'POST',body:fd});
  $('saveMsg').textContent=r.ok?'Logo 已保存':'Logo 保存失败';
  await load();
 }
 async function cacheLogoURL(platform){
  const el=$('logoUrl-'+platform); const raw=String(el.value||'').trim(); if(!raw){$('saveMsg').textContent='请先粘贴 Logo 图片链接'; return}
  $('saveMsg').textContent='正在缓存 Logo...';
- const r=await fetch('/api/mediaparser/logos?platform='+encodeURIComponent(platform),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:raw})});
+ const r=await apiFetch('/api/mediaparser/logos?platform='+encodeURIComponent(platform),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:raw})});
  $('saveMsg').textContent=r.ok?'Logo 链接已缓存':'Logo 链接缓存失败';
  if(r.ok) el.value='';
  await load();
