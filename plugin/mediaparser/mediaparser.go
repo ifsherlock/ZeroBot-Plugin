@@ -155,6 +155,13 @@ type config struct {
 	KeylolASFForward   bool   `json:"keylol_asf_forward"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
+	CookieCloudEnabled         bool            `json:"cookiecloud_enabled"`
+	CookieCloudServer          string          `json:"cookiecloud_server"`
+	CookieCloudUUID            string          `json:"cookiecloud_uuid"`
+	CookieCloudPassword        string          `json:"cookiecloud_password"`
+	CookieCloudIntervalMinutes int             `json:"cookiecloud_interval_minutes"`
+	CookieCloudPlatforms       map[string]bool `json:"cookiecloud_platforms"`
+
 	UseYTDLPFallback     bool   `json:"use_yt_dlp_fallback"`
 	YTDLPPath            string `json:"yt_dlp_path"`
 	YTDLPCookieFile      string `json:"yt_dlp_cookie_file"`
@@ -261,6 +268,7 @@ func init() {
 		ctx.SendChain(message.Text(formatStatus()))
 	})
 	zero.OnMessage().SetBlock(false).Handle(handleAutoParse)
+	startCookieCloudSyncer()
 	startPluginWebUI()
 }
 
@@ -347,6 +355,8 @@ func defaultConfig() config {
 		KeylolLightTheme:           "classic",
 		KeylolDarkTheme:            "black",
 		KeylolASFForward:           true,
+		CookieCloudIntervalMinutes: 60,
+		CookieCloudPlatforms:       map[string]bool{},
 	}
 }
 
@@ -523,6 +533,24 @@ func normalizeConfig(cfg *config) bool {
 	cfg.KeylolCookie = strings.TrimSpace(cfg.KeylolCookie)
 	cfg.LinuxdoCookie = strings.TrimSpace(cfg.LinuxdoCookie)
 	cfg.LinuxdoUA = strings.TrimSpace(cfg.LinuxdoUA)
+	cfg.CookieCloudServer = strings.TrimSpace(cfg.CookieCloudServer)
+	cfg.CookieCloudUUID = strings.TrimSpace(cfg.CookieCloudUUID)
+	cfg.CookieCloudPassword = strings.TrimSpace(cfg.CookieCloudPassword)
+	if cfg.CookieCloudIntervalMinutes <= 0 {
+		cfg.CookieCloudIntervalMinutes = 60
+		changed = true
+	}
+	if cfg.CookieCloudPlatforms == nil {
+		cfg.CookieCloudPlatforms = map[string]bool{}
+		changed = true
+	} else {
+		for platform := range cfg.CookieCloudPlatforms {
+			if !cookieCloudSupportedPlatform(platform) {
+				delete(cfg.CookieCloudPlatforms, platform)
+				changed = true
+			}
+		}
+	}
 	cfg.KeylolFooter = strings.TrimSpace(cfg.KeylolFooter)
 	if cfg.KeylolFooter == "" {
 		cfg.KeylolFooter = "Keylol 帖子截图 · 浏览器渲染 · {time}"

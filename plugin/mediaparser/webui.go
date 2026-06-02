@@ -219,6 +219,18 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "files": files, "bytes": bytes})
 	})
+	mux.HandleFunc("/api/mediaparser/cookiecloud/sync", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
+		result, err := syncCookieCloudNow(true)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "result": result, "config": configForWeb()})
+	})
 	mux.HandleFunc("/api/mediaparser/logos", serveLogoAPI)
 	mux.HandleFunc("/api/mediaparser/logos/image", serveLogoImageAPI)
 	mux.HandleFunc("/api/onebot/groups", serveGroupListAPI)
@@ -466,6 +478,7 @@ func configForWeb() map[string]any {
 		"instagram_cookie",
 		"keylol_cookie",
 		"linuxdo_cookie",
+		"cookiecloud_password",
 		"yt_dlp_cookie_file",
 		"youtube_cookie_file",
 		"instagram_cookie_file",
@@ -481,9 +494,11 @@ func configForWeb() map[string]any {
 	out["instagram_cookie_set"] = strings.TrimSpace(cfg.InstagramCookie) != ""
 	out["keylol_cookie_set"] = strings.TrimSpace(cfg.KeylolCookie) != ""
 	out["linuxdo_cookie_set"] = strings.TrimSpace(cfg.LinuxdoCookie) != ""
+	out["cookiecloud_password_set"] = strings.TrimSpace(cfg.CookieCloudPassword) != ""
 	out["yt_dlp_cookie_file_set"] = strings.TrimSpace(cfg.YTDLPCookieFile) != ""
 	out["youtube_cookie_file_set"] = strings.TrimSpace(cfg.YouTubeCookieFile) != ""
 	out["instagram_cookie_file_set"] = strings.TrimSpace(cfg.InstagramCookieFile) != ""
+	out["cookiecloud_platform_options"] = cookieCloudPlatformOptions()
 	return out
 }
 
@@ -505,6 +520,9 @@ func preserveSecretConfigFields(next *config, old config) {
 	}
 	if strings.TrimSpace(next.LinuxdoCookie) == "" {
 		next.LinuxdoCookie = old.LinuxdoCookie
+	}
+	if strings.TrimSpace(next.CookieCloudPassword) == "" {
+		next.CookieCloudPassword = old.CookieCloudPassword
 	}
 	if strings.TrimSpace(next.YTDLPCookieFile) == "" {
 		next.YTDLPCookieFile = old.YTDLPCookieFile
@@ -1495,6 +1513,17 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="settingsCard">
+<div class="sectionTitle"><b>CookieCloud 同步</b><span class="muted">从内网 CookieCloud 拉取已登录浏览器 Cookie；只同步勾选的平台。</span></div>
+<div class="controlPills"><label class="row">启用同步 <span id="cookieCloudEnabledSwitch"></span></label><button type="button" onclick="syncCookieCloudNow()">立即同步</button><span class="muted" id="cookieCloudSyncMsg">默认关闭</span></div>
+<div class="settingsFields">
+<label class="field">服务端地址 <input id="cookieCloudServer" placeholder="http://10.10.10.x:8088"></label>
+<label class="field">UUID <input id="cookieCloudUUID" placeholder="CookieCloud UUID"></label>
+<label class="field">密码 <input id="cookieCloudPassword" type="password" placeholder="CookieCloud 密码"></label>
+<label class="field">同步间隔分钟 <input id="cookieCloudInterval" type="number" min="5" placeholder="60"></label>
+</div>
+<div class="groupList compact" id="cookieCloudPlatforms"></div>
+</div>
+<div class="settingsCard">
 <div class="sectionTitle"><b>Linux.do 过盾参数</b><span class="muted">从同一个已登录浏览器复制 Cookie 和 User-Agent；Cloudflare 盾较厚，二者不匹配时仍可能 403。</span></div>
 <div class="settingsFields">
 <label class="field">Linux.do Cookie <textarea id="linuxdoCookie" placeholder="_t=...; cf_clearance=..."></textarea></label>
@@ -1618,6 +1647,38 @@ function keylolDarkThemeValue(v){v=String(v||'black').toLowerCase();return v==='
 function pickRandom(arr,current){const pool=arr.filter(x=>x!==current);return (pool.length?pool:arr)[Math.floor(Math.random()*(pool.length?pool.length:arr.length))]}
 function randomKeylolLightTheme(){cfg.keylol_light_theme=pickRandom(['classic','blue','green','white'],keylolLightThemeValue(cfg.keylol_light_theme));renderKeylolThemeSwitches();markDirty()}
 function randomKeylolDarkTheme(){cfg.keylol_dark_theme=pickRandom(['black','dark'],keylolDarkThemeValue(cfg.keylol_dark_theme));renderKeylolThemeSwitches();markDirty()}
+function cookieCloudOptions(){return cfg.cookiecloud_platform_options||[{name:'bilibili',label:'B站'},{name:'xiaohongshu',label:'小红书'},{name:'youtube',label:'YouTube'},{name:'instagram',label:'Instagram'},{name:'keylol',label:'Keylol'},{name:'linuxdo',label:'Linux.do'}]}
+function renderCookieCloudSettings(){
+ if(!$('cookieCloudEnabledSwitch')) return;
+ cfg.cookiecloud_platforms=cfg.cookiecloud_platforms||{};
+ $('cookieCloudEnabledSwitch').innerHTML=switchHTML('cfg.cookiecloud_enabled',!!cfg.cookiecloud_enabled);
+ $('cookieCloudServer').value=cfg.cookiecloud_server||'';
+ $('cookieCloudUUID').value=cfg.cookiecloud_uuid||'';
+ setSecretInput('cookieCloudPassword', cfg.cookiecloud_password_set, 'CookieCloud 密码');
+ $('cookieCloudInterval').value=cfg.cookiecloud_interval_minutes||60;
+ $('cookieCloudPlatforms').innerHTML=cookieCloudOptions().map(p=>'<label class="groupItem"><input type="checkbox" data-platform="'+escapeHTML(p.name)+'" '+checked(!!cfg.cookiecloud_platforms[p.name])+' onchange="cfg.cookiecloud_platforms[this.dataset.platform]=this.checked;markDirty()"><span><b>'+escapeHTML(p.label||p.name)+'</b><small>'+escapeHTML(p.name)+'</small></span></label>').join('');
+}
+function collectCookieCloudSettings(){
+ if(!$('cookieCloudServer')) return;
+ cfg.cookiecloud_server=String($('cookieCloudServer').value||'').trim();
+ cfg.cookiecloud_uuid=String($('cookieCloudUUID').value||'').trim();
+ cfg.cookiecloud_password=String($('cookieCloudPassword').value||'').trim();
+ cfg.cookiecloud_interval_minutes=Number($('cookieCloudInterval').value||60);
+ cfg.cookiecloud_platforms=cfg.cookiecloud_platforms||{};
+}
+async function syncCookieCloudNow(){
+ collectCookieCloudSettings();
+ $('cookieCloudSyncMsg').textContent='同步中...';
+ const saved=await apiFetch('/api/mediaparser/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+ if(!saved.ok){$('cookieCloudSyncMsg').textContent='保存配置失败'; return}
+ const r=await apiFetch('/api/mediaparser/cookiecloud/sync',{method:'POST'});
+ if(!r.ok){$('cookieCloudSyncMsg').textContent='同步失败：'+await r.text(); return}
+ const data=await r.json();
+ cfg=data.config||cfg;
+ const res=(data.result||{});
+ $('cookieCloudSyncMsg').textContent='已更新：'+((res.updated||[]).join('、')||'无');
+ render();
+}
 function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
@@ -1736,6 +1797,7 @@ function render(){
 	setSecretInput('keylolCookie', cfg.keylol_cookie_set, 'key=value; key2=value2');
 	setSecretInput('linuxdoCookie', cfg.linuxdo_cookie_set, '_t=...; cf_clearance=...');
 	$('linuxdoUA').value=cfg.linuxdo_ua||'';
+	renderCookieCloudSettings();
 	$('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderKeylolThemeSwitches();
  renderCacheStats();
@@ -2060,6 +2122,7 @@ function deleteSafetyCustomCategory(){
 function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function save(){
  collectSafetyCategoryEditor();
+ collectCookieCloudSettings();
  if($('mediaShieldReplyText')) cfg.media_shield_reply_text=String($('mediaShieldReplyText').value||'').trim();
  if($('mediaShieldEmoji')) cfg.media_shield_emoji=String($('mediaShieldEmoji').value||'').trim();
  if($('mediaShieldKeywords')) cfg.media_shield_keywords=splitWords($('mediaShieldKeywords').value);

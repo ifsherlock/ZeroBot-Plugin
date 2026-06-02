@@ -197,6 +197,46 @@ func TestLinuxdoHeadersIncludeCookieAndUA(t *testing.T) {
 	}
 }
 
+func TestCookieCloudHeaderForDomains(t *testing.T) {
+	cookies := []cookieCloudCookie{
+		{Domain: ".linux.do", Name: "_t", Value: "token"},
+		{Domain: "www.linux.do", Name: "cf_clearance", Value: "clear"},
+		{Domain: ".example.com", Name: "skip", Value: "nope"},
+	}
+	got := cookieCloudHeaderForDomains(cookies, []string{"linux.do"})
+	if got != "_t=token; cf_clearance=clear" {
+		t.Fatalf("header=%q", got)
+	}
+	if !cookieCloudDomainMatch("static.youtube.com", []string{"youtube.com"}) {
+		t.Fatal("expected subdomain match")
+	}
+}
+
+func TestApplyCookieCloudCookiesUpdatesSelectedPlatforms(t *testing.T) {
+	oldConfigPath := configPath
+	oldConf := snapshotConfig()
+	configPath = filepath.Join(t.TempDir(), "config.json")
+	currentConf = defaultConfig()
+	defer func() {
+		configPath = oldConfigPath
+		currentConf = oldConf
+	}()
+
+	result := applyCookieCloudCookies([]cookieCloudPlatformSpec{
+		{Name: "linuxdo", Domains: []string{"linux.do"}},
+		{Name: "instagram", Domains: []string{"instagram.com"}},
+	}, []cookieCloudCookie{
+		{Domain: ".linux.do", Name: "_t", Value: "token"},
+		{Domain: ".instagram.com", Name: "sessionid", Value: "ig"},
+	})
+	if currentConf.LinuxdoCookie != "_t=token" || currentConf.InstagramCookie != "sessionid=ig" {
+		t.Fatalf("cookies not applied: linuxdo=%q instagram=%q", currentConf.LinuxdoCookie, currentConf.InstagramCookie)
+	}
+	if !containsString(result.Warnings, "linuxdo 缺少 cf_clearance") {
+		t.Fatalf("warnings=%v", result.Warnings)
+	}
+}
+
 func TestLinuxdoErrorSummaryDetectsCloudflare(t *testing.T) {
 	body := `<html><head><title>Just a moment...</title></head><body><script src="/cdn-cgi/challenge-platform/h/b"></script></body></html>`
 
