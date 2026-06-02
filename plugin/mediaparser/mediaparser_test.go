@@ -889,7 +889,7 @@ func TestOneBotLocalMediaTargetUsesMappedPathWhenNotLoopback(t *testing.T) {
 	}()
 
 	got := filepath.ToSlash(oneBotLocalMediaTarget(card))
-	want := "file:///host/data/cache/nested/card_test.png"
+	want := "file:///host/data/mediaparser/cache/nested/card_test.png"
 	if got != want {
 		t.Fatalf("target=%q, want %q", got, want)
 	}
@@ -946,7 +946,7 @@ func TestOneBotUploadFilePathPrefersMappedHostPath(t *testing.T) {
 	}()
 
 	got := filepath.ToSlash(oneBotUploadFilePath(archive))
-	want := filepath.ToSlash("/host/data/cache/nested/shield_0.zip")
+	want := filepath.ToSlash("/host/data/mediaparser/cache/nested/shield_0.zip")
 	if got != want {
 		t.Fatalf("upload path=%q, want %q", got, want)
 	}

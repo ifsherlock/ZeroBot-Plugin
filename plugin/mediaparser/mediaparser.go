@@ -2688,7 +2688,7 @@ func oneBotMappedLocalPath(path string) string {
 	if err != nil {
 		return ""
 	}
-	appDataAbs, err := filepath.Abs(filepath.Join(cacheDir, ".."))
+	appDataAbs, err := filepath.Abs(filepath.Join(cacheDir, "..", ".."))
 	if err != nil {
 		return ""
 	}
