@@ -73,35 +73,43 @@ func keylolBodyFontBytes(fallback []byte) []byte {
 
 func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	theme := keylolCardThemeNow()
 	const (
 		w        = 760
 		pad      = 40
 		panelPad = 28
 	)
-	bg := color.RGBA{R: 249, G: 241, B: 228, A: 255}
-	panel := color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	contentBG := color.RGBA{R: 245, G: 246, B: 248, A: 255}
-	titleColor := color.RGBA{R: 28, G: 32, B: 42, A: 255}
-	bodyColor := color.RGBA{R: 48, G: 54, B: 66, A: 255}
-	mutedColor := color.RGBA{R: 108, G: 116, B: 130, A: 255}
-	lineColor := color.RGBA{R: 224, G: 228, B: 235, A: 255}
+	bg := theme.BG
+	panel := theme.Panel
+	contentBG := linuxdoContentBoxColor(theme)
+	titleColor := theme.Title
+	bodyColor := theme.Body
+	mutedColor := theme.Muted
+	lineColor := theme.Line
 
 	contentXPad := 8
 	contentW := w - pad*2 - panelPad*2 - contentXPad*2
+	boxInset := 12
+	boxX := pad + panelPad + contentXPad + boxInset
+	boxW := contentW - boxInset*2
 	imageGroups := linuxdoPreviewImageGroups(meta.ImageURLs, 3)
 	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
 	imageH := 0
 	if len(images) > 0 {
-		imageH = 300
+		imageH = 270
 	}
 	titleLines := wrapDisplayTextByPixels(fontBytes, 30, firstNonEmpty(meta.Title, "Linux.do"), float64(contentW), 3)
 	body := strings.TrimSpace(meta.Desc)
 	if body == "" {
 		body = "暂无正文摘要"
 	}
-	bodyLines := wrapTextByPixels(gg.NewContext(w, 100), bodyFontBytes, 24, body, float64(contentW-32))
-	if len(bodyLines) > 14 {
-		bodyLines = bodyLines[:14]
+	bodyLines := wrapTextByPixels(gg.NewContext(w, 100), bodyFontBytes, 24, body, float64(boxW-36))
+	maxBodyLines := 12
+	if imageH > 0 {
+		maxBodyLines = 8
+	}
+	if len(bodyLines) > maxBodyLines {
+		bodyLines = bodyLines[:maxBodyLines]
 		rs := []rune(bodyLines[len(bodyLines)-1])
 		if len(rs) > 1 {
 			bodyLines[len(bodyLines)-1] = strings.TrimRight(string(rs[:len(rs)-1]), "，。！？；：,.!?;: ") + "..."
@@ -116,9 +124,9 @@ func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 	imageGap := 0
 	if imageH > 0 {
-		imageGap = 18
+		imageGap = 20
 	}
-	panelH := 96 + len(titleLines)*42 + 92 + contentBoxH + imageGap + imageH + 88
+	panelH := 38 + 58 + len(titleLines)*42 + 16 + 76 + 24 + contentBoxH + imageGap + imageH + 30 + 36 + 44
 	h := pad*2 + panelH
 
 	dc := gg.NewContext(w, h)
@@ -162,21 +170,20 @@ func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	y += 24
 
 	setRGB(dc, contentBG)
-	dc.DrawRoundedRectangle(float64(x), float64(y), float64(contentW), float64(contentBoxH), 12)
+	dc.DrawRoundedRectangle(float64(boxX), float64(y), float64(boxW), float64(contentBoxH), 12)
 	dc.Fill()
 	yy := y + 36
 	for _, line := range bodyLines {
-		drawInlineEmoji(dc, bodyFontBytes, 24, bodyColor, line, float64(x+18), float64(yy))
+		drawInlineEmoji(dc, bodyFontBytes, 24, bodyColor, line, float64(boxX+18), float64(yy))
 		yy += 34
 	}
 	y += contentBoxH
 	if imageH > 0 {
 		y += imageGap
-		imageInset := 8
-		drawLinuxdoImagePreview(dc, fontBytes, images, x+imageInset, y, contentW-imageInset*2, imageH, len(meta.ImageURLs), lineColor)
+		drawLinuxdoImagePreview(dc, fontBytes, images, boxX, y, boxW, imageH, len(meta.ImageURLs), lineColor)
 		y += imageH
 	}
-	y += 24
+	y += 30
 	setRGB(dc, lineColor)
 	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 1)
 	dc.Fill()
@@ -185,6 +192,33 @@ func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	footer = truncateTextByPixels(fontBytes, 18, "🔗 "+footer, float64(contentW))
 	drawInlineEmoji(dc, fontBytes, 18, mutedColor, footer, float64(x), float64(y))
 	return saveCardPNG(dc, meta)
+}
+
+func linuxdoContentBoxColor(theme keylolCardTheme) color.RGBA {
+	if keylolThemeDark(theme) {
+		return color.RGBA{
+			R: clampColorInt(int(theme.Panel.R) + 12),
+			G: clampColorInt(int(theme.Panel.G) + 12),
+			B: clampColorInt(int(theme.Panel.B) + 12),
+			A: 255,
+		}
+	}
+	return color.RGBA{
+		R: clampColorInt(int(theme.Panel.R) - 10),
+		G: clampColorInt(int(theme.Panel.G) - 9),
+		B: clampColorInt(int(theme.Panel.B) - 7),
+		A: 255,
+	}
+}
+
+func clampColorInt(v int) uint8 {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return uint8(v)
 }
 
 func linuxdoPreviewImageGroups(groups [][]string, limit int) [][]string {
