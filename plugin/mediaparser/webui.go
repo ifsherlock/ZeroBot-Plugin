@@ -465,6 +465,7 @@ func configForWeb() map[string]any {
 		"youtube_cookie",
 		"instagram_cookie",
 		"keylol_cookie",
+		"linuxdo_cookie",
 		"yt_dlp_cookie_file",
 		"youtube_cookie_file",
 		"instagram_cookie_file",
@@ -479,6 +480,7 @@ func configForWeb() map[string]any {
 	out["youtube_cookie_set"] = strings.TrimSpace(cfg.YouTubeCookie) != ""
 	out["instagram_cookie_set"] = strings.TrimSpace(cfg.InstagramCookie) != ""
 	out["keylol_cookie_set"] = strings.TrimSpace(cfg.KeylolCookie) != ""
+	out["linuxdo_cookie_set"] = strings.TrimSpace(cfg.LinuxdoCookie) != ""
 	out["yt_dlp_cookie_file_set"] = strings.TrimSpace(cfg.YTDLPCookieFile) != ""
 	out["youtube_cookie_file_set"] = strings.TrimSpace(cfg.YouTubeCookieFile) != ""
 	out["instagram_cookie_file_set"] = strings.TrimSpace(cfg.InstagramCookieFile) != ""
@@ -500,6 +502,9 @@ func preserveSecretConfigFields(next *config, old config) {
 	}
 	if strings.TrimSpace(next.KeylolCookie) == "" {
 		next.KeylolCookie = old.KeylolCookie
+	}
+	if strings.TrimSpace(next.LinuxdoCookie) == "" {
+		next.LinuxdoCookie = old.LinuxdoCookie
 	}
 	if strings.TrimSpace(next.YTDLPCookieFile) == "" {
 		next.YTDLPCookieFile = old.YTDLPCookieFile
@@ -1484,6 +1489,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">YouTube Cookie <textarea id="youtubeCookie" placeholder="VISITOR_INFO1_LIVE=...; SID=..."></textarea></label>
 <label class="field">Instagram Cookie <textarea id="instagramCookie" placeholder="sessionid=...; ds_user_id=..."></textarea></label>
 <label class="field">Keylol Cookie <textarea id="keylolCookie" placeholder="key=value; key2=value2"></textarea></label>
+<label class="field">Linux.do Cookie <textarea id="linuxdoCookie" placeholder="_t=...; cf_clearance=..."></textarea></label>
+<label class="field">Linux.do User-Agent <textarea id="linuxdoUA" placeholder="从同一个已登录浏览器复制 User-Agent；留空使用默认 UA"></textarea></label>
 </div>
 </div>
 </div>
@@ -1712,10 +1719,12 @@ function render(){
  if($('proxySummaryText')) $('proxySummaryText').textContent=cfg.proxy||'未配置';
  setSecretInput('bilibiliCookie', cfg.bilibili_cookie_set, 'SESSDATA=...; bili_jct=...');
  setSecretInput('xiaohongshuCookie', cfg.xiaohongshu_cookie_set, 'a1=...; web_session=...');
- setSecretInput('youtubeCookie', cfg.youtube_cookie_set, 'VISITOR_INFO1_LIVE=...; SID=...');
- setSecretInput('instagramCookie', cfg.instagram_cookie_set, 'sessionid=...; ds_user_id=...');
- setSecretInput('keylolCookie', cfg.keylol_cookie_set, 'key=value; key2=value2');
- $('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
+	setSecretInput('youtubeCookie', cfg.youtube_cookie_set, 'VISITOR_INFO1_LIVE=...; SID=...');
+	setSecretInput('instagramCookie', cfg.instagram_cookie_set, 'sessionid=...; ds_user_id=...');
+	setSecretInput('keylolCookie', cfg.keylol_cookie_set, 'key=value; key2=value2');
+	setSecretInput('linuxdoCookie', cfg.linuxdo_cookie_set, '_t=...; cf_clearance=...');
+	$('linuxdoUA').value=cfg.linuxdo_ua||'';
+	$('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderKeylolThemeSwitches();
  renderCacheStats();
  $('keylolASFForwardSwitch').innerHTML=switchHTML('cfg.keylol_asf_forward', cfg.keylol_asf_forward!==false);
@@ -2048,7 +2057,7 @@ async function save(){
  if($('safetyNoticeText')) cfg.safety_filter_notice_text=String($('safetyNoticeText').value||'').trim();
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim();
- cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
+	cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim(); cfg.linuxdo_cookie=String($('linuxdoCookie').value||'').trim(); cfg.linuxdo_ua=String($('linuxdoUA').value||'').trim();
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
  cfg.keylol_theme=String(cfg.keylol_theme||'auto').trim()||'auto';
  cfg.keylol_light_theme=keylolLightThemeValue($('keylolLightTheme')?$('keylolLightTheme').value:cfg.keylol_light_theme);

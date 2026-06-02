@@ -180,6 +180,35 @@ func TestParseLinuxdoTopicJSON(t *testing.T) {
 	}
 }
 
+func TestLinuxdoHeadersIncludeCookieAndUA(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.LinuxdoCookie = "_t=token; cf_clearance=clearance"
+	cfg.LinuxdoUA = "UnitTest/Linuxdo"
+
+	headers := linuxdoHeaders(cfg, "https://linux.do/t/topic/123")
+	if headers["Cookie"] != cfg.LinuxdoCookie {
+		t.Fatalf("cookie header=%q", headers["Cookie"])
+	}
+	if headers["User-Agent"] != cfg.LinuxdoUA {
+		t.Fatalf("ua header=%q", headers["User-Agent"])
+	}
+	if headers["Origin"] != linuxdoBase {
+		t.Fatalf("origin=%q", headers["Origin"])
+	}
+}
+
+func TestLinuxdoErrorSummaryDetectsCloudflare(t *testing.T) {
+	body := `<html><head><title>Just a moment...</title></head><body><script src="/cdn-cgi/challenge-platform/h/b"></script></body></html>`
+
+	got := linuxdoErrorSummary(body)
+	if !strings.Contains(got, "title=\"Just a moment...\"") || !strings.Contains(got, "cloudflare_challenge") {
+		t.Fatalf("summary=%q", got)
+	}
+	if !strings.Contains(got, "body_len=") || !strings.Contains(got, "snippet=") {
+		t.Fatalf("summary missing diagnostics: %q", got)
+	}
+}
+
 func TestRenderLinuxdoShareCard(t *testing.T) {
 	oldCacheDir := cacheDir
 	cacheDir = t.TempDir()

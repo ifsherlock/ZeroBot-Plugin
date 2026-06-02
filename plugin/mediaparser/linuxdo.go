@@ -6,6 +6,7 @@ import (
 	"html"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -21,27 +22,83 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, fmt.Errorf("linux.do topic id not found")
 	}
 	api := linuxdoBase + "/t/" + topicID + ".json"
-	headers := linuxdoHeaders(raw)
+	headers := linuxdoHeaders(cfg, raw)
 	body, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", api, headers, true)
 	if err != nil {
 		return mediaMeta{}, err
 	}
 	if status >= 400 {
-		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d: %s", status, truncate(body, 180))
+		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s", status, finalURL, linuxdoErrorSummary(body))
 	}
 	meta, err := parseLinuxdoTopicJSON(raw, finalURL, body)
 	if err != nil {
 		return mediaMeta{}, err
 	}
-	meta.VideoHeads = buildHeaders(true, linuxdoReferer, linuxdoUA)
-	meta.ImageHeads = buildHeaders(false, linuxdoReferer, linuxdoUA)
+	ua := linuxdoUserAgent(cfg)
+	meta.VideoHeads = buildHeaders(true, linuxdoReferer, ua)
+	meta.ImageHeads = buildHeaders(false, linuxdoReferer, ua)
+	if cfg.LinuxdoCookie != "" {
+		meta.VideoHeads["Cookie"] = cfg.LinuxdoCookie
+		meta.ImageHeads["Cookie"] = cfg.LinuxdoCookie
+	}
 	return meta, nil
 }
 
-func linuxdoHeaders(referer string) map[string]string {
-	headers := buildHeaders(false, firstNonEmpty(referer, linuxdoReferer), linuxdoUA)
+func linuxdoHeaders(cfg config, referer string) map[string]string {
+	headers := buildHeaders(false, firstNonEmpty(referer, linuxdoReferer), linuxdoUserAgent(cfg))
 	headers["Accept"] = "application/json,text/plain,*/*"
+	headers["Origin"] = linuxdoBase
+	if cfg.LinuxdoCookie != "" {
+		headers["Cookie"] = cfg.LinuxdoCookie
+	}
 	return headers
+}
+
+func linuxdoUserAgent(cfg config) string {
+	return firstNonEmpty(strings.TrimSpace(cfg.LinuxdoUA), linuxdoUA)
+}
+
+func linuxdoErrorSummary(body string) string {
+	clean := strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(body, " "))
+	title := ""
+	if m := regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`).FindStringSubmatch(body); len(m) > 1 {
+		title = strings.TrimSpace(html.UnescapeString(htmlUnescape(m[1])))
+	}
+	signals := []string{}
+	lower := strings.ToLower(body)
+	hasSignal := func(label string) bool {
+		for _, signal := range signals {
+			if signal == label {
+				return true
+			}
+		}
+		return false
+	}
+	for _, item := range []struct {
+		key   string
+		label string
+	}{
+		{"just a moment", "cloudflare_challenge"},
+		{"cf-browser-verification", "cloudflare_challenge"},
+		{"challenge-platform", "cloudflare_challenge"},
+		{"cf-mitigated", "cloudflare_mitigated"},
+		{"login", "login_hint"},
+	} {
+		if strings.Contains(lower, item.key) && !hasSignal(item.label) {
+			signals = append(signals, item.label)
+		}
+	}
+	parts := []string{fmt.Sprintf("body_len=%d", len(body))}
+	if title != "" {
+		parts = append(parts, fmt.Sprintf("title=%q", title))
+	}
+	if len(signals) > 0 {
+		parts = append(parts, "signals="+strings.Join(signals, ","))
+	}
+	if clean != "" {
+		parts = append(parts, "snippet="+strconv.Quote(truncate(clean, 320)))
+	}
+	return strings.Join(parts, " ")
 }
 
 func linuxdoTopicID(raw string) string {

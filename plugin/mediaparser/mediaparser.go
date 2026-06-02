@@ -146,6 +146,8 @@ type config struct {
 	YouTubeCookie      string `json:"youtube_cookie"`
 	InstagramCookie    string `json:"instagram_cookie"`
 	KeylolCookie       string `json:"keylol_cookie"`
+	LinuxdoCookie      string `json:"linuxdo_cookie"`
+	LinuxdoUA          string `json:"linuxdo_ua"`
 	KeylolFooter       string `json:"keylol_footer"`
 	KeylolTheme        string `json:"keylol_theme"`
 	KeylolLightTheme   string `json:"keylol_light_theme"`
@@ -519,6 +521,8 @@ func normalizeConfig(cfg *config) bool {
 	cfg.YouTubeCookie = strings.TrimSpace(cfg.YouTubeCookie)
 	cfg.InstagramCookie = strings.TrimSpace(cfg.InstagramCookie)
 	cfg.KeylolCookie = strings.TrimSpace(cfg.KeylolCookie)
+	cfg.LinuxdoCookie = strings.TrimSpace(cfg.LinuxdoCookie)
+	cfg.LinuxdoUA = strings.TrimSpace(cfg.LinuxdoUA)
 	cfg.KeylolFooter = strings.TrimSpace(cfg.KeylolFooter)
 	if cfg.KeylolFooter == "" {
 		cfg.KeylolFooter = "Keylol 帖子截图 · 浏览器渲染 · {time}"
