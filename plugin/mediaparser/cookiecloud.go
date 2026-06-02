@@ -1,6 +1,7 @@
 package mediaparser
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -145,14 +146,16 @@ func fetchCookieCloudCookies(cfg config) ([]cookieCloudCookie, error) {
 	if err != nil {
 		return nil, err
 	}
-	q := u.Query()
-	q.Set("password", strings.TrimSpace(cfg.CookieCloudPassword))
-	u.RawQuery = q.Encode()
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	body, err := json.Marshal(map[string]string{"password": strings.TrimSpace(cfg.CookieCloudPassword)})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, u.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -179,6 +182,9 @@ func fetchCookieCloudCookies(cfg config) ([]cookieCloudCookie, error) {
 		data = payload.Cookies
 	}
 	if len(data) == 0 {
+		if strings.TrimSpace(payload.Message) != "" {
+			return nil, fmt.Errorf("CookieCloud: %s", payload.Message)
+		}
 		return nil, fmt.Errorf("CookieCloud 未返回 cookie_data")
 	}
 	out := []cookieCloudCookie{}
