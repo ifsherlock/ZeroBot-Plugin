@@ -1498,6 +1498,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupList compact" id="mediaShieldGroupPicker"></div>
 </div>
 <div class="settingsCard">
+<div class="sectionTitle"><b>私聊白名单</b><span class="muted">默认关闭；开启后也只有白名单用户能触发 MediaShield。</span></div>
+<div class="controlPills"><label class="row">允许私聊 <span id="mediaShieldPrivateSwitch"></span></label></div>
+<label class="field">用户白名单<textarea id="mediaShieldUserEnabled" placeholder="每行一个用户 ID；OneBot 填 QQ 号，官方 QQBot 填日志里的映射 user_id" oninput="cfg.media_shield_user_enabled=parseList(this.value);markDirty()"></textarea></label>
+</div>
+<div class="settingsCard">
 <div class="sectionTitle"><b>回复文案</b><span class="muted">{password} 会替换成随机 6 位解压密码；文案里没有密码时会自动追加一行。</span></div>
 <div class="settingsFields single">
 <label class="field">密码回复文案 <input id="mediaShieldReplyText" placeholder="已打包，解压密码：{password}" oninput="cfg.media_shield_reply_text=this.value;markDirty()"></label>
@@ -1872,6 +1877,7 @@ function renderSafetySettings(){
 }
 function renderMediaShieldSettings(){
  if(!cfg) return;
+ cfg.media_shield_user_enabled=cfg.media_shield_user_enabled||{};
  cfg.media_shield_group_enabled=cfg.media_shield_group_enabled||{};
  if($('mediaShieldPluginStatus')){
   $('mediaShieldPluginStatus').textContent=cfg.media_shield_enabled?'已启用':'未启用';
@@ -1880,6 +1886,8 @@ function renderMediaShieldSettings(){
  if($('mediaShieldEnabledSwitch')) $('mediaShieldEnabledSwitch').innerHTML=switchHTML('cfg.media_shield_enabled', !!cfg.media_shield_enabled);
  if($('mediaShieldPassiveSwitch')) $('mediaShieldPassiveSwitch').innerHTML=switchHTML('cfg.media_shield_passive', cfg.media_shield_passive!==false);
  if($('mediaShieldActiveSwitch')) $('mediaShieldActiveSwitch').innerHTML=switchHTML('cfg.media_shield_active', cfg.media_shield_active!==false);
+ if($('mediaShieldPrivateSwitch')) $('mediaShieldPrivateSwitch').innerHTML=switchHTML('cfg.media_shield_private_enabled', !!cfg.media_shield_private_enabled);
+ if($('mediaShieldUserEnabled')) $('mediaShieldUserEnabled').value=listText(cfg.media_shield_user_enabled);
  if($('mediaShieldReplyText')) $('mediaShieldReplyText').value=cfg.media_shield_reply_text||'已打包，解压密码：{password}';
  if($('mediaShieldEmoji')) $('mediaShieldEmoji').value=cfg.media_shield_emoji||'😏';
  if($('mediaShieldKeywords')) $('mediaShieldKeywords').value=(cfg.media_shield_keywords||[]).join('\n');
@@ -2013,6 +2021,7 @@ async function save(){
  if($('mediaShieldKeywords')) cfg.media_shield_keywords=splitWords($('mediaShieldKeywords').value);
  if($('mediaShieldPassiveWords')) cfg.media_shield_passive_words=splitWords($('mediaShieldPassiveWords').value);
  if($('mediaShieldPassiveExcludes')) cfg.media_shield_passive_excludes=splitWords($('mediaShieldPassiveExcludes').value);
+ if($('mediaShieldUserEnabled')) cfg.media_shield_user_enabled=parseList($('mediaShieldUserEnabled').value);
  if($('safetyNoticeText')) cfg.safety_filter_notice_text=String($('safetyNoticeText').value||'').trim();
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim();

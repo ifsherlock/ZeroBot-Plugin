@@ -134,6 +134,8 @@ type config struct {
 	MediaShieldKeywords        []string                        `json:"media_shield_keywords"`
 	MediaShieldPassiveWords    []string                        `json:"media_shield_passive_words"`
 	MediaShieldPassiveExcludes []string                        `json:"media_shield_passive_excludes"`
+	MediaShieldPrivateEnabled  bool                            `json:"media_shield_private_enabled"`
+	MediaShieldUserEnabled     map[int64]bool                  `json:"media_shield_user_enabled"`
 	MediaShieldGroupEnabled    map[int64]bool                  `json:"media_shield_group_enabled"`
 	MediaShieldSeedVersion     int                             `json:"media_shield_seed_version"`
 
@@ -326,6 +328,8 @@ func defaultConfig() config {
 		MediaShieldKeywords:        defaultMediaShieldKeywords(),
 		MediaShieldPassiveWords:    []string{},
 		MediaShieldPassiveExcludes: []string{},
+		MediaShieldPrivateEnabled:  false,
+		MediaShieldUserEnabled:     map[int64]bool{},
 		MediaShieldGroupEnabled:    map[int64]bool{},
 		MediaShieldSeedVersion:     0,
 		AvoidAV1:                   true,
@@ -1104,11 +1108,13 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 	meta.Author = cardDisplayAuthor(meta.Author)
 	hit, blocked := safetyBlocked(cfg, meta, rawMessage)
 	groupID := int64(0)
+	userID := int64(0)
 	if ctx != nil && ctx.Event != nil {
 		groupID = ctx.Event.GroupID
+		userID = ctx.Event.UserID
 	}
-	if mediaShieldShouldHandle(cfg, meta, rawMessage, hit, blocked, groupID) {
-		if err := sendMediaShieldPackage(ctx, cfg, &meta, mediaShieldReason(cfg, meta, rawMessage, hit, blocked, groupID)); err != nil {
+	if mediaShieldShouldHandle(cfg, meta, rawMessage, hit, blocked, groupID, userID) {
+		if err := sendMediaShieldPackage(ctx, cfg, &meta, mediaShieldReason(cfg, meta, rawMessage, hit, blocked, groupID, userID)); err != nil {
 			logrus.Warnf("[mediaparser] media_shield_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
 			if blocked {
 				if cfg.SafetyFilterNotice {
@@ -2663,6 +2669,14 @@ func oneBotLoopbackCacheURL(path string) string {
 }
 
 func oneBotMappedFileURI(path string) string {
+	target := oneBotMappedLocalPath(path)
+	if target == "" {
+		return ""
+	}
+	return fileURI(target)
+}
+
+func oneBotMappedLocalPath(path string) string {
 	systemMu.RLock()
 	dataDir := runtimeSystem.OneBotDataDir
 	systemMu.RUnlock()
@@ -2682,7 +2696,18 @@ func oneBotMappedFileURI(path string) string {
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		return ""
 	}
-	return fileURI(filepath.Join(dataDir, rel))
+	return filepath.Join(dataDir, rel)
+}
+
+func oneBotUploadFilePath(path string) string {
+	if target := oneBotMappedLocalPath(path); target != "" {
+		return target
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return abs
 }
 
 func cachePublicURL(path string) string {

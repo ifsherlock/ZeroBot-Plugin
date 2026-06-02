@@ -81,6 +81,10 @@ func defaultMediaShieldPassiveExtraWords() []string {
 
 func normalizeMediaShieldConfig(cfg *config) bool {
 	changed := false
+	if cfg.MediaShieldUserEnabled == nil {
+		cfg.MediaShieldUserEnabled = map[int64]bool{}
+		changed = true
+	}
 	if cfg.MediaShieldGroupEnabled == nil {
 		cfg.MediaShieldGroupEnabled = map[int64]bool{}
 		changed = true
@@ -127,8 +131,8 @@ func normalizeMediaShieldConfig(cfg *config) bool {
 	return changed
 }
 
-func mediaShieldShouldHandle(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID int64) bool {
-	if !mediaShieldAvailableForGroup(cfg, meta, groupID) {
+func mediaShieldShouldHandle(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID, userID int64) bool {
+	if !mediaShieldAvailableForTarget(cfg, meta, groupID, userID) {
 		return false
 	}
 	if mediaShieldRiskBlocked(cfg, meta, raw) {
@@ -143,10 +147,10 @@ func mediaShieldShouldHandle(cfg config, meta mediaMeta, raw string, hit safetyH
 	return cfg.MediaShieldActive && mediaShieldActiveTriggered(cfg, raw)
 }
 
-func mediaShieldReason(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID int64) mediaShieldReasonInfo {
+func mediaShieldReason(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID, userID int64) mediaShieldReasonInfo {
 	active := false
 	passive := false
-	if mediaShieldAvailableForGroup(cfg, meta, groupID) && !mediaShieldRiskBlocked(cfg, meta, raw) {
+	if mediaShieldAvailableForTarget(cfg, meta, groupID, userID) && !mediaShieldRiskBlocked(cfg, meta, raw) {
 		passive = cfg.MediaShieldPassive && (mediaShieldHasTwitterSensitiveMarker(meta, raw) || (mediaShieldPassiveTriggered(cfg, meta, raw) && mediaShieldCanTakeoverBlocked(hit, blocked)))
 		active = cfg.MediaShieldActive && mediaShieldActiveTriggered(cfg, raw)
 	}
@@ -157,12 +161,12 @@ func mediaShieldReason(cfg config, meta mediaMeta, raw string, hit safetyHit, bl
 	}
 }
 
-func mediaShieldAvailableForGroup(cfg config, meta mediaMeta, groupID int64) bool {
+func mediaShieldAvailableForTarget(cfg config, meta mediaMeta, groupID, userID int64) bool {
 	if !cfg.MediaShieldEnabled || normalizePlatformName(meta.Platform) != "twitter" {
 		return false
 	}
 	if groupID == 0 {
-		return true
+		return cfg.MediaShieldPrivateEnabled && userID != 0 && cfg.MediaShieldUserEnabled[userID]
 	}
 	return cfg.MediaShieldGroupEnabled[groupID]
 }
@@ -390,20 +394,17 @@ func sanitizeMediaShieldZipName(name string, used map[string]int) string {
 }
 
 func uploadMediaShieldArchive(ctx *zero.Ctx, path string) error {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		abs = path
-	}
+	uploadPath := oneBotUploadFilePath(path)
 	name := filepath.Base(path)
 	if ctx.Event != nil && ctx.Event.GroupID != 0 {
-		ret := ctx.UploadThisGroupFile(abs, name, "")
+		ret := ctx.UploadThisGroupFile(uploadPath, name, "")
 		if ret.Status == "failed" {
 			return fmt.Errorf("group upload failed: %s%s", ret.Message, ret.Wording)
 		}
 		return nil
 	}
 	if ctx.Event != nil && ctx.Event.UserID != 0 {
-		if ret := ctx.UploadPrivateFile(ctx.Event.UserID, abs, name); strings.TrimSpace(ret) != "" && strings.Contains(strings.ToLower(ret), "failed") {
+		if ret := ctx.UploadPrivateFile(ctx.Event.UserID, uploadPath, name); strings.TrimSpace(ret) != "" && strings.Contains(strings.ToLower(ret), "failed") {
 			return fmt.Errorf("private upload failed: %s", ret)
 		}
 	}
