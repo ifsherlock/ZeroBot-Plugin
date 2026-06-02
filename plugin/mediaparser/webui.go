@@ -1247,7 +1247,7 @@ header{height:64px;display:flex;align-items:center;justify-content:space-between
 h1{font-size:18px;margin:0;font-weight:760}.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 64px)}.sidebar{padding:20px 14px;border-right:1px solid rgba(148,163,184,.25);background:rgba(255,255,255,.45)}.brand{font-weight:800;font-size:20px;margin:0 0 18px}.nav{display:flex;flex-direction:column;gap:6px}.nav a{color:#334155;text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover,.nav a.active{background:#fff;color:var(--blue);box-shadow:0 1px 0 rgba(15,23,42,.04)}
 .pluginHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.crumb{font-size:13px;color:var(--muted);margin-bottom:6px}.subnav{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.subnav button{height:32px;border-radius:999px}.subnav button.active{background:var(--blue);border-color:var(--blue);color:#fff}.plugin-section{display:none!important}.plugin-section.active{display:block!important}
 .wrap{max-width:1240px;width:100%;padding:22px 24px 40px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.hero h2{font-size:28px;line-height:1.1;margin:0}.hero p{margin:8px 0 0;color:var(--muted)}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.panel{background:rgba(255,255,255,.94);border:1px solid rgba(203,213,225,.9);border-radius:10px;padding:16px;box-shadow:var(--shadow)}.sectionTitle{display:flex;gap:10px;align-items:center;margin-bottom:12px}.sectionTitle b{font-size:16px}.span4{grid-column:span 4}.span2{grid-column:span 2}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.panel{background:rgba(255,255,255,.94);border:1px solid rgba(203,213,225,.9);border-radius:10px;padding:16px;box-shadow:var(--shadow)}.sectionTitle{display:flex;gap:10px;align-items:center;margin-bottom:12px}.sectionTitle b{font-size:16px;white-space:nowrap;flex:0 0 auto}.sectionTitle .muted{min-width:0;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.sectionTitle .right{flex:0 0 auto}.span4{grid-column:span 4}.span2{grid-column:span 2}
 .metric{display:flex;flex-direction:column;gap:6px;min-height:94px}.metric span:first-child{font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric b{font-size:26px}.muted{color:var(--muted)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}
 table{width:100%;border-collapse:separate;border-spacing:0;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{background:#f8fafc;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}tbody tr:hover{background:#fbfdff}
 button,select,input,textarea{border:1px solid var(--line);border-radius:8px;background:white;color:var(--text);padding:0 10px}button,select,input{height:34px}textarea{width:100%;min-height:110px;padding:9px 10px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}button{cursor:pointer;background:#fff;font-weight:650}button:hover{border-color:#b8c5d6}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button.danger{border-color:#fecdd3;color:var(--red);background:#fff7f7}
@@ -1287,21 +1287,21 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel metric page active" data-page="overview"><span class="muted">解析失败</span><b id="failn">-</b></div>
 <div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>最近消息</b><button class="right" onclick="toggleLastMsg()">展开</button></div><p class="muted lastMsg" id="lastMsg">-</p></div>
 <div class="panel span2 page active" data-page="overview"><div class="sectionTitle"><b>运行信息</b></div><div class="overviewList" id="runtimeSummary">-</div></div>
-<div class="panel span4 page active" data-page="overview"><div class="sectionTitle"><b>通道与插件</b><span class="muted">当前连接、解析策略和图片公开访问状态。</span></div><div class="overviewList" id="overviewDetails">-</div></div>
+<div class="panel span4 page active" data-page="overview"><div class="sectionTitle"><b>通道与插件</b><span class="muted">连接、策略和图片访问。</span></div><div class="overviewList" id="overviewDetails">-</div></div>
 <div class="panel span4 page" data-page="system" id="system">
-<div class="sectionTitle"><b>全局设置</b><span class="muted">端口和 WS 地址保存后需要重启服务生效；超级管理员、昵称、命令前缀会立即写入运行时。</span><span class="right msg" id="systemMsg"></span></div>
+<div class="sectionTitle"><b>全局设置</b><span class="muted">端口和 WS 需重启。</span><span class="right msg" id="systemMsg"></span></div>
 <div class="accessGrid">
 <label class="field">WebUI 监听地址 <input id="sysWebui" placeholder="0.0.0.0:3000"></label>
 <label class="field">OneBot WS 地址 <input id="sysWS" placeholder="ws://127.0.0.1:3001"></label>
 <label class="field">OneBot Token <input id="sysToken" type="password" placeholder="留空表示不修改"></label>
-<label class="field">OneBot 可见数据目录 <input id="onebotDataDir" placeholder="/home/jay/apps/mediaparser/data"><span class="muted">容器内 /app/data 对应的宿主机目录；llbot 不在容器内时用于 file:// 图片路径映射。</span></label>
+<label class="field">OneBot 可见数据目录 <input id="onebotDataDir" placeholder="/home/jay/apps/mediaparser/data"><span class="muted">用于 file:// 路径映射。</span></label>
 <label class="field">机器人昵称 <input id="sysNick" placeholder="ZeroBot"></label>
 <label class="field">命令前缀 <input id="sysPrefix" placeholder="/"></label>
 <label class="field">超级管理员 QQ <textarea id="sysSuperUsers" placeholder="一行一个 QQ"></textarea></label>
 </div>
 <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSystemSettings()">保存全局设置</button><span class="muted" id="sysPending"></span></div>
 <div class="settingsCard" style="margin-top:14px">
-<div class="sectionTitle"><b>WebUI 登录账户</b><span class="muted">密码会以加盐哈希保存，不落明文；保存后刷新页面并使用新账户重新登录。</span></div>
+<div class="sectionTitle"><b>WebUI 登录账户</b><span class="muted">密码加盐哈希保存。</span></div>
 <div class="settingsFields">
 <label class="field">用户名 <input id="webAuthUser" autocomplete="username" placeholder="admin"></label>
 <label class="field">新密码 <input id="webAuthPass" type="password" autocomplete="new-password" placeholder="输入新密码"></label>
@@ -1311,11 +1311,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
-<div class="sectionTitle"><b>插件中心</b><span class="muted">每个插件以后独立放入口，聚合解析只是其中一个配置页。</span></div>
+<div class="sectionTitle"><b>插件中心</b><span class="muted">插件入口集中管理。</span></div>
 <table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">基础群管理、欢迎语、提醒和精华消息能力。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">群管理和提醒。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="commandGrid" style="margin-top:12px">
 <div class="commandItem"><b>群管理</b><code>踢出群聊 QQ</code><code>开启全员禁言 / 解除全员禁言</code><code>禁言 @成员 10分钟 / 解除禁言 QQ</code></div>
 <div class="commandItem"><b>成员资料</b><code>修改名片 QQ 名片</code><code>修改头衔 QQ 头衔</code><code>申请头衔 头衔</code></div>
@@ -1324,45 +1324,45 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="commandItem"><b>提醒</b><code>在&quot;cron&quot;时提醒大家 内容</code><code>列出所有提醒</code><code>取消在&quot;cron&quot;的提醒</code></div>
 <div class="commandItem"><b>轻量功能</b><code>翻牌</code><code>赞我</code><code>群签到</code><code>回应表情 表情</code></div>
 </div>
-<p class="muted" style="margin-bottom:0">这些命令沿用聊天内权限判断。WebUI 暂不开放踢人、禁言等直接操作按钮，等 WebUI 鉴权做好后再接入可执行动作。</p>
+<p class="muted" style="margin-bottom:0">沿用聊天内权限判断。</p>
 </div>
 <div class="panel span4 page" data-page="qqbot" id="qqbot">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">官方通道能力较窄：解析卡片走 Markdown 图片，媒体下载和合并转发默认跳过。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">官方通道能力有限。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="settingsGrid">
 <div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>通道配置</b><span class="muted">AppID 和 Secret 保存后需要重启服务才会建立官方 Gateway 连接。</span></div>
-<div class="runtimeNote hidden" id="qqbotUnavailable">官方包无此功能。当前运行包没有加载 QQBot 驱动，下面配置仅在带 QQBot 驱动的私有运行包中可用。</div>
+<div class="sectionTitle"><b>通道配置</b><span class="muted">保存后需重启。</span></div>
+<div class="runtimeNote hidden" id="qqbotUnavailable">官方包无此功能。</div>
 <div class="settingsFields">
-<label class="field">启用官方 QQBot <span class="row"><label class="switch"><input id="qqbotEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">启用后会和 OneBot 通道并行监听。</span></span></label>
+<label class="field">启用官方 QQBot <span class="row"><label class="switch"><input id="qqbotEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">与 OneBot 并行。</span></span></label>
 <label class="field">通道名称 <input id="qqbotName" placeholder="qqbot"></label>
 <label class="field">AppID <input id="qqbotAppID" autocomplete="off"></label>
 <label class="field">AppSecret <input id="qqbotSecret" type="password" autocomplete="new-password" placeholder="留空表示不修改"></label>
 <label class="field">默认用户 OpenID <input id="qqbotOpenID" autocomplete="off" placeholder="私聊主动发送兜底目标，可留空"></label>
 <label class="field">默认群 OpenID <input id="qqbotGroupOpenID" autocomplete="off" placeholder="群聊主动发送兜底目标，可留空"></label>
 <label class="field">图片公网根地址 <input id="qqbotPublicBase" autocomplete="off" placeholder="例如：https://你的域名/cache/"></label>
-<label class="field">解析卡片 <span class="row"><label class="switch"><input id="qqbotCardEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">发送聚合解析卡片 PNG；需要图片公网根地址。</span></span></label>
-<label class="field">媒体图片下载 <span class="row"><label class="switch"><input id="qqbotMediaEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">只逐张发送图片，不发送视频，也不使用合并转发。</span></span></label>
-<label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">开启后文本消息按 Markdown 载荷发送。</span></span></label>
+<label class="field">解析卡片 <span class="row"><label class="switch"><input id="qqbotCardEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">发送卡片 PNG。</span></span></label>
+<label class="field">媒体图片下载 <span class="row"><label class="switch"><input id="qqbotMediaEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">只发图片。</span></span></label>
+<label class="field">Markdown 发送 <span class="row"><label class="switch"><input id="qqbotMarkdown" type="checkbox"><span class="slider"></span></label><span class="muted">文本走 Markdown。</span></span></label>
 </div>
-<div class="row"><button class="primary" id="qqbotSaveButton" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted" id="qqbotSaveHint">公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。</span></div>
+<div class="row"><button class="primary" id="qqbotSaveButton" onclick="saveSystemSettings()">保存 QQBot 配置</button><span class="muted" id="qqbotSaveHint">公网根地址用于 Markdown 图片。</span></div>
 </div>
 </div>
 <div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>能力范围</b><span class="muted">这里列的是官方 QQBot 通道下的实际表现。</span></div>
+<div class="sectionTitle"><b>能力范围</b><span class="muted">官方通道表现。</span></div>
 <div class="commandGrid">
 <div class="commandItem"><b>聚合解析</b><small class="ok">可用</small><code>文本链接解析</code><code>卡片 PNG 转公网 URL 后回发</code></div>
 <div class="commandItem"><b>媒体图片</b><small class="ok">可选</small><code>开启后逐张发送图片</code><code>不发送视频，不合并转发</code></div>
 <div class="commandItem"><b>控制功能</b><small class="muted">暂不接入</small><code>官方通道权限与事件模型差异较大</code></div>
 </div>
-<p class="muted" style="margin-bottom:0">当前实现会把官方 QQBot 消息转换成 OneBot 风格事件交给聚合解析处理；白名单使用日志里的映射 user_id。</p>
+<p class="muted" style="margin-bottom:0">白名单使用日志里的映射 user_id。</p>
 </div>
 </div>
 </div>
 </div>
 <div class="panel span4 page" data-page="mediaparser" id="mediaparserHead">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 聚合解析</div><div class="sectionTitle"><b>聚合解析</b><span class="muted">短视频、图文、动态、商品链接解析配置。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / 聚合解析</div><div class="sectionTitle"><b>聚合解析</b><span class="muted">链接解析配置。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="subnav" id="mediaparserTabs">
 <button class="active" data-plugin-tab="basic" onclick="showPluginSection('basic')">基础开关</button>
 <button data-plugin-tab="platforms" onclick="showPluginSection('platforms')">平台设置</button>
@@ -1375,18 +1375,18 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel span2 page plugin-section active" data-page="mediaparser" data-plugin-section="basic" id="global"><div class="sectionTitle"><b>聚合解析总开关</b><span class="right msg" id="saveMsg"></span></div><div class="controlPills" id="globalControls"></div></div>
 <div class="panel span2 page plugin-section active" data-page="mediaparser" data-plugin-section="basic"><div class="sectionTitle"><b>解析状态</b></div><p class="muted">解析成功 <b id="okn2">-</b> 次，失败 <b id="failn2">-</b> 次。</p></div>
 <div class="span4 page plugin-section" data-page="mediaparser" data-plugin-section="platforms" id="platforms">
-<div class="sectionTitle"><b>平台开关与 Logo</b><span class="muted">解析卡片表示识别链接并发送卡片；媒体下载表示额外发送原图、视频或合并转发。</span></div>
+<div class="sectionTitle"><b>平台开关与 Logo</b><span class="muted">控制卡片和媒体发送。</span></div>
 <table><thead><tr><th>平台</th><th>解析卡片</th><th>媒体下载</th><th>下载画质</th><th>Logo</th></tr></thead><tbody id="platformRows"></tbody></table>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="access" id="access">
-<div class="sectionTitle"><b>访问控制</b><span class="muted">先判断私聊/群号是否允许，再判断群聊发言人；三套名单互不影响。</span></div>
+<div class="sectionTitle"><b>访问控制</b><span class="muted">私聊、群、发言人分开。</span></div>
 <div class="row" style="margin-top:12px">
 <label>私聊模式 <select id="pmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
 <label>群聊模式 <select id="gmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
 <label>群成员模式 <select id="gumode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
 </div>
 <div class="accessGrid">
-<label class="field accessField" data-mode="pmode" data-kind="whitelist">私聊白名单<textarea id="userWhitelist" placeholder="每行填写一个。OneBot 填 QQ 号；官方 QQBot 填日志里的映射 user_id 长数字。"></textarea><span class="muted">官方 QQBot 的私聊 user_id 是映射后的长数字，不是 QQ 号；可以在用户向机器人发送消息后，从日志里获取。</span></label>
+<label class="field accessField" data-mode="pmode" data-kind="whitelist">私聊白名单<textarea id="userWhitelist" placeholder="每行一个。OneBot 填 QQ；QQBot 填映射 user_id。"></textarea><span class="muted">QQBot user_id 看日志。</span></label>
 <label class="field accessField" data-mode="pmode" data-kind="blacklist">用户黑名单<textarea id="userBlacklist" placeholder="一行一个 QQ 号"></textarea></label>
 <label class="field accessField" data-mode="gmode" data-kind="whitelist">群白名单<textarea id="groupWhitelist" placeholder="一行一个群号"></textarea></label>
 <label class="field accessField" data-mode="gmode" data-kind="blacklist">群黑名单<textarea id="groupBlacklist" placeholder="一行一个群号"></textarea></label>
@@ -1394,7 +1394,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field accessField" data-mode="gumode" data-kind="blacklist">群成员黑名单<textarea id="groupUserBlacklist" placeholder="想屏蔽某人就填这里"></textarea></label>
 </div>
 <div class="row" style="margin-top:12px">
-<button onclick="loadGroups(true)">刷新群列表</button><span class="muted" id="groupMsg">群列表用于快速勾选群白名单/群黑名单</span>
+<button onclick="loadGroups(true)">刷新群列表</button><span class="muted" id="groupMsg">用于快速勾选群名单</span>
 </div>
 <div class="groupTools">
 <div class="groupBox accessField" data-mode="gmode" data-kind="whitelist"><div class="row"><b>勾选到群白名单</b><input id="groupWhiteSearch" placeholder="搜索群名或群号" oninput="renderGroupPickers()"></div><div class="groupList" id="groupWhitePicker"></div></div>
@@ -1402,7 +1402,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="group-platform" id="group-platform">
-<div class="sectionTitle"><b>群平台开关</b><span class="muted">先选群，再选择这个群里要屏蔽哪些平台；不影响其他群。</span></div>
+<div class="sectionTitle"><b>群平台开关</b><span class="muted">只影响当前群。</span></div>
 <div class="row" style="margin-top:12px">
 <label>群 <select id="platformBlockGroupSelect" onchange="renderPlatformGroupBlock()"></select></label>
 <button class="danger" onclick="clearGroupPlatformBlock()">清空当前群屏蔽</button>
@@ -1411,12 +1411,12 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupBox" style="margin-top:12px"><div class="row"><b>当前群的平台屏蔽</b><input id="platformBlockSearch" placeholder="搜索平台" oninput="renderPlatformGroupBlock()"></div><div class="groupList" id="platformBlockPicker"></div></div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="safety" id="safety">
-<div class="sectionTitle"><b>内容安全</b><span class="muted">词库只按分类维护；平台页只选择额外启用哪些分类。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="sectionTitle"><b>内容安全</b><span class="muted">分类词库和平台启用。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="safetyGrid">
 <div class="safetyColumn">
 <div class="settingsCard safetyControlCard">
 <div class="safetyControlRow">
-<div class="safetyControlTitle"><b>开关</b><span class="muted">命中后停止发送卡片、媒体和合并转发。</span></div>
+<div class="safetyControlTitle"><b>开关</b><span class="muted">命中后停止发送。</span></div>
 <div class="controlPills"><label class="row">启用屏蔽 <span id="safetyEnabledSwitch"></span></label><label class="row">X 敏感标记 <span id="safetyTwitterSensitiveSwitch"></span></label><label class="row">命中提示 <span id="safetyNoticeSwitch"></span></label></div>
 </div>
 <label class="field safetyNoticeField">命中提示文案<input id="safetyNoticeText" placeholder="内容触发安全屏蔽，已停止解析。" oninput="cfg.safety_filter_notice_text=this.value;markDirty()"></label>
@@ -1424,7 +1424,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="safetyColumn">
 <div class="settingsCard safetyEditorCard">
-<div class="sectionTitle"><b id="safetyCategoryTitle">分类词库</b><span class="muted" id="safetyCategoryMeta">选择分类后直接预览和编辑。</span></div>
+<div class="sectionTitle"><b id="safetyCategoryTitle">分类词库</b><span class="muted" id="safetyCategoryMeta">选择后预览和编辑。</span></div>
 <div class="safetyEditorHead">
 <label class="field">选择分类<select id="safetyCategorySelect" onchange="selectSafetyCategory(this.value)"></select></label>
 <button onclick="addSafetyCustomCategory()">新建分类</button>
@@ -1443,11 +1443,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="safetyColumn">
 <div class="settingsCard safetyEnableCard">
-<div class="sectionTitle"><b>全局启用分类</b><span class="muted">勾选后对所有平台生效。</span></div>
+<div class="sectionTitle"><b>全局启用分类</b><span class="muted">对所有平台生效。</span></div>
 <div class="groupList" id="safetyGlobalCategories"></div>
 </div>
 <div class="settingsCard safetyEnableCard">
-<div class="sectionTitle"><b>平台启用分类</b><span class="muted">不单独存平台词库；这里只决定该平台额外启用哪些分类。</span></div>
+<div class="sectionTitle"><b>平台启用分类</b><span class="muted">选择平台额外分类。</span></div>
 <select id="safetyPlatformSelect" onchange="renderSafetyPlatformCategories()"></select>
 <div class="groupList" id="safetyPlatformCategories"></div>
 </div>
@@ -1455,11 +1455,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="runtime" id="runtime">
-<div class="sectionTitle"><b>运行配置</b><span class="muted">管理下载策略、代理、缓存、社区卡片和各平台登录态；Cookie 只保存在本机配置。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="sectionTitle"><b>运行配置</b><span class="muted">下载、代理、缓存、卡片和登录态。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="settingsGrid">
 <div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>下载规则</b><span class="muted">平台表里的画质会覆盖全局默认；视频体积超限时只发送预览卡片。</span></div>
+<div class="sectionTitle"><b>下载规则</b><span class="muted">平台画质优先；超限只发卡片。</span></div>
 <div class="settingsFields">
 <label class="field">全局视频画质 <select id="res"><option value="0">不限</option><option value="360">360p</option><option value="720">720p</option><option value="1080">1080p</option></select></label>
 <label class="field">最大发送体积 MB <input id="maxmb" type="number" min="1"></label>
@@ -1469,19 +1469,19 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>代理与提取器</b><span class="muted">网络代理只作用于海外平台和 Linux.do；YouTube extractor 参数用于 yt-dlp/网页解析降级。</span></div>
+<div class="sectionTitle"><b>代理与提取器</b><span class="muted">仅海外平台和 Linux.do 使用。</span></div>
 <div class="settingsFields single">
 <label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
-<label class="field">海外平台代理 <input id="proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"><span class="muted">仅 X/TikTok/YouTube/Instagram/Linux.do 生效，不影响国内平台。</span></label>
+<label class="field">海外平台代理 <input id="proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"><span class="muted">X/TikTok/YouTube/Instagram/Linux.do。</span></label>
 </div>
 <div class="proxySummary">
 <div class="proxyBadge"><b>适用平台</b><span>X / TikTok / YouTube / Instagram / Linux.do</span></div>
-<div class="proxyBadge"><b>连通提示</b><span>403 也可能代表代理已连通但站点风控</span></div>
+<div class="proxyBadge"><b>连通提示</b><span>403 可能是站点风控</span></div>
 <div class="proxyBadge"><b>当前配置</b><span id="proxySummaryText">未配置</span></div>
 </div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>缓存管理</b><span class="muted">统计当前媒体缓存文件数和占用空间。</span></div>
+<div class="sectionTitle"><b>缓存管理</b><span class="muted">查看或清理媒体缓存。</span></div>
 <div class="cacheCard">
 <div class="cacheStat"><span>缓存文件</span><b id="cacheFiles">-</b></div>
 <div class="cacheStat"><span>占用空间</span><b id="cacheSize">-</b></div>
@@ -1490,7 +1490,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="runtimeNote" id="cacheMsg">清理只影响媒体缓存，不会删除配置和 Cookie。</div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>BBS 卡片样式</b><span class="muted">Keylol 与 Linux.do 共用日夜配色；登录态在右侧单独配置。</span></div>
+<div class="sectionTitle"><b>BBS 卡片样式</b><span class="muted">Keylol / Linux.do 共用。</span></div>
 <div class="settingsFields single">
 <label class="field">Keylol 底部文案 <input id="keylolFooter" placeholder="Keylol · {author} 发布 · {time}"></label>
 </div>
@@ -1499,11 +1499,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">日间配色 <span class="fieldInline"><select id="keylolLightTheme" onchange="cfg.keylol_light_theme=this.value;markDirty()"><option value="classic">经典</option><option value="blue">蓝调</option><option value="green">绿野</option><option value="white">纯白</option></select><button type="button" onclick="randomKeylolLightTheme()">随机</button></span></label>
 <label class="field">夜间配色 <span class="fieldInline"><select id="keylolDarkTheme" onchange="cfg.keylol_dark_theme=this.value;markDirty()"><option value="black">纯黑</option><option value="dark">深色</option></select><button type="button" onclick="randomKeylolDarkTheme()">随机</button></span></label>
 </div>
-<div class="controlPills"><label class="row">Keylol ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">帖子含“复制ASF代码”时追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
+<div class="controlPills"><label class="row">Keylol ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">追加封面、名称、AppID。</span></div>
 </div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>平台登录态</b><span class="muted">用于登录后内容、高清视频和受限页面；留空保存会保留旧 Cookie，不会明文回显。</span></div>
+<div class="sectionTitle"><b>平台登录态</b><span class="muted">留空保存会保留旧 Cookie。</span></div>
 <div class="settingsFields">
 <label class="field">B站 Cookie <textarea id="bilibiliCookie" placeholder="SESSDATA=...; bili_jct=..."></textarea></label>
 <label class="field">小红书 Cookie <textarea id="xiaohongshuCookie" placeholder="a1=...; web_session=..."></textarea></label>
@@ -1513,7 +1513,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>CookieCloud 同步</b><span class="muted">从内网 CookieCloud 拉取已登录浏览器 Cookie；只同步勾选的平台。</span></div>
+<div class="sectionTitle"><b>CookieCloud 同步</b><span class="muted">只同步勾选平台。</span></div>
 <div class="controlPills"><label class="row">启用同步 <span id="cookieCloudEnabledSwitch"></span></label><button type="button" onclick="syncCookieCloudNow()">立即同步</button><span class="muted" id="cookieCloudSyncMsg">默认关闭</span></div>
 <div class="settingsFields">
 <label class="field">服务端地址 <input id="cookieCloudServer" placeholder="http://10.10.10.x:8088"></label>
@@ -1524,35 +1524,35 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="groupList compact" id="cookieCloudPlatforms"></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>Linux.do 过盾参数</b><span class="muted">从同一个已登录浏览器复制 Cookie 和 User-Agent；Cloudflare 盾较厚，二者不匹配时仍可能 403。</span></div>
+<div class="sectionTitle"><b>Linux.do 过盾参数</b><span class="muted">Cookie 和 UA 需同源。</span></div>
 <div class="settingsFields">
 <label class="field">Linux.do Cookie <textarea id="linuxdoCookie" placeholder="_t=...; cf_clearance=..."></textarea></label>
-<label class="field">Linux.do User-Agent <textarea id="linuxdoUA" placeholder="从同一个已登录浏览器复制 User-Agent；留空使用默认 UA"></textarea></label>
+<label class="field">Linux.do User-Agent <textarea id="linuxdoUA" placeholder="同一浏览器 UA；留空用默认"></textarea></label>
 </div>
-<div class="runtimeNote">解析失败日志会输出 body_len、页面标题和 Cloudflare 信号，方便判断是盾、登录态还是接口状态问题。</div>
+<div class="runtimeNote">日志会显示 403、页面标题和 Cloudflare 信号。</div>
 </div>
 </div>
 </div>
 <div class="panel span4 page" data-page="mediashield" id="mediashield">
-<div class="pluginHead"><div><div class="crumb">插件中心 / MediaShield</div><div class="sectionTitle"><b>MediaShield</b><span class="muted">X 平台专属：成人命中或主动词命中时，打码预览并发送带密码的媒体压缩包。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / MediaShield</div><div class="sectionTitle"><b>MediaShield</b><span class="muted">X 媒体打码和加密包。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="settingsGrid">
 <div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>触发开关</b><span class="muted">总开关默认关闭；关闭时不会接管内容安全屏蔽，也不会监听主动触发词。</span></div>
+<div class="sectionTitle"><b>触发开关</b><span class="muted">默认关闭。</span></div>
 <div class="controlPills"><label class="row">总开关 <span id="mediaShieldEnabledSwitch"></span></label><label class="row">被动检测 <span id="mediaShieldPassiveSwitch"></span></label><label class="row">主动触发 <span id="mediaShieldActiveSwitch"></span></label></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>群开关</b><span class="muted">只在勾选的群里启用；私聊不受群开关限制。</span></div>
+<div class="sectionTitle"><b>群开关</b><span class="muted">只在勾选群启用。</span></div>
 <div class="row"><input id="mediaShieldGroupSearch" placeholder="搜索群名或群号" oninput="renderMediaShieldGroups()"><button onclick="loadGroups(true)">刷新群列表</button></div>
 <div class="groupList compact" id="mediaShieldGroupPicker"></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>私聊白名单</b><span class="muted">默认关闭；开启后也只有白名单用户能触发 MediaShield。</span></div>
+<div class="sectionTitle"><b>私聊白名单</b><span class="muted">开启后按名单触发。</span></div>
 <div class="controlPills"><label class="row">允许私聊 <span id="mediaShieldPrivateSwitch"></span></label></div>
 <label class="field">用户白名单<textarea id="mediaShieldUserEnabled" placeholder="每行一个用户 ID；OneBot 填 QQ 号，官方 QQBot 填日志里的映射 user_id" oninput="cfg.media_shield_user_enabled=parseList(this.value);markDirty()"></textarea></label>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>回复文案</b><span class="muted">{password} 会替换成随机 6 位解压密码；文案里没有密码时会自动追加一行。</span></div>
+<div class="sectionTitle"><b>回复文案</b><span class="muted">{password} 会替换密码。</span></div>
 <div class="settingsFields single">
 <label class="field">密码回复文案 <input id="mediaShieldReplyText" placeholder="已打包，解压密码：{password}" oninput="cfg.media_shield_reply_text=this.value;markDirty()"></label>
 <label class="field">主动回应 emoji <input id="mediaShieldEmoji" maxlength="12" placeholder="😏" oninput="cfg.media_shield_emoji=this.value;markDirty()"></label>
@@ -1561,29 +1561,29 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="settingsStack">
 <div class="settingsCard">
-<div class="sectionTitle"><b>主动监听词</b><span class="muted">同一条消息里包含 X 链接和这些词时触发；一行一个，支持普通词、* / ? 通配、re:正则。</span></div>
+<div class="sectionTitle"><b>主动监听词</b><span class="muted">一行一个，支持通配和正则。</span></div>
 <label class="field">关键词<textarea id="mediaShieldKeywords" placeholder="一行一个；例如 色色、打包、setu、大雷" oninput="cfg.media_shield_keywords=splitWords(this.value);markDirty()"></textarea></label>
 <div class="row"><button class="primary" onclick="save()">保存 MediaShield 配置</button><span class="muted">仅作用于 X / Twitter 平台。</span></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>被动检测词库</b><span class="muted">这是 MediaShield 自己的词库，首次从成人内置/扩展词复制一份，之后和内容安全插件互不影响。</span></div>
+<div class="sectionTitle"><b>被动检测词库</b><span class="muted">独立词库，互不影响。</span></div>
 <div class="settingsFields">
 <label class="field">被动检测词<textarea id="mediaShieldPassiveWords" placeholder="一行一个；支持普通词、* / ? 通配、re:正则" oninput="cfg.media_shield_passive_words=splitWords(this.value);markDirty()"></textarea></label>
 <label class="field">排除词 / 白名单<textarea id="mediaShieldPassiveExcludes" placeholder="一行一个；命中这些词时不触发 MediaShield" oninput="cfg.media_shield_passive_excludes=splitWords(this.value);markDirty()"></textarea></label>
 </div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>当前链路</b><span class="muted">复用聚合解析的 X 解析、代理、媒体下载和缓存清理能力。</span></div>
+<div class="sectionTitle"><b>当前链路</b><span class="muted">复用 X 解析和缓存。</span></div>
 <div class="overviewList">
-<div class="infoLine"><b>被动检测</b><span class="muted">成人类安全命中后接管；政治、暴恐、广告等非成人命中仍走普通屏蔽。</span></div>
-<div class="infoLine"><b>主动触发</b><span class="muted">未被其他安全分类屏蔽时才触发，避免绕过高风险屏蔽。</span></div>
+<div class="infoLine"><b>被动检测</b><span class="muted">成人命中后接管。</span></div>
+<div class="infoLine"><b>主动触发</b><span class="muted">安全通过后触发。</span></div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">显示当前进程捕获到的程序日志，敏感 Cookie 会做基础脱敏。</span><button class="right" onclick="loadLogs()">刷新日志</button></div><div class="logList" id="logSummary">-</div></div>
-<div class="panel span4 page" data-page="maintenance" id="maintenance"><div class="sectionTitle"><b>数据维护</b><span class="muted">缓存、Logo、本地配置文件维护。</span></div><div class="row"><button class="danger" onclick="clearCache()">清理媒体缓存</button><span class="muted" id="maintenanceMsg">配置文件只保存在本机 data 目录，不会上传到 GitHub。</span></div></div>
+<div class="panel span4 page" data-page="logs" id="logs"><div class="sectionTitle"><b>日志诊断</b><span class="muted">Cookie 会脱敏。</span><button class="right" onclick="loadLogs()">刷新日志</button></div><div class="logList" id="logSummary">-</div></div>
+<div class="panel span4 page" data-page="maintenance" id="maintenance"><div class="sectionTitle"><b>数据维护</b><span class="muted">缓存、Logo、配置。</span></div><div class="row"><button class="danger" onclick="clearCache()">清理媒体缓存</button><span class="muted" id="maintenanceMsg">配置只保存在本机 data。</span></div></div>
 </section>
 </main>
 </div>
@@ -1676,7 +1676,11 @@ async function syncCookieCloudNow(){
  const data=await r.json();
  cfg=data.config||cfg;
  const res=(data.result||{});
- $('cookieCloudSyncMsg').textContent='已更新：'+((res.updated||[]).join('、')||'无');
+ const updated=(res.updated||[]), skipped=(res.skipped||[]), warnings=(res.warnings||[]);
+ let msg=updated.length?'已更新：'+updated.join('、'):'未匹配 Cookie';
+ if(skipped.length) msg+='；跳过 '+skipped.length+' 项';
+ if(warnings.length) msg+='；警告 '+warnings.length+' 项';
+ $('cookieCloudSyncMsg').textContent=msg;
  render();
 }
 function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
