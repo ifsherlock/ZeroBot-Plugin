@@ -284,8 +284,8 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 	}
 	logrus.Infof("[mediaparser] media_shield_zip_created platform=%s title=%q file=%s size_mb=%.1f elapsed=%s", meta.Platform, truncate(meta.Title, 80), filepath.Base(archive), fileSizeMB(archive), time.Since(zipStarted).Round(time.Millisecond))
 	scheduleDelete(archive, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-	if err := queueMediaShieldArchiveForward(ctx, cfg, archive, password, shieldCard, reason.Active, meta.Platform, meta.Title); err != nil {
-		return fmt.Errorf("queue forward: %w", err)
+	if err := queueMediaShieldDelivery(ctx, cfg, archive, password, shieldCard, reason.Active, meta.Platform, meta.Title); err != nil {
+		return fmt.Errorf("queue delivery: %w", err)
 	}
 	return nil
 }
@@ -422,7 +422,7 @@ func uploadMediaShieldArchive(ctx *zero.Ctx, path string) error {
 	return nil
 }
 
-func queueMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password, cardPath string, active bool, platform, title string) error {
+func queueMediaShieldDelivery(ctx *zero.Ctx, cfg config, path, password, cardPath string, active bool, platform, title string) error {
 	if ctx == nil || ctx.Event == nil {
 		return fmt.Errorf("missing event")
 	}
@@ -430,30 +430,34 @@ func queueMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password, c
 		return fmt.Errorf("missing target")
 	}
 	name := filepath.Base(path)
-	logrus.Infof("[mediaparser] media_shield_archive_forward_queued platform=%s title=%q file=%s", platform, truncate(title, 80), name)
+	logrus.Infof("[mediaparser] media_shield_delivery_queued platform=%s title=%q file=%s", platform, truncate(title, 80), name)
 	go func() {
 		started := time.Now()
-		if err := sendMediaShieldArchiveForward(ctx, cfg, path, password, cardPath, active); err != nil {
-			logrus.Warnf("[mediaparser] media_shield_archive_forward_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond), err)
+		if err := sendMediaShieldPreviewForward(ctx, cfg, password, cardPath, active); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_preview_forward_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond), err)
 			return
 		}
-		logrus.Infof("[mediaparser] media_shield_archive_forward_async_done platform=%s title=%q file=%s elapsed=%s", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond))
+		logrus.Infof("[mediaparser] media_shield_preview_forward_async_done platform=%s title=%q file=%s elapsed=%s", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond))
+		uploadStarted := time.Now()
+		if err := uploadMediaShieldArchive(ctx, path); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_archive_upload_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), name, time.Since(uploadStarted).Round(time.Millisecond), err)
+			return
+		}
+		logrus.Infof("[mediaparser] media_shield_archive_upload_async_done platform=%s title=%q file=%s elapsed=%s total_elapsed=%s", platform, truncate(title, 80), name, time.Since(uploadStarted).Round(time.Millisecond), time.Since(started).Round(time.Millisecond))
 	}()
 	return nil
 }
 
-func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password, cardPath string, active bool) error {
+func sendMediaShieldPreviewForward(ctx *zero.Ctx, cfg config, password, cardPath string, active bool) error {
 	if ctx == nil || ctx.Event == nil {
 		return fmt.Errorf("missing event")
 	}
-	uploadPath := oneBotUploadFilePath(path)
-	name := filepath.Base(path)
 	nickname, userID := mediaShieldForwardSender(ctx)
 	cardTarget := ""
 	if strings.TrimSpace(cardPath) != "" {
 		cardTarget = mediaShieldCardTarget(ctx, cardPath)
 	}
-	nodes := mediaShieldArchiveForwardNodes(nickname, userID, uploadPath, name, mediaShieldReplyText(cfg, password), cardTarget, active, strings.TrimSpace(cfg.MediaShieldEmoji))
+	nodes := mediaShieldPreviewForwardNodes(nickname, userID, mediaShieldReplyText(cfg, password), cardTarget, active, strings.TrimSpace(cfg.MediaShieldEmoji))
 	var resp zero.APIResponse
 	started := time.Now()
 	if ctx.Event.GroupID != 0 {
@@ -472,20 +476,20 @@ func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password, ca
 	elapsed := time.Since(started)
 	if resp.Status == "failed" {
 		if mediaShieldForwardMayStillComplete(resp, elapsed) {
-			logrus.Warnf("[mediaparser] media_shield_archive_forward_pending sender=%s(%d) file=%s elapsed=%s reason=%s", nickname, userID, name, elapsed.Round(time.Millisecond), mediaShieldForwardFailureText(resp))
+			logrus.Warnf("[mediaparser] media_shield_preview_forward_pending sender=%s(%d) elapsed=%s reason=%s", nickname, userID, elapsed.Round(time.Millisecond), mediaShieldForwardFailureText(resp))
 			return nil
 		}
-		return fmt.Errorf("forward failed: %s%s", resp.Message, resp.Wording)
+		return fmt.Errorf("preview forward failed: %s%s", resp.Message, resp.Wording)
 	}
 	resID := resp.Data.Get("message_id").Int()
 	if resID == 0 {
 		if mediaShieldForwardMayStillComplete(resp, elapsed) {
-			logrus.Warnf("[mediaparser] media_shield_archive_forward_pending sender=%s(%d) file=%s elapsed=%s", nickname, userID, name, elapsed.Round(time.Millisecond))
+			logrus.Warnf("[mediaparser] media_shield_preview_forward_pending sender=%s(%d) elapsed=%s", nickname, userID, elapsed.Round(time.Millisecond))
 			return nil
 		}
-		return fmt.Errorf("empty forward response")
+		return fmt.Errorf("empty preview forward response")
 	}
-	logrus.Infof("[mediaparser] media_shield_archive_forward_sent sender=%s(%d) file=%s message_id=%d", nickname, userID, name, resID)
+	logrus.Infof("[mediaparser] media_shield_preview_forward_sent sender=%s(%d) message_id=%d", nickname, userID, resID)
 	return nil
 }
 
@@ -510,7 +514,7 @@ func mediaShieldForwardFailureText(resp zero.APIResponse) string {
 	return strings.TrimSpace(resp.Message + resp.Wording)
 }
 
-func mediaShieldArchiveForwardNodes(nickname string, userID int64, file, name, reply, card string, active bool, emoji string) []map[string]any {
+func mediaShieldPreviewForwardNodes(nickname string, userID int64, reply, card string, active bool, emoji string) []map[string]any {
 	nodes := []map[string]any{}
 	if active && emoji != "" {
 		nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
@@ -524,13 +528,6 @@ func mediaShieldArchiveForwardNodes(nickname string, userID int64, file, name, r
 			"data": map[string]any{"file": card},
 		}}))
 	}
-	nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
-		"type": "file",
-		"data": map[string]any{
-			"file": file,
-			"name": name,
-		},
-	}}))
 	nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
 		"type": "text",
 		"data": map[string]any{

@@ -2337,43 +2337,45 @@ func TestMediaShieldForwardSenderUsesOriginalSender(t *testing.T) {
 	}
 }
 
-func TestMediaShieldArchiveForwardNodesUseNativeFileContent(t *testing.T) {
-	nodes := mediaShieldArchiveForwardNodes("sender", 12345, "/host/data/shield.zip", "shield.zip", "password: 123456", "file:///host/card.png", true, "smirk")
-	if len(nodes) != 4 {
-		t.Fatalf("nodes=%d, want 4", len(nodes))
+func TestMediaShieldPreviewForwardNodesIncludePreviewAndPassword(t *testing.T) {
+	nodes := mediaShieldPreviewForwardNodes("sender", 12345, "password: 123456", "file:///host/card.png", true, "smirk")
+	if len(nodes) != 3 {
+		t.Fatalf("nodes=%d, want 3", len(nodes))
 	}
-	data, ok := nodes[2]["data"].(map[string]any)
-	if !ok {
-		t.Fatalf("file node data has unexpected type %T", nodes[2]["data"])
-	}
-	content, ok := data["content"].([]map[string]any)
-	if !ok || len(content) != 1 {
-		t.Fatalf("file content=%T len=%d", data["content"], len(content))
-	}
-	if content[0]["type"] != "file" {
-		t.Fatalf("file content type=%v, want file", content[0]["type"])
-	}
-	fileData, ok := content[0]["data"].(map[string]any)
-	if !ok {
-		t.Fatalf("file content data has unexpected type %T", content[0]["data"])
-	}
-	if fileData["file"] != "/host/data/shield.zip" || fileData["name"] != "shield.zip" {
-		t.Fatalf("file data=%v", fileData)
+	wantTypes := []string{"text", "image", "text"}
+	for i, want := range wantTypes {
+		data, ok := nodes[i]["data"].(map[string]any)
+		if !ok {
+			t.Fatalf("node %d data has unexpected type %T", i, nodes[i]["data"])
+		}
+		content, ok := data["content"].([]map[string]any)
+		if !ok || len(content) != 1 {
+			t.Fatalf("node %d content=%T len=%d", i, data["content"], len(content))
+		}
+		if content[0]["type"] != want {
+			t.Fatalf("node %d type=%v, want %s", i, content[0]["type"], want)
+		}
 	}
 }
 
-func TestMediaShieldArchiveForwardNodesCanOmitPreview(t *testing.T) {
-	nodes := mediaShieldArchiveForwardNodes("sender", 12345, "/host/data/shield.zip", "shield.zip", "password: 123456", "", false, "")
-	if len(nodes) != 2 {
-		t.Fatalf("nodes=%d, want 2", len(nodes))
+func TestMediaShieldPreviewForwardNodesContainNoFileNode(t *testing.T) {
+	nodes := mediaShieldPreviewForwardNodes("sender", 12345, "password: 123456", "", false, "")
+	if len(nodes) != 1 {
+		t.Fatalf("nodes=%d, want 1", len(nodes))
 	}
 	data, ok := nodes[0]["data"].(map[string]any)
 	if !ok {
-		t.Fatalf("file node data has unexpected type %T", nodes[0]["data"])
+		t.Fatalf("node data has unexpected type %T", nodes[0]["data"])
 	}
 	content, ok := data["content"].([]map[string]any)
-	if !ok || len(content) != 1 || content[0]["type"] != "file" {
-		t.Fatalf("first node should be file content=%v", data["content"])
+	if !ok || len(content) != 1 {
+		t.Fatalf("content=%T len=%d", data["content"], len(content))
+	}
+	if content[0]["type"] == "file" {
+		t.Fatalf("preview forward should not contain file node")
+	}
+	if content[0]["type"] != "text" {
+		t.Fatalf("content type=%v, want text", content[0]["type"])
 	}
 }
 
