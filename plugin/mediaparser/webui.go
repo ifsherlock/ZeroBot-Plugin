@@ -1468,7 +1468,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsFields single">
 <label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
 </div>
-<div class="controlPills"><label class="row">自动日夜 <span id="keylolThemeAutoSwitch"></span></label><label class="row">黑夜模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">关闭自动后，黑夜模式开关才生效；白天使用彩色透明 Logo，黑夜使用白色透明 Logo。</span></div>
+<div class="controlPills"><label class="row">自动日夜 <span id="keylolThemeAutoSwitch"></span></label><label class="row">黑夜模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">自动模式按北京时间切换；手动模式由黑夜开关决定。</span></div>
+<div class="settingsFields">
+<label class="field">日间配色 <select id="keylolLightTheme" onchange="cfg.keylol_light_theme=this.value;markDirty()"><option value="classic">经典</option><option value="blue">蓝调</option><option value="green">绿野</option><option value="white">纯白</option></select></label>
+<label class="field">夜间配色 <select id="keylolDarkTheme" onchange="cfg.keylol_dark_theme=this.value;markDirty()"><option value="black">纯黑</option><option value="dark">深色</option></select></label>
+</div>
 <div class="controlPills"><label class="row">ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">帖子含“复制ASF代码”时追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
 </div>
 </div>
@@ -1575,7 +1579,19 @@ function resolutionCell(name){const v=cfg.platform_video_resolution&&Object.prot
 function setPlatformResolution(name,value){cfg.platform_video_resolution=cfg.platform_video_resolution||{}; if(value==='') delete cfg.platform_video_resolution[name]; else cfg.platform_video_resolution[name]=Number(value); markDirty()}
 function setKeylolThemeAuto(on){cfg.keylol_theme=on?'auto':((cfg.keylol_theme==='dark'||cfg.keylol_theme==='night'||cfg.keylol_theme==='black')?'dark':'light');renderKeylolThemeSwitches();markDirty()}
 function setKeylolThemeDark(on){cfg.keylol_theme=on?'dark':'light';renderKeylolThemeSwitches();markDirty()}
-function renderKeylolThemeSwitches(){const mode=String((cfg&&cfg.keylol_theme)||'auto').toLowerCase();const auto=mode==='auto'||!mode;const dark=mode==='dark'||mode==='night'||mode==='black';$('keylolThemeAutoSwitch').innerHTML=actionSwitchHTML('setKeylolThemeAuto',auto);$('keylolThemeDarkSwitch').innerHTML=actionSwitchHTML('setKeylolThemeDark',auto?false:dark);const darkInput=$('keylolThemeDarkSwitch').querySelector('input');if(darkInput) darkInput.disabled=auto}
+function renderKeylolThemeSwitches(){
+ const mode=String((cfg&&cfg.keylol_theme)||'auto').toLowerCase();
+ const auto=mode==='auto'||!mode;
+ const dark=mode==='dark'||mode==='night'||mode==='black';
+ $('keylolThemeAutoSwitch').innerHTML=actionSwitchHTML('setKeylolThemeAuto',auto);
+ $('keylolThemeDarkSwitch').innerHTML=actionSwitchHTML('setKeylolThemeDark',auto?false:dark);
+ const darkInput=$('keylolThemeDarkSwitch').querySelector('input');
+ if(darkInput) darkInput.disabled=auto;
+ if($('keylolLightTheme')) $('keylolLightTheme').value=keylolLightThemeValue(cfg&&cfg.keylol_light_theme);
+ if($('keylolDarkTheme')) $('keylolDarkTheme').value=keylolDarkThemeValue(cfg&&cfg.keylol_dark_theme);
+}
+function keylolLightThemeValue(v){v=String(v||'classic').toLowerCase();return ['classic','blue','green','white'].includes(v)?v:'classic'}
+function keylolDarkThemeValue(v){v=String(v||'black').toLowerCase();return v==='dark'?'dark':'black'}
 function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
@@ -2028,6 +2044,8 @@ async function save(){
  cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim();
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
  cfg.keylol_theme=String(cfg.keylol_theme||'auto').trim()||'auto';
+ cfg.keylol_light_theme=keylolLightThemeValue($('keylolLightTheme')?$('keylolLightTheme').value:cfg.keylol_light_theme);
+ cfg.keylol_dark_theme=keylolDarkThemeValue($('keylolDarkTheme')?$('keylolDarkTheme').value:cfg.keylol_dark_theme);
  cfg.keylol_asf_forward=cfg.keylol_asf_forward!==false;
  cfg.send_info_card=!!cfg.auto_parse; cfg.send_media=!!cfg.download_video; platforms.forEach(p=>{cfg.platform_info_card[p.name]=!!cfg.platform_enabled[p.name]; cfg.platform_send_media[p.name]=!!cfg.platform_download_video[p.name]});
  cfg.private_access_mode=$('pmode').value; cfg.group_access_mode=$('gmode').value; cfg.group_user_access_mode=$('gumode').value;

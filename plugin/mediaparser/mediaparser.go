@@ -148,6 +148,8 @@ type config struct {
 	KeylolCookie       string `json:"keylol_cookie"`
 	KeylolFooter       string `json:"keylol_footer"`
 	KeylolTheme        string `json:"keylol_theme"`
+	KeylolLightTheme   string `json:"keylol_light_theme"`
+	KeylolDarkTheme    string `json:"keylol_dark_theme"`
 	KeylolASFForward   bool   `json:"keylol_asf_forward"`
 	AvoidAV1           bool   `json:"avoid_av1"`
 
@@ -238,6 +240,7 @@ var platforms = []platform{
 	{Name: "xiaoheihe", Hosts: []string{"xiaoheihe.cn", "heybox.cn"}, Aliases: []string{"小黑盒", "heybox"}},
 	{Name: "twitter", Hosts: []string{"twitter.com", "x.com", "fxtwitter.com", "fixupx.com", "vxtwitter.com"}, Aliases: []string{"推特", "x"}},
 	{Name: "keylol", Hosts: []string{"keylol.com", "www.keylol.com"}, Aliases: []string{"Keylol", "keylol"}},
+	{Name: "linuxdo", Hosts: []string{"linux.do", "www.linux.do"}, Aliases: []string{"Linux.do", "linuxdo"}},
 	{Name: "steam", Hosts: []string{"store.steampowered.com"}, Aliases: []string{"Steam", "steam"}},
 }
 
@@ -339,6 +342,8 @@ func defaultConfig() config {
 		YouTubeExtractorArgs:       "youtube:player_client=default,android;formats=missing_pot",
 		KeylolFooter:               "Keylol 帖子截图 · 浏览器渲染 · {time}",
 		KeylolTheme:                "auto",
+		KeylolLightTheme:           "classic",
+		KeylolDarkTheme:            "black",
 		KeylolASFForward:           true,
 	}
 }
@@ -508,6 +513,21 @@ func normalizeConfig(cfg *config) bool {
 		}
 	default:
 		cfg.KeylolTheme = "auto"
+	}
+	cfg.KeylolLightTheme = strings.ToLower(strings.TrimSpace(cfg.KeylolLightTheme))
+	switch cfg.KeylolLightTheme {
+	case "classic", "blue", "green", "white", "light":
+		if cfg.KeylolLightTheme == "light" {
+			cfg.KeylolLightTheme = "white"
+		}
+	default:
+		cfg.KeylolLightTheme = "classic"
+	}
+	cfg.KeylolDarkTheme = strings.ToLower(strings.TrimSpace(cfg.KeylolDarkTheme))
+	switch cfg.KeylolDarkTheme {
+	case "black", "dark":
+	default:
+		cfg.KeylolDarkTheme = "black"
 	}
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"
@@ -1385,6 +1405,8 @@ func parseNative(cfg config, link parsedLink) (mediaMeta, error) {
 		return parseTwitter(cfg, link.URL)
 	case "keylol":
 		return parseKeylol(cfg, link.URL)
+	case "linuxdo":
+		return parseLinuxdo(cfg, link.URL)
 	case "steam":
 		return parseSteam(cfg, link.URL)
 	default:

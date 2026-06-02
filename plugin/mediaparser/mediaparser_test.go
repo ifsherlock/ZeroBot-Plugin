@@ -118,6 +118,102 @@ func TestExtractLinksUnescapesHTMLAmpersands(t *testing.T) {
 	}
 }
 
+func TestExtractLinksRecognizesLinuxdoTopics(t *testing.T) {
+	cfg := defaultConfig()
+	raw := `https://linux.do/t/topic-title/12345/2`
+	links := extractLinks(raw, cfg)
+	if len(links) != 1 {
+		t.Fatalf("links len=%d", len(links))
+	}
+	if links[0].Platform != "linuxdo" {
+		t.Fatalf("platform=%s", links[0].Platform)
+	}
+}
+
+func TestLinuxdoTopicID(t *testing.T) {
+	cases := map[string]string{
+		"https://linux.do/t/topic-title/12345":   "12345",
+		"https://linux.do/t/topic-title/12345/2": "12345",
+		"https://linux.do/t/12345.json":          "12345",
+	}
+	for raw, want := range cases {
+		if got := linuxdoTopicID(raw); got != want {
+			t.Fatalf("linuxdoTopicID(%q)=%q, want %q", raw, got, want)
+		}
+	}
+}
+
+func TestParseLinuxdoTopicJSON(t *testing.T) {
+	body := `{
+	  "id": 12345,
+	  "slug": "topic-title",
+	  "title": "Linux.do 分享图片功能",
+	  "post_stream": {
+	    "posts": [{
+	      "post_number": 1,
+	      "username": "neo",
+	      "name": "Neo",
+	      "avatar_template": "/user_avatar/linux.do/neo/{size}/1_2.png",
+	      "created_at": "2026-06-03T12:34:56.000Z",
+	      "cooked": "<p>这是主帖内容。</p><p><img src=\"/uploads/default/original/1X/test.png\"></p>"
+	    }]
+	  }
+	}`
+	meta, err := parseLinuxdoTopicJSON("https://linux.do/t/topic-title/12345", "https://linux.do/t/12345.json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Platform != "linuxdo" || meta.Title != "Linux.do 分享图片功能" || meta.Author != "Neo" {
+		t.Fatalf("meta=%+v", meta)
+	}
+	if !strings.Contains(meta.Desc, "这是主帖内容") {
+		t.Fatalf("desc=%q", meta.Desc)
+	}
+	if meta.URL != "https://linux.do/t/topic-title/12345/1" {
+		t.Fatalf("url=%q", meta.URL)
+	}
+	if len(meta.ImageURLs) != 1 || meta.ImageURLs[0][0] != "https://linux.do/uploads/default/original/1X/test.png" {
+		t.Fatalf("images=%v", meta.ImageURLs)
+	}
+	if meta.Avatar != "https://linux.do/user_avatar/linux.do/neo/120/1_2.png" {
+		t.Fatalf("avatar=%q", meta.Avatar)
+	}
+}
+
+func TestRenderLinuxdoShareCard(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
+	img := image.NewRGBA(image.Rect(0, 0, 360, 180))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 75, G: 122, B: 255, A: 255}}, image.Point{}, draw.Src)
+	imgSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		if err := png.Encode(w, img); err != nil {
+			t.Errorf("encode image: %v", err)
+		}
+	}))
+	defer imgSrv.Close()
+
+	meta := mediaMeta{
+		URL:       "https://linux.do/t/topic-title/12345/1",
+		SourceURL: "https://linux.do/t/topic-title/12345",
+		Platform:  "linuxdo",
+		Title:     "Linux.do 分享图片功能",
+		Author:    "Neo",
+		Timestamp: "2026-06-03 12:34:56",
+		Desc:      "这是主帖内容。\n第二行摘要。",
+		ImageURLs: [][]string{{imgSrv.URL + "/post.png"}},
+	}
+	out, err := renderInfoCard(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("card not saved: %v", err)
+	}
+}
+
 func TestExtractLinksRecognizesXianyuMtbShortLinks(t *testing.T) {
 	cfg := defaultConfig()
 	raw := `【闲鱼】https://m.tb.cn/h.RT9Lh91?tk=i31S5yHWj6i tG-#22&gt;lD 「快来捡漏」`

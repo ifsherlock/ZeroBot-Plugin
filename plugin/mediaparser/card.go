@@ -48,6 +48,9 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if meta.Platform == "keylol" {
 		return renderKeylolThreadCard(meta, fontBytes)
 	}
+	if meta.Platform == "linuxdo" {
+		return renderLinuxdoShareCard(meta, fontBytes)
+	}
 	if meta.Platform == "steam" {
 		return renderSteamGameCard(meta, fontBytes)
 	}
@@ -66,6 +69,227 @@ func keylolBodyFontBytes(fallback []byte) []byte {
 		return fallback
 	}
 	return fontBytes
+}
+
+func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	const (
+		w        = 760
+		pad      = 40
+		panelPad = 28
+	)
+	bg := color.RGBA{R: 249, G: 241, B: 228, A: 255}
+	panel := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	contentBG := color.RGBA{R: 245, G: 246, B: 248, A: 255}
+	titleColor := color.RGBA{R: 28, G: 32, B: 42, A: 255}
+	bodyColor := color.RGBA{R: 48, G: 54, B: 66, A: 255}
+	mutedColor := color.RGBA{R: 108, G: 116, B: 130, A: 255}
+	lineColor := color.RGBA{R: 224, G: 228, B: 235, A: 255}
+
+	contentXPad := 8
+	contentW := w - pad*2 - panelPad*2 - contentXPad*2
+	imageGroups := linuxdoPreviewImageGroups(meta.ImageURLs, 3)
+	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
+	imageH := 0
+	if len(images) > 0 {
+		imageH = 300
+	}
+	titleLines := wrapDisplayTextByPixels(fontBytes, 30, firstNonEmpty(meta.Title, "Linux.do"), float64(contentW), 3)
+	body := strings.TrimSpace(meta.Desc)
+	if body == "" {
+		body = "暂无正文摘要"
+	}
+	bodyLines := wrapTextByPixels(gg.NewContext(w, 100), bodyFontBytes, 24, body, float64(contentW-32))
+	if len(bodyLines) > 14 {
+		bodyLines = bodyLines[:14]
+		rs := []rune(bodyLines[len(bodyLines)-1])
+		if len(rs) > 1 {
+			bodyLines[len(bodyLines)-1] = strings.TrimRight(string(rs[:len(rs)-1]), "，。！？；：,.!?;: ") + "..."
+		}
+	}
+	if len(bodyLines) == 0 {
+		bodyLines = []string{"暂无正文摘要"}
+	}
+	contentBoxH := 34 + len(bodyLines)*34 + 32
+	if contentBoxH < 118 {
+		contentBoxH = 118
+	}
+	imageGap := 0
+	if imageH > 0 {
+		imageGap = 18
+	}
+	panelH := 96 + len(titleLines)*42 + 92 + contentBoxH + imageGap + imageH + 88
+	h := pad*2 + panelH
+
+	dc := gg.NewContext(w, h)
+	setRGB(dc, bg)
+	dc.Clear()
+	for i := 12; i >= 1; i-- {
+		dc.SetRGBA255(130, 96, 46, 3+i)
+		dc.DrawRoundedRectangle(float64(pad), float64(pad+i), float64(w-pad*2), float64(panelH), 18)
+		dc.Fill()
+	}
+	setRGB(dc, panel)
+	dc.DrawRoundedRectangle(float64(pad), float64(pad), float64(w-pad*2), float64(panelH), 18)
+	dc.Fill()
+
+	x := pad + panelPad + contentXPad
+	y := pad + 38
+	drawLinuxdoLogo(dc, fontBytes, x, y, titleColor)
+	y += 58
+	for _, line := range titleLines {
+		drawInlineEmoji(dc, fontBytes, 30, titleColor, line, float64(x), float64(y))
+		y += 42
+	}
+	y += 16
+
+	avatar := fetchCardImage(meta.Avatar, meta.ImageHeads)
+	drawAvatar(dc, fontBytes, avatar, x, y-4, 54, meta.Author)
+	drawInlineEmoji(dc, fontBytes, 23, titleColor, firstNonEmpty(meta.Author, "Linux.do 用户"), float64(x+72), float64(y+18))
+	sub := strings.TrimSpace(meta.Timestamp)
+	if sub != "" {
+		sub = "@" + strings.TrimSpace(meta.Author) + " · " + sub
+	} else if meta.Author != "" {
+		sub = "@" + strings.TrimSpace(meta.Author)
+	}
+	if sub != "" {
+		drawInlineEmoji(dc, fontBytes, 18, mutedColor, sub, float64(x+72), float64(y+48))
+	}
+	y += 76
+	setRGB(dc, lineColor)
+	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 1)
+	dc.Fill()
+	y += 24
+
+	setRGB(dc, contentBG)
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(contentW), float64(contentBoxH), 12)
+	dc.Fill()
+	yy := y + 36
+	for _, line := range bodyLines {
+		drawInlineEmoji(dc, bodyFontBytes, 24, bodyColor, line, float64(x+18), float64(yy))
+		yy += 34
+	}
+	y += contentBoxH
+	if imageH > 0 {
+		y += imageGap
+		imageInset := 8
+		drawLinuxdoImagePreview(dc, fontBytes, images, x+imageInset, y, contentW-imageInset*2, imageH, len(meta.ImageURLs), lineColor)
+		y += imageH
+	}
+	y += 24
+	setRGB(dc, lineColor)
+	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 1)
+	dc.Fill()
+	y += 36
+	footer := firstNonEmpty(meta.URL, meta.SourceURL, linuxdoReferer)
+	footer = truncateTextByPixels(fontBytes, 18, "🔗 "+footer, float64(contentW))
+	drawInlineEmoji(dc, fontBytes, 18, mutedColor, footer, float64(x), float64(y))
+	return saveCardPNG(dc, meta)
+}
+
+func linuxdoPreviewImageGroups(groups [][]string, limit int) [][]string {
+	out := [][]string{}
+	if limit <= 0 {
+		return out
+	}
+	for _, group := range groups {
+		if len(group) == 0 {
+			continue
+		}
+		out = append(out, group)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func drawLinuxdoImagePreview(dc *gg.Context, fontBytes []byte, images []image.Image, x, y, w, h, total int, border color.RGBA) {
+	if len(images) == 0 {
+		return
+	}
+	radius := 12.0
+	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), radius)
+	dc.ClipPreserve()
+	dc.SetRGB255(238, 241, 245)
+	dc.Fill()
+	if len(images) == 1 {
+		drawLinuxdoImageContain(dc, images[0], x, y, w, h)
+	} else {
+		gap := 8
+		mainW := int(float64(w) * 0.66)
+		sideW := w - mainW - gap
+		drawLinuxdoImageFill(dc, images[0], x, y, mainW, h)
+		cellH := (h - gap) / 2
+		drawLinuxdoImageFill(dc, images[1], x+mainW+gap, y, sideW, cellH)
+		if len(images) >= 3 {
+			drawLinuxdoImageFill(dc, images[2], x+mainW+gap, y+cellH+gap, sideW, cellH)
+		}
+	}
+	dc.ResetClip()
+	dc.SetLineWidth(1)
+	setRGB(dc, border)
+	dc.DrawRoundedRectangle(float64(x)+0.5, float64(y)+0.5, float64(w)-1, float64(h)-1, radius)
+	dc.Stroke()
+	if total > len(images) {
+		label := fmt.Sprintf("+%d", total-len(images))
+		dc.SetRGBA255(0, 0, 0, 122)
+		dc.DrawRoundedRectangle(float64(x+w-68), float64(y+h-44), 52, 30, 8)
+		dc.Fill()
+		mustFont(dc, fontBytes, 16)
+		dc.SetRGB255(255, 255, 255)
+		dc.DrawStringAnchored(label, float64(x+w-42), float64(y+h-29), 0.5, 0.5)
+	}
+}
+
+func drawLinuxdoImageContain(dc *gg.Context, img image.Image, x, y, w, h int) {
+	if img == nil {
+		return
+	}
+	fit := imaging.Fit(img, w, h, imaging.Lanczos)
+	b := fit.Bounds()
+	dc.DrawImage(fit, x+(w-b.Dx())/2, y+(h-b.Dy())/2)
+}
+
+func drawLinuxdoImageFill(dc *gg.Context, img image.Image, x, y, w, h int) {
+	if img == nil {
+		return
+	}
+	dc.DrawImage(imaging.Fill(img, w, h, imaging.Center, imaging.Lanczos), x, y)
+}
+
+func drawLinuxdoLogo(dc *gg.Context, fontBytes []byte, x, y int, c color.RGBA) {
+	if logo := loadPlatformLogo("linuxdo"); logo != nil {
+		fit := imaging.Fit(logo, 32, 32, imaging.Lanczos)
+		b := fit.Bounds()
+		dc.DrawImage(fit, x+(32-b.Dx())/2, y-25+(32-b.Dy())/2)
+	} else {
+		dc.SetRGB255(28, 28, 30)
+		dc.DrawCircle(float64(x+17), float64(y-9), 17)
+		dc.Fill()
+	}
+	drawInlineEmoji(dc, fontBytes, 22, c, "LINUX DO", float64(x+44), float64(y-2))
+}
+
+func truncateTextByPixels(fontBytes []byte, size float64, s string, maxW float64) string {
+	s = strings.TrimSpace(s)
+	if s == "" || maxW <= 0 {
+		return s
+	}
+	dc := gg.NewContext(1, 1)
+	mustFont(dc, fontBytes, size)
+	if tw, _ := dc.MeasureString(s); tw <= maxW {
+		return s
+	}
+	rs := []rune(s)
+	for len(rs) > 0 {
+		candidate := strings.TrimRight(string(rs), " /") + "..."
+		if tw, _ := dc.MeasureString(candidate); tw <= maxW {
+			return candidate
+		}
+		rs = rs[:len(rs)-1]
+	}
+	return "..."
 }
 
 func renderSteamGameCard(meta mediaMeta, fontBytes []byte) (string, error) {
@@ -1232,6 +1456,7 @@ func keylolCompactVideoCardHeight(contentW int, hasCover bool) int {
 type keylolCardTheme struct {
 	BG     color.RGBA
 	Panel  color.RGBA
+	Border color.RGBA
 	Title  color.RGBA
 	Body   color.RGBA
 	Muted  color.RGBA
@@ -1240,30 +1465,71 @@ type keylolCardTheme struct {
 }
 
 func keylolCardThemeNow() keylolCardTheme {
+	cfg := snapshotConfig()
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("MEDIAPARSER_KEYLOL_THEME")))
+	lightStyle := strings.ToLower(strings.TrimSpace(os.Getenv("MEDIAPARSER_KEYLOL_LIGHT_THEME")))
+	darkStyle := strings.ToLower(strings.TrimSpace(os.Getenv("MEDIAPARSER_KEYLOL_DARK_THEME")))
 	if mode == "" {
-		mode = strings.ToLower(strings.TrimSpace(snapshotConfig().KeylolTheme))
+		mode = strings.ToLower(strings.TrimSpace(cfg.KeylolTheme))
+	}
+	if lightStyle == "" {
+		lightStyle = strings.ToLower(strings.TrimSpace(cfg.KeylolLightTheme))
+	}
+	if darkStyle == "" {
+		darkStyle = strings.ToLower(strings.TrimSpace(cfg.KeylolDarkTheme))
+	}
+	if mode == "" {
+		mode = "auto"
+	}
+	if lightStyle == "" {
+		lightStyle = "classic"
+	}
+	if darkStyle == "" {
+		darkStyle = "black"
 	}
 	switch mode {
 	case "dark", "night", "black":
-		return keylolDarkTheme()
+		return keylolDarkThemeByName(darkStyle)
 	case "light", "day", "white":
-		return keylolLightTheme()
+		return keylolLightThemeByName(lightStyle)
 	}
 	hour := time.Now().Hour()
 	if loc, err := time.LoadLocation("Asia/Shanghai"); err == nil {
 		hour = time.Now().In(loc).Hour()
 	}
 	if hour >= 18 || hour < 6 {
-		return keylolDarkTheme()
+		return keylolDarkThemeByName(darkStyle)
 	}
-	return keylolLightTheme()
+	return keylolLightThemeByName(lightStyle)
 }
 
-func keylolDarkTheme() keylolCardTheme {
+func keylolDarkThemeByName(name string) keylolCardTheme {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "dark":
+		return keylolSoftDarkTheme()
+	default:
+		return keylolBlackTheme()
+	}
+}
+
+func keylolLightThemeByName(name string) keylolCardTheme {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "blue":
+		return keylolBlueTheme()
+	case "green":
+		return keylolGreenTheme()
+	case "white", "light":
+		return keylolWhiteTheme()
+	default:
+		return keylolClassicTheme()
+	}
+}
+
+func keylolSoftDarkTheme() keylolCardTheme {
 	return keylolCardTheme{
-		BG:     color.RGBA{R: 7, G: 12, B: 20, A: 255},
-		Panel:  color.RGBA{R: 18, G: 24, B: 34, A: 255},
+		BG:     color.RGBA{R: 30, G: 30, B: 30, A: 255},
+		Panel:  color.RGBA{R: 45, G: 45, B: 45, A: 255},
+		Border: color.RGBA{R: 255, G: 255, B: 255, A: 26},
 		Title:  color.RGBA{R: 230, G: 235, B: 244, A: 255},
 		Body:   color.RGBA{R: 184, G: 190, B: 201, A: 255},
 		Muted:  color.RGBA{R: 127, G: 137, B: 153, A: 255},
@@ -1272,16 +1538,49 @@ func keylolDarkTheme() keylolCardTheme {
 	}
 }
 
-func keylolLightTheme() keylolCardTheme {
+func keylolBlackTheme() keylolCardTheme {
 	return keylolCardTheme{
-		BG:     color.RGBA{R: 234, G: 238, B: 244, A: 255},
+		BG:     color.RGBA{R: 0, G: 0, B: 0, A: 255},
+		Panel:  color.RGBA{R: 26, G: 26, B: 26, A: 255},
+		Border: color.RGBA{R: 255, G: 255, B: 255, A: 26},
+		Title:  color.RGBA{R: 236, G: 240, B: 246, A: 255},
+		Body:   color.RGBA{R: 190, G: 196, B: 205, A: 255},
+		Muted:  color.RGBA{R: 128, G: 136, B: 148, A: 255},
+		Line:   color.RGBA{R: 48, G: 48, B: 48, A: 255},
+		Footer: color.RGBA{R: 112, G: 120, B: 132, A: 255},
+	}
+}
+
+func keylolClassicTheme() keylolCardTheme {
+	return keylolCardTheme{
+		BG:     color.RGBA{R: 249, G: 241, B: 228, A: 255},
 		Panel:  color.RGBA{R: 255, G: 255, B: 255, A: 255},
+		Border: color.RGBA{R: 0, G: 0, B: 0, A: 26},
 		Title:  color.RGBA{R: 26, G: 31, B: 48, A: 255},
 		Body:   color.RGBA{R: 45, G: 48, B: 56, A: 255},
 		Muted:  color.RGBA{R: 145, G: 150, B: 160, A: 255},
 		Line:   color.RGBA{R: 224, G: 228, B: 235, A: 255},
 		Footer: color.RGBA{R: 176, G: 184, B: 194, A: 255},
 	}
+}
+
+func keylolBlueTheme() keylolCardTheme {
+	t := keylolClassicTheme()
+	t.BG = color.RGBA{R: 232, G: 244, B: 252, A: 255}
+	return t
+}
+
+func keylolGreenTheme() keylolCardTheme {
+	t := keylolClassicTheme()
+	t.BG = color.RGBA{R: 232, G: 245, B: 233, A: 255}
+	return t
+}
+
+func keylolWhiteTheme() keylolCardTheme {
+	t := keylolClassicTheme()
+	t.BG = color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	t.Panel = color.RGBA{R: 245, G: 245, B: 245, A: 255}
+	return t
 }
 
 func keylolThemeDark(theme keylolCardTheme) bool {
@@ -1300,7 +1599,10 @@ func drawKeylolPanel(dc *gg.Context, x, y, w, h int, theme keylolCardTheme) {
 	}
 	setRGB(dc, theme.Panel)
 	dc.DrawRoundedRectangle(float64(x), float64(y), float64(w), float64(h), 18)
-	dc.Fill()
+	dc.FillPreserve()
+	setRGB(dc, theme.Border)
+	dc.SetLineWidth(1.2)
+	dc.Stroke()
 }
 
 func drawKeylolBadge(dc *gg.Context, fontBytes []byte, label string, x, y float64) {
