@@ -1572,7 +1572,7 @@ function apiURL(path){
  const u=new URL(path, location.origin);
  u.username='';
  u.password='';
- return u.pathname+u.search+u.hash;
+ return u.href;
 }
 function apiFetch(path, options){return fetch(apiURL(path), options)}
 function switchHTML(expr,on){return '<label class="switch"><input type="checkbox"'+checked(on)+' onchange="'+expr+'=this.checked;markDirty()"><span class="slider"></span></label>'}
