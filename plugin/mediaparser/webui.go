@@ -1811,7 +1811,7 @@ function render(){
 }
 function setSecretInput(id,set,placeholder){
  const el=$(id); if(!el) return;
- el.value='';
+ if(document.activeElement!==el && !el.value) el.value='';
  el.placeholder=set?'Already set; leave blank to keep, enter a new value to replace':placeholder;
 }
 function renderSystemSettings(){
