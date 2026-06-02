@@ -423,6 +423,7 @@ func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password str
 	nickname, userID := mediaShieldForwardSender(ctx)
 	nodes := mediaShieldArchiveForwardNodes(nickname, userID, uploadPath, name, mediaShieldReplyText(cfg, password))
 	var resp zero.APIResponse
+	started := time.Now()
 	if ctx.Event.GroupID != 0 {
 		resp = ctx.CallAction("send_group_forward_msg", zero.Params{
 			"group_id": ctx.Event.GroupID,
@@ -436,15 +437,24 @@ func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password str
 	} else {
 		return fmt.Errorf("missing target")
 	}
+	elapsed := time.Since(started)
 	if resp.Status == "failed" {
 		return fmt.Errorf("forward failed: %s%s", resp.Message, resp.Wording)
 	}
 	resID := resp.Data.Get("message_id").Int()
 	if resID == 0 {
+		if mediaShieldForwardMayStillComplete(resp, elapsed) {
+			logrus.Warnf("[mediaparser] media_shield_archive_forward_pending sender=%s(%d) file=%s elapsed=%s", nickname, userID, name, elapsed.Round(time.Millisecond))
+			return nil
+		}
 		return fmt.Errorf("empty forward response")
 	}
 	logrus.Infof("[mediaparser] media_shield_archive_forward_sent sender=%s(%d) file=%s message_id=%d", nickname, userID, name, resID)
 	return nil
+}
+
+func mediaShieldForwardMayStillComplete(resp zero.APIResponse, elapsed time.Duration) bool {
+	return resp.Status == "" && !resp.Data.Exists() && elapsed >= 20*time.Second
 }
 
 func mediaShieldArchiveForwardNodes(nickname string, userID int64, file, name, reply string) []map[string]any {

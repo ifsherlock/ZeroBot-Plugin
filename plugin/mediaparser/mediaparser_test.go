@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FloatTech/gg"
 	zip "github.com/alexmullins/zip"
@@ -2358,6 +2359,18 @@ func TestMediaShieldArchiveForwardNodesUseNativeFileContent(t *testing.T) {
 	}
 	if fileData["file"] != "/host/data/shield.zip" || fileData["name"] != "shield.zip" {
 		t.Fatalf("file data=%v", fileData)
+	}
+}
+
+func TestMediaShieldForwardMayStillCompleteOnlyForLongEmptyResponse(t *testing.T) {
+	if !mediaShieldForwardMayStillComplete(zero.APIResponse{}, 25*time.Second) {
+		t.Fatalf("long empty response should be treated as pending")
+	}
+	if mediaShieldForwardMayStillComplete(zero.APIResponse{}, time.Second) {
+		t.Fatalf("short empty response should not be treated as pending")
+	}
+	if mediaShieldForwardMayStillComplete(zero.APIResponse{Status: "failed"}, 25*time.Second) {
+		t.Fatalf("failed response should not be treated as pending")
 	}
 }
 
