@@ -1437,7 +1437,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="runtime" id="runtime">
-<div class="sectionTitle"><b>运行配置</b><span class="muted">这里集中管理下载规则、缓存、平台凭据和 Keylol 卡片样式；Keylol 日夜模式是卡片全局开关。</span><button class="primary right" onclick="save()">保存</button></div>
+<div class="sectionTitle"><b>运行配置</b><span class="muted">管理下载策略、代理、缓存、社区卡片和各平台登录态；Cookie 只保存在本机配置。</span><button class="primary right" onclick="save()">保存</button></div>
 <div class="settingsGrid">
 <div class="settingsStack">
 <div class="settingsCard">
@@ -1449,12 +1449,15 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">解析回应 <input id="reactionEmoji" maxlength="8" placeholder="🍉"></label>
 <label class="field">失败回应 <input id="failReactionEmoji" maxlength="8" placeholder="❌"></label>
 </div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>代理与提取器</b><span class="muted">网络代理只作用于海外平台和 Linux.do；YouTube extractor 参数用于 yt-dlp/网页解析降级。</span></div>
 <div class="settingsFields single">
 <label class="field">YouTube extractor 参数 <input id="youtubeExtractorArgs" placeholder="youtube:player_client=default,android;formats=missing_pot"></label>
-<label class="field">海外平台代理 <input id="proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"><span class="muted">仅 X/TikTok/YouTube/Instagram 生效，不影响国内平台。</span></label>
+<label class="field">海外平台代理 <input id="proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890"><span class="muted">仅 X/TikTok/YouTube/Instagram/Linux.do 生效，不影响国内平台。</span></label>
 </div>
 <div class="proxySummary">
-<div class="proxyBadge"><b>适用平台</b><span>X / TikTok / YouTube / Instagram</span></div>
+<div class="proxyBadge"><b>适用平台</b><span>X / TikTok / YouTube / Instagram / Linux.do</span></div>
 <div class="proxyBadge"><b>qb 实测</b><span>YouTube、Instagram 200；X 返回 403 但代理连通</span></div>
 <div class="proxyBadge"><b>当前配置</b><span id="proxySummaryText">未配置</span></div>
 </div>
@@ -1469,29 +1472,35 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="runtimeNote" id="cacheMsg">清理只影响媒体缓存，不会删除配置和 Cookie。</div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>Keylol 卡片</b><span class="muted">日夜模式影响所有 Keylol 截图卡片；自动模式按北京时间切换。</span></div>
+<div class="sectionTitle"><b>社区卡片</b><span class="muted">Keylol 使用主题化截图卡片；Linux.do 使用轻量分享卡片，登录态在右侧单独配置。</span></div>
 <div class="settingsFields single">
-<label class="field">底部文案 <input id="keylolFooter" placeholder="Keylol 帖子截图 · 浏览器渲染 · {time}"></label>
+<label class="field">Keylol 底部文案 <input id="keylolFooter" placeholder="Keylol · {author} 发布 · {time}"></label>
 </div>
-<div class="controlPills"><label class="row">自动日夜 <span id="keylolThemeAutoSwitch"></span></label><label class="row">黑夜模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">自动模式按北京时间切换；手动模式由黑夜开关决定。</span></div>
+<div class="controlPills"><label class="row">Keylol 自动日夜 <span id="keylolThemeAutoSwitch"></span></label><label class="row">Keylol 黑夜模式 <span id="keylolThemeDarkSwitch"></span></label><span class="muted">自动模式按北京时间切换；手动模式由黑夜开关决定。</span></div>
 <div class="settingsFields">
 <label class="field">日间配色 <select id="keylolLightTheme" onchange="cfg.keylol_light_theme=this.value;markDirty()"><option value="classic">经典</option><option value="blue">蓝调</option><option value="green">绿野</option><option value="white">纯白</option></select></label>
 <label class="field">夜间配色 <select id="keylolDarkTheme" onchange="cfg.keylol_dark_theme=this.value;markDirty()"><option value="black">纯黑</option><option value="dark">深色</option></select></label>
 </div>
-<div class="controlPills"><label class="row">ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">帖子含“复制ASF代码”时追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
+<div class="controlPills"><label class="row">Keylol ASF 合并转发 <span id="keylolASFForwardSwitch"></span></label><span class="muted">帖子含“复制ASF代码”时追加游戏封面、名称、AppID 和 ASF 复制代码。</span></div>
 </div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>平台凭据</b><span class="muted">Cookie 只保存在本机配置；YouTube 和 Instagram 会自动生成 yt-dlp 临时 cookie 文件。</span></div>
+<div class="sectionTitle"><b>平台登录态</b><span class="muted">用于登录后内容、高清视频和受限页面；留空保存会保留旧 Cookie，不会明文回显。</span></div>
 <div class="settingsFields">
 <label class="field">B站 Cookie <textarea id="bilibiliCookie" placeholder="SESSDATA=...; bili_jct=..."></textarea></label>
 <label class="field">小红书 Cookie <textarea id="xiaohongshuCookie" placeholder="a1=...; web_session=..."></textarea></label>
 <label class="field">YouTube Cookie <textarea id="youtubeCookie" placeholder="VISITOR_INFO1_LIVE=...; SID=..."></textarea></label>
 <label class="field">Instagram Cookie <textarea id="instagramCookie" placeholder="sessionid=...; ds_user_id=..."></textarea></label>
 <label class="field">Keylol Cookie <textarea id="keylolCookie" placeholder="key=value; key2=value2"></textarea></label>
+</div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>Linux.do 过盾参数</b><span class="muted">从同一个已登录浏览器复制 Cookie 和 User-Agent；Cloudflare 盾较厚，二者不匹配时仍可能 403。</span></div>
+<div class="settingsFields">
 <label class="field">Linux.do Cookie <textarea id="linuxdoCookie" placeholder="_t=...; cf_clearance=..."></textarea></label>
 <label class="field">Linux.do User-Agent <textarea id="linuxdoUA" placeholder="从同一个已登录浏览器复制 User-Agent；留空使用默认 UA"></textarea></label>
 </div>
+<div class="runtimeNote">解析失败日志会输出 body_len、页面标题和 Cloudflare 信号，方便判断是盾、登录态还是接口状态问题。</div>
 </div>
 </div>
 </div>

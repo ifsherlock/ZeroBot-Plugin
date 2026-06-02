@@ -89,7 +89,7 @@ func redirectURLWithClient(raw string, headers map[string]string, c *http.Client
 
 func proxyAllowedPlatform(platform string) bool {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
-	case "twitter", "tiktok", "youtube", "instagram":
+	case "twitter", "tiktok", "youtube", "instagram", "linuxdo":
 		return true
 	default:
 		return false

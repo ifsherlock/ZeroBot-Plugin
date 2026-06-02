@@ -28,7 +28,7 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, err
 	}
 	if status >= 400 {
-		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s", status, finalURL, linuxdoErrorSummary(body))
+		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg))
 	}
 	meta, err := parseLinuxdoTopicJSON(raw, finalURL, body)
 	if err != nil {
@@ -56,6 +56,18 @@ func linuxdoHeaders(cfg config, referer string) map[string]string {
 
 func linuxdoUserAgent(cfg config) string {
 	return firstNonEmpty(strings.TrimSpace(cfg.LinuxdoUA), linuxdoUA)
+}
+
+func linuxdoRequestSummary(cfg config) string {
+	cookie := strings.TrimSpace(cfg.LinuxdoCookie)
+	ua := linuxdoUserAgent(cfg)
+	return fmt.Sprintf(
+		"cookie_set=%t cf_clearance_set=%t ua_len=%d proxy_set=%t",
+		cookie != "",
+		strings.Contains(strings.ToLower(cookie), "cf_clearance="),
+		len(ua),
+		proxyForPlatform(cfg, "linuxdo") != "",
+	)
 }
 
 func linuxdoErrorSummary(body string) string {
