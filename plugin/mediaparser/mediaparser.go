@@ -32,10 +32,9 @@ import (
 )
 
 const (
-	defaultMaxVideoMB                = 1000
-	defaultTTLMinutes                = 60
-	defaultTimeoutSec                = 180
-	twitterGroupVideoFileThresholdMB = 8
+	defaultMaxVideoMB = 1000
+	defaultTTLMinutes = 60
+	defaultTimeoutSec = 180
 
 	accessNone      = "none"
 	accessBlacklist = "blacklist"
@@ -1413,23 +1412,9 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 		if target == "" {
 			continue
 		}
-		if shouldUploadVideoAsFile(ctx, meta, i) {
-			if err := uploadMediaVideoFile(ctx, meta, i); err != nil {
-				logrus.Warnf("[mediaparser] upload_video_file_failed platform=%s title=%q index=%d error=%v", meta.Platform, meta.Title, i, err)
-			}
-			continue
-		}
 		sendStarted := time.Now()
-		msgID := ctx.SendChain(message.Video(target))
-		elapsed := time.Since(sendStarted).Round(time.Millisecond)
-		if msgID.ID() == 0 {
-			logrus.Warnf("[mediaparser] send_video_failed platform=%s title=%q target=%s send_elapsed=%s", meta.Platform, meta.Title, target, elapsed)
-			if err := uploadMediaVideoFile(ctx, meta, i); err != nil {
-				logrus.Warnf("[mediaparser] upload_video_file_failed platform=%s title=%q index=%d error=%v", meta.Platform, meta.Title, i, err)
-			}
-			continue
-		}
-		logrus.Infof("[mediaparser] sent_video platform=%s title=%q target=%s message_id=%d send_elapsed=%s", meta.Platform, meta.Title, target, msgID.ID(), elapsed)
+		ctx.SendChain(message.Video(target))
+		logrus.Infof("[mediaparser] sent_video platform=%s title=%q target=%s send_elapsed=%s", meta.Platform, meta.Title, target, time.Since(sendStarted).Round(time.Millisecond))
 	}
 	for i := range meta.ImageURLs {
 		target := mediaImageTarget(meta, i)
@@ -1440,72 +1425,6 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 		logrus.Infof("[mediaparser] sent_image platform=%s title=%q target=%s", meta.Platform, meta.Title, target)
 	}
 	return nil
-}
-
-func shouldUploadVideoAsFile(ctx *zero.Ctx, meta *mediaMeta, i int) bool {
-	if ctx == nil || ctx.Event == nil || ctx.Event.GroupID == 0 || meta == nil {
-		return false
-	}
-	if normalizePlatformName(meta.Platform) != "twitter" {
-		return false
-	}
-	if localVideoPath(meta, i) == "" {
-		return false
-	}
-	sizeMB := localVideoSizeMB(meta, i)
-	return sizeMB >= twitterGroupVideoFileThresholdMB
-}
-
-func localVideoPath(meta *mediaMeta, i int) string {
-	if meta == nil || i < 0 || i >= len(meta.VideoURLs) {
-		return ""
-	}
-	if i >= len(meta.VideoModes) || meta.VideoModes[i] != "local" {
-		return ""
-	}
-	if i >= len(meta.FilePaths) {
-		return ""
-	}
-	return strings.TrimSpace(meta.FilePaths[i])
-}
-
-func localVideoSizeMB(meta *mediaMeta, i int) float64 {
-	if meta == nil || i < 0 {
-		return 0
-	}
-	if i < len(meta.VideoSizes) && meta.VideoSizes[i] > 0 {
-		return meta.VideoSizes[i]
-	}
-	path := localVideoPath(meta, i)
-	if path == "" {
-		return 0
-	}
-	return fileSizeMB(path)
-}
-
-func uploadMediaVideoFile(ctx *zero.Ctx, meta *mediaMeta, i int) error {
-	path := localVideoPath(meta, i)
-	if path == "" {
-		return fmt.Errorf("missing local video file")
-	}
-	uploadPath := oneBotUploadFilePath(path)
-	name := filepath.Base(path)
-	if ctx.Event != nil && ctx.Event.GroupID != 0 {
-		ret := ctx.UploadThisGroupFile(uploadPath, name, "")
-		if ret.Status == "failed" {
-			return fmt.Errorf("group upload failed: %s%s", ret.Message, ret.Wording)
-		}
-		logrus.Infof("[mediaparser] uploaded_video_file platform=%s title=%q name=%s size_mb=%.1f", meta.Platform, meta.Title, name, localVideoSizeMB(meta, i))
-		return nil
-	}
-	if ctx.Event != nil && ctx.Event.UserID != 0 {
-		if ret := ctx.UploadPrivateFile(ctx.Event.UserID, uploadPath, name); strings.TrimSpace(ret) != "" && strings.Contains(strings.ToLower(ret), "failed") {
-			return fmt.Errorf("private upload failed: %s", ret)
-		}
-		logrus.Infof("[mediaparser] uploaded_video_file platform=%s title=%q name=%s size_mb=%.1f", meta.Platform, meta.Title, name, localVideoSizeMB(meta, i))
-		return nil
-	}
-	return fmt.Errorf("missing upload target")
 }
 
 func sendQQBotImageMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {

@@ -2374,28 +2374,6 @@ func TestMediaShieldForwardMayStillCompleteOnlyForLongEmptyResponse(t *testing.T
 	}
 }
 
-func TestShouldUploadTwitterGroupLargeVideoAsFile(t *testing.T) {
-	ctx := &zero.Ctx{Event: &zero.Event{GroupID: 123, UserID: 456}}
-	meta := &mediaMeta{
-		Platform:   "twitter",
-		VideoURLs:  [][]string{{"https://example.com/video.mp4"}},
-		VideoModes: []string{"local"},
-		FilePaths:  []string{"/host/video.mp4"},
-		VideoSizes: []float64{14.1},
-	}
-	if !shouldUploadVideoAsFile(ctx, meta, 0) {
-		t.Fatalf("large twitter group video should upload as file")
-	}
-	meta.VideoSizes[0] = 1.1
-	if shouldUploadVideoAsFile(ctx, meta, 0) {
-		t.Fatalf("small twitter group video should stay as video message")
-	}
-	ctx.Event.GroupID = 0
-	if shouldUploadVideoAsFile(ctx, meta, 0) {
-		t.Fatalf("private video should not use group file fallback threshold")
-	}
-}
-
 func TestCreateMediaShieldZipRequiresPassword(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "media.txt")
