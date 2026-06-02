@@ -115,6 +115,7 @@ type config struct {
 	SafetyFilterEnabled      bool                            `json:"safety_filter_enabled"`
 	SafetyFilterNotice       bool                            `json:"safety_filter_notice"`
 	SafetyFilterNoticeText   string                          `json:"safety_filter_notice_text"`
+	SafetyTwitterSensitive   bool                            `json:"safety_twitter_sensitive_block"`
 	SafetyGlobalCategories   map[string]bool                 `json:"safety_global_categories"`
 	SafetyPlatformCategories map[string]map[string]bool      `json:"safety_platform_categories"`
 	SafetyCustomGlobal       map[string][]string             `json:"safety_custom_global"`
@@ -124,6 +125,7 @@ type config struct {
 	SafetyCustomCategories   map[string]safetyCustomCategory `json:"safety_custom_categories"`
 	SafetyCustomSeedVersion  int                             `json:"safety_custom_seed_version"`
 	SafetyDefaultVersion     int                             `json:"safety_default_version"`
+	SafetyTwitterVersion     int                             `json:"safety_twitter_version"`
 
 	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
 	BilibiliCookie     string `json:"bilibili_cookie"`
@@ -295,6 +297,7 @@ func defaultConfig() config {
 		SafetyFilterEnabled:      true,
 		SafetyFilterNotice:       false,
 		SafetyFilterNoticeText:   "内容触发安全屏蔽，已停止解析。",
+		SafetyTwitterSensitive:   true,
 		SafetyGlobalCategories:   defaultSafetyGlobalCategories(),
 		SafetyPlatformCategories: defaultSafetyPlatformCategories(),
 		SafetyCustomGlobal:       map[string][]string{},
@@ -304,6 +307,7 @@ func defaultConfig() config {
 		SafetyCustomCategories:   map[string]safetyCustomCategory{},
 		SafetyCustomSeedVersion:  0,
 		SafetyDefaultVersion:     currentSafetyDefaultVersion,
+		SafetyTwitterVersion:     currentSafetyTwitterVersion,
 		AvoidAV1:                 true,
 		BilibiliMaxQuality:       "不限制",
 		UseYTDLPFallback:         false,
@@ -560,6 +564,9 @@ func normalizeConfig(cfg *config) bool {
 		changed = true
 	}
 	if migrateSafetyDefaults(cfg) {
+		changed = true
+	}
+	if migrateSafetyTwitterSensitiveDefault(cfg) {
 		changed = true
 	}
 	if cfg.SafetyCustomSeedVersion < currentSafetyCustomSeedVersion {

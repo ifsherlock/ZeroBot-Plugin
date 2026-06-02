@@ -16,7 +16,7 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, fmt.Errorf("无法解析 Twitter/X 推文ID: %s", raw)
 	}
 	tweetID := m[1]
-	info, err := fetchFxTwitter(cfg, tweetID)
+	info, err := fetchTwitterInfo(cfg, tweetID)
 	if err != nil {
 		return mediaMeta{}, err
 	}
@@ -85,6 +85,18 @@ type twitterVideo struct {
 	Duration any
 }
 
+func fetchTwitterInfo(cfg config, tweetID string) (twitterInfo, error) {
+	info, fxErr := fetchFxTwitter(cfg, tweetID)
+	if fxErr == nil {
+		return info, nil
+	}
+	info, vxErr := fetchVxTwitter(cfg, tweetID)
+	if vxErr == nil {
+		return info, nil
+	}
+	return twitterInfo{}, fmt.Errorf("X parse failed: FxTwitter: %v; VxTwitter: %v", fxErr, vxErr)
+}
+
 func fetchFxTwitter(cfg config, tweetID string) (twitterInfo, error) {
 	api := "https://api.fxtwitter.com/status/" + tweetID
 	httpClient := httpClientForPlatform(cfg, "twitter", 45*time.Second, true)
@@ -120,6 +132,45 @@ func fetchFxTwitter(cfg config, tweetID string) (twitterInfo, error) {
 			return twitterInfo{}, err
 		}
 		return parseFxTwitterResponse(data)
+	}
+	return twitterInfo{}, lastErr
+}
+
+func fetchVxTwitter(cfg config, tweetID string) (twitterInfo, error) {
+	api := "https://api.vxtwitter.com/Twitter/status/" + tweetID
+	httpClient := httpClientForPlatform(cfg, "twitter", 45*time.Second, true)
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		req, _ := http.NewRequest(http.MethodGet, api, nil)
+		req.Header.Set("User-Agent", defaultUA)
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		if resp.StatusCode == 404 || resp.StatusCode == 403 {
+			return twitterInfo{}, fmt.Errorf("VxTwitter tweet unavailable HTTP %d", resp.StatusCode)
+		}
+		if resp.StatusCode >= 500 || resp.StatusCode == 429 {
+			lastErr = fmt.Errorf("VxTwitter HTTP %d", resp.StatusCode)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return twitterInfo{}, fmt.Errorf("VxTwitter HTTP %d: %s", resp.StatusCode, truncate(string(body), 160))
+		}
+		var data map[string]any
+		if err := json.Unmarshal(body, &data); err != nil {
+			return twitterInfo{}, err
+		}
+		return parseVxTwitterResponse(data)
 	}
 	return twitterInfo{}, lastErr
 }
@@ -170,6 +221,68 @@ func parseFxTwitterResponse(data map[string]any) (twitterInfo, error) {
 	}
 	if info.Cover == "" && len(info.Images) > 0 {
 		info.Cover = info.Images[0]
+	}
+	return info, nil
+}
+
+func parseVxTwitterResponse(data map[string]any) (twitterInfo, error) {
+	text := strings.TrimSpace(getString(data, "text"))
+	author := fxTwitterAuthor(map[string]any{
+		"name":        getString(data, "user_name"),
+		"screen_name": getString(data, "user_screen_name"),
+	})
+	timestamp := parseTwitterDate(getString(data, "date"))
+	info := twitterInfo{
+		Title: firstNonEmpty(func() string {
+			if author != "" {
+				return author + " 的推文"
+			}
+			return ""
+		}(), "Twitter 推文"),
+		Text:      text,
+		Author:    author,
+		Avatar:    getString(data, "user_profile_image_url"),
+		Timestamp: timestamp,
+	}
+	if anyBool(data["possibly_sensitive"]) {
+		info.SafetyText = safetyMarkerTwitterSensitive
+	}
+	for _, media := range getSlice(data, "media_extended") {
+		m, ok := media.(map[string]any)
+		if !ok {
+			continue
+		}
+		url := getString(m, "url")
+		switch strings.ToLower(strings.TrimSpace(getString(m, "type"))) {
+		case "video", "animated_gif", "gif":
+			if url != "" {
+				info.Videos = append(info.Videos, twitterVideo{
+					URL:      url,
+					Thumb:    getString(m, "thumbnail_url"),
+					Duration: m["duration_millis"],
+				})
+				if info.Cover == "" {
+					info.Cover = getString(m, "thumbnail_url")
+				}
+			}
+		default:
+			if url != "" {
+				info.Images = append(info.Images, url)
+			}
+		}
+	}
+	if len(info.Images) == 0 && len(info.Videos) == 0 {
+		for _, mediaURL := range getSlice(data, "mediaURLs") {
+			if url, ok := mediaURL.(string); ok && strings.TrimSpace(url) != "" {
+				info.Images = append(info.Images, strings.TrimSpace(url))
+			}
+		}
+	}
+	if info.Cover == "" && len(info.Images) > 0 {
+		info.Cover = info.Images[0]
+	}
+	if len(info.Images) == 0 && len(info.Videos) == 0 && text == "" {
+		return twitterInfo{}, fmt.Errorf("VxTwitter response has no text or media")
 	}
 	return info, nil
 }

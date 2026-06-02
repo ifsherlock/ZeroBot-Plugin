@@ -24,6 +24,7 @@ const (
 
 	currentSafetyCustomSeedVersion = 3
 	currentSafetyDefaultVersion    = 3
+	currentSafetyTwitterVersion    = 1
 )
 
 type safetyHit struct {
@@ -495,6 +496,15 @@ func migrateSafetyDefaults(cfg *config) bool {
 	return true
 }
 
+func migrateSafetyTwitterSensitiveDefault(cfg *config) bool {
+	if cfg.SafetyTwitterVersion >= currentSafetyTwitterVersion {
+		return false
+	}
+	cfg.SafetyTwitterSensitive = true
+	cfg.SafetyTwitterVersion = currentSafetyTwitterVersion
+	return true
+}
+
 func legacyCustomSafetyCategoryID(id string) (string, bool) {
 	id = normalizeCustomSafetyCategoryID(id)
 	if !strings.HasPrefix(id, "custom_") {
@@ -599,6 +609,9 @@ func safetyBlocked(cfg config, meta mediaMeta, raw string) (safetyHit, bool) {
 	if !cfg.SafetyFilterEnabled {
 		return safetyHit{}, false
 	}
+	if safetyTwitterSensitiveBlocked(cfg, meta) {
+		return safetyHit{Category: safetyCategoryAdult, Keyword: safetyMarkerTwitterSensitive, Source: "platform_sensitive"}, true
+	}
 	text := safetyScanText(meta, raw)
 	if strings.TrimSpace(text) == "" {
 		return safetyHit{}, false
@@ -640,6 +653,20 @@ func safetyBlocked(cfg config, meta mediaMeta, raw string) (safetyHit, bool) {
 		}
 	}
 	return safetyHit{}, false
+}
+
+func safetyTwitterSensitiveBlocked(cfg config, meta mediaMeta) bool {
+	if !cfg.SafetyTwitterSensitive {
+		return false
+	}
+	platform := normalizePlatformName(meta.Platform)
+	if platform == "" {
+		platform = normalizePlatformName(meta.SourceURL)
+	}
+	if platform != "twitter" {
+		return false
+	}
+	return strings.Contains(meta.AccessText, safetyMarkerTwitterSensitive)
 }
 
 func safetyExcluded(cfg config, platform, category, normalizedText string) bool {

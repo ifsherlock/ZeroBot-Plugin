@@ -1393,7 +1393,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsCard safetyControlCard">
 <div class="safetyControlRow">
 <div class="safetyControlTitle"><b>开关</b><span class="muted">命中后停止发送卡片、媒体和合并转发。</span></div>
-<div class="controlPills"><label class="row">启用屏蔽 <span id="safetyEnabledSwitch"></span></label><label class="row">命中提示 <span id="safetyNoticeSwitch"></span></label></div>
+<div class="controlPills"><label class="row">启用屏蔽 <span id="safetyEnabledSwitch"></span></label><label class="row">X 敏感标记 <span id="safetyTwitterSensitiveSwitch"></span></label><label class="row">命中提示 <span id="safetyNoticeSwitch"></span></label></div>
 </div>
 <label class="field safetyNoticeField">命中提示文案<input id="safetyNoticeText" placeholder="内容触发安全屏蔽，已停止解析。" oninput="cfg.safety_filter_notice_text=this.value;markDirty()"></label>
 </div>
@@ -1808,6 +1808,7 @@ function renderSafetySettings(){
  ensureSafetyMaps();
  if(!allSafetyCategories().some(c=>c.id===selectedSafetyCategory)) selectedSafetyCategory=(allSafetyCategories()[0]||{}).id||'adult';
  $('safetyEnabledSwitch').innerHTML=switchHTML('cfg.safety_filter_enabled', cfg.safety_filter_enabled!==false);
+ if($('safetyTwitterSensitiveSwitch')) $('safetyTwitterSensitiveSwitch').innerHTML=switchHTML('cfg.safety_twitter_sensitive_block', cfg.safety_twitter_sensitive_block!==false);
  $('safetyNoticeSwitch').innerHTML=switchHTML('cfg.safety_filter_notice', !!cfg.safety_filter_notice);
  if($('safetyNoticeText')) $('safetyNoticeText').value=cfg.safety_filter_notice_text||'内容触发安全屏蔽，已停止解析。';
  const platformOptions=platforms.map(p=>'<option value="'+p.name+'">'+escapeHTML(p.label)+' / '+escapeHTML(p.name)+'</option>').join('');

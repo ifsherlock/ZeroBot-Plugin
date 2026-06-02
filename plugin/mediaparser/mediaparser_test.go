@@ -1721,14 +1721,33 @@ func TestSafetyBlockedUsesXAdultTags(t *testing.T) {
 
 func TestSafetyBlockedUsesTwitterSensitiveMarker(t *testing.T) {
 	cfg := defaultConfig()
-	cfg.SafetyGlobalCategories[safetyCategoryAdult] = true
+	cfg.SafetyGlobalCategories = map[string]bool{}
 	meta := mediaMeta{Platform: "twitter", AccessText: safetyMarkerTwitterSensitive}
 	hit, blocked := safetyBlocked(cfg, meta, "")
 	if !blocked {
 		t.Fatal("expected twitter sensitive marker to block")
 	}
-	if hit.Category != safetyCategoryAdult || hit.Source != "builtin" {
+	if hit.Category != safetyCategoryAdult || hit.Source != "platform_sensitive" {
 		t.Fatalf("unexpected hit=%+v", hit)
+	}
+}
+
+func TestSafetyBlockedSkipsTwitterSensitiveMarkerWhenDisabled(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyTwitterSensitive = false
+	cfg.SafetyGlobalCategories = map[string]bool{}
+	meta := mediaMeta{Platform: "twitter", AccessText: safetyMarkerTwitterSensitive}
+	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatalf("did not expect twitter sensitive marker to block when disabled, hit=%+v", hit)
+	}
+}
+
+func TestSafetyBlockedIgnoresTwitterSensitiveMarkerOnOtherPlatforms(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories = map[string]bool{}
+	meta := mediaMeta{Platform: "bilibili", AccessText: safetyMarkerTwitterSensitive}
+	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatalf("did not expect marker to block other platforms, hit=%+v", hit)
 	}
 }
 
@@ -1748,6 +1767,33 @@ func TestParseFxTwitterResponseMarksPossiblySensitive(t *testing.T) {
 	}
 	if info.SafetyText != safetyMarkerTwitterSensitive {
 		t.Fatalf("safety marker=%q", info.SafetyText)
+	}
+}
+
+func TestParseVxTwitterResponseMarksPossiblySensitive(t *testing.T) {
+	info, err := parseVxTwitterResponse(map[string]any{
+		"text":                   "probe text",
+		"user_name":              "Probe",
+		"user_screen_name":       "probe",
+		"user_profile_image_url": "https://example.com/avatar.jpg",
+		"date":                   "Mon Jun 01 14:31:43 +0000 2026",
+		"possibly_sensitive":     true,
+		"media_extended": []any{
+			map[string]any{
+				"type":          "video",
+				"url":           "https://video.example.com/probe.mp4",
+				"thumbnail_url": "https://example.com/thumb.jpg",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.SafetyText != safetyMarkerTwitterSensitive {
+		t.Fatalf("safety marker=%q", info.SafetyText)
+	}
+	if len(info.Videos) != 1 || info.Videos[0].URL == "" || info.Cover == "" {
+		t.Fatalf("unexpected videos=%+v cover=%q", info.Videos, info.Cover)
 	}
 }
 
