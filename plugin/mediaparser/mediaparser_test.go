@@ -2336,6 +2336,31 @@ func TestMediaShieldForwardSenderUsesOriginalSender(t *testing.T) {
 	}
 }
 
+func TestMediaShieldArchiveForwardNodesUseNativeFileContent(t *testing.T) {
+	nodes := mediaShieldArchiveForwardNodes("sender", 12345, "/host/data/shield.zip", "shield.zip", "password: 123456")
+	if len(nodes) != 2 {
+		t.Fatalf("nodes=%d, want 2", len(nodes))
+	}
+	data, ok := nodes[0]["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("file node data has unexpected type %T", nodes[0]["data"])
+	}
+	content, ok := data["content"].([]map[string]any)
+	if !ok || len(content) != 1 {
+		t.Fatalf("file content=%T len=%d", data["content"], len(content))
+	}
+	if content[0]["type"] != "file" {
+		t.Fatalf("file content type=%v, want file", content[0]["type"])
+	}
+	fileData, ok := content[0]["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("file content data has unexpected type %T", content[0]["data"])
+	}
+	if fileData["file"] != "/host/data/shield.zip" || fileData["name"] != "shield.zip" {
+		t.Fatalf("file data=%v", fileData)
+	}
+}
+
 func TestCreateMediaShieldZipRequiresPassword(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "media.txt")

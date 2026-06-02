@@ -421,23 +421,62 @@ func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password str
 	uploadPath := oneBotUploadFilePath(path)
 	name := filepath.Base(path)
 	nickname, userID := mediaShieldForwardSender(ctx)
-	nodes := message.Message{
-		message.CustomNode(nickname, userID, message.Message{message.File(uploadPath, name)}),
-		message.CustomNode(nickname, userID, message.Message{message.Text(mediaShieldReplyText(cfg, password))}),
-	}
-	var resID int64
+	nodes := mediaShieldArchiveForwardNodes(nickname, userID, uploadPath, name, mediaShieldReplyText(cfg, password))
+	var resp zero.APIResponse
 	if ctx.Event.GroupID != 0 {
-		resID = ctx.SendGroupForwardMessage(ctx.Event.GroupID, nodes).Get("message_id").Int()
+		resp = ctx.CallAction("send_group_forward_msg", zero.Params{
+			"group_id": ctx.Event.GroupID,
+			"messages": nodes,
+		})
 	} else if ctx.Event.UserID != 0 {
-		resID = ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes).Get("message_id").Int()
+		resp = ctx.CallAction("send_private_forward_msg", zero.Params{
+			"user_id":  ctx.Event.UserID,
+			"messages": nodes,
+		})
 	} else {
 		return fmt.Errorf("missing target")
 	}
+	if resp.Status == "failed" {
+		return fmt.Errorf("forward failed: %s%s", resp.Message, resp.Wording)
+	}
+	resID := resp.Data.Get("message_id").Int()
 	if resID == 0 {
 		return fmt.Errorf("empty forward response")
 	}
 	logrus.Infof("[mediaparser] media_shield_archive_forward_sent sender=%s(%d) file=%s message_id=%d", nickname, userID, name, resID)
 	return nil
+}
+
+func mediaShieldArchiveForwardNodes(nickname string, userID int64, file, name, reply string) []map[string]any {
+	return []map[string]any{
+		{
+			"type": "node",
+			"data": map[string]any{
+				"name": nickname,
+				"uin":  fmt.Sprintf("%d", userID),
+				"content": []map[string]any{{
+					"type": "file",
+					"data": map[string]any{
+						"file": file,
+						"name": name,
+					},
+				}},
+			},
+		},
+		{
+			"type": "node",
+			"data": map[string]any{
+				"name": nickname,
+				"uin":  fmt.Sprintf("%d", userID),
+				"content": []map[string]any{{
+					"type": "text",
+					"data": map[string]any{
+						"text": reply,
+					},
+				}},
+			},
+		},
+	}
 }
 
 func mediaShieldForwardSender(ctx *zero.Ctx) (string, int64) {
