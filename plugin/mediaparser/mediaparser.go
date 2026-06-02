@@ -412,27 +412,45 @@ func normalizeConfig(cfg *config) bool {
 	for _, p := range platforms {
 		if _, ok := cfg.PlatformEnabled[p.Name]; !ok {
 			cfg.PlatformEnabled[p.Name] = true
+			changed = true
 		}
 		if _, ok := cfg.PlatformInfoCard[p.Name]; !ok {
 			cfg.PlatformInfoCard[p.Name] = true
+			changed = true
 		}
 		if _, ok := cfg.PlatformSendMedia[p.Name]; !ok {
 			cfg.PlatformSendMedia[p.Name] = true
+			changed = true
 		}
 		if _, ok := cfg.PlatformDownload[p.Name]; !ok {
 			cfg.PlatformDownload[p.Name] = true
+			changed = true
 		}
 		if cfg.PlatformGroupBlock[p.Name] == nil {
 			cfg.PlatformGroupBlock[p.Name] = map[int64]bool{}
+			changed = true
 		}
 		if _, ok := cfg.OutputMode[p.Name]; !ok {
 			cfg.OutputMode[p.Name] = outputAll
+			changed = true
 		}
-		cfg.PlatformInfoCard[p.Name] = cfg.PlatformEnabled[p.Name]
-		cfg.PlatformSendMedia[p.Name] = cfg.PlatformDownload[p.Name]
+		if cfg.PlatformInfoCard[p.Name] != cfg.PlatformEnabled[p.Name] {
+			cfg.PlatformInfoCard[p.Name] = cfg.PlatformEnabled[p.Name]
+			changed = true
+		}
+		if cfg.PlatformSendMedia[p.Name] != cfg.PlatformDownload[p.Name] {
+			cfg.PlatformSendMedia[p.Name] = cfg.PlatformDownload[p.Name]
+			changed = true
+		}
 	}
-	cfg.SendInfoCard = cfg.AutoParse
-	cfg.SendMedia = cfg.DownloadVideo
+	if cfg.SendInfoCard != cfg.AutoParse {
+		cfg.SendInfoCard = cfg.AutoParse
+		changed = true
+	}
+	if cfg.SendMedia != cfg.DownloadVideo {
+		cfg.SendMedia = cfg.DownloadVideo
+		changed = true
+	}
 	if cfg.AccessMode == "" {
 		if cfg.WhitelistMode {
 			cfg.AccessMode = accessWhitelist
@@ -504,7 +522,9 @@ func normalizeConfig(cfg *config) bool {
 	cfg.KeylolFooter = strings.TrimSpace(cfg.KeylolFooter)
 	if cfg.KeylolFooter == "" {
 		cfg.KeylolFooter = "Keylol 帖子截图 · 浏览器渲染 · {time}"
+		changed = true
 	}
+	oldKeylolTheme := cfg.KeylolTheme
 	cfg.KeylolTheme = strings.ToLower(strings.TrimSpace(cfg.KeylolTheme))
 	switch cfg.KeylolTheme {
 	case "", "auto", "light", "day", "white", "dark", "night", "black":
@@ -514,6 +534,10 @@ func normalizeConfig(cfg *config) bool {
 	default:
 		cfg.KeylolTheme = "auto"
 	}
+	if cfg.KeylolTheme != oldKeylolTheme {
+		changed = true
+	}
+	oldKeylolLightTheme := cfg.KeylolLightTheme
 	cfg.KeylolLightTheme = strings.ToLower(strings.TrimSpace(cfg.KeylolLightTheme))
 	switch cfg.KeylolLightTheme {
 	case "classic", "blue", "green", "white", "light":
@@ -523,11 +547,18 @@ func normalizeConfig(cfg *config) bool {
 	default:
 		cfg.KeylolLightTheme = "classic"
 	}
+	if cfg.KeylolLightTheme != oldKeylolLightTheme {
+		changed = true
+	}
+	oldKeylolDarkTheme := cfg.KeylolDarkTheme
 	cfg.KeylolDarkTheme = strings.ToLower(strings.TrimSpace(cfg.KeylolDarkTheme))
 	switch cfg.KeylolDarkTheme {
 	case "black", "dark":
 	default:
 		cfg.KeylolDarkTheme = "black"
+	}
+	if cfg.KeylolDarkTheme != oldKeylolDarkTheme {
+		changed = true
 	}
 	if strings.TrimSpace(cfg.ParseReactionEmoji) == "" {
 		cfg.ParseReactionEmoji = "🍉"
