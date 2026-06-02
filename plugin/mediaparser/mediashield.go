@@ -261,10 +261,8 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 	if ctx == nil || meta == nil {
 		return nil
 	}
-	if reason.Active && strings.TrimSpace(cfg.MediaShieldEmoji) != "" {
-		ctx.SendChain(message.Text(strings.TrimSpace(cfg.MediaShieldEmoji)))
-	}
-	if err := sendMediaShieldCard(ctx, cfg, *meta); err != nil {
+	shieldCard, err := createMediaShieldCard(cfg, *meta)
+	if err != nil {
 		logrus.Warnf("[mediaparser] media_shield_card_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
 	}
 	meta.ForceLocal = true
@@ -284,8 +282,11 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 		return fmt.Errorf("create zip: %w", err)
 	}
 	scheduleDelete(archive, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-	if err := sendMediaShieldArchiveForward(ctx, cfg, archive, password); err != nil {
+	if err := sendMediaShieldArchiveForward(ctx, cfg, archive, password, shieldCard, reason.Active); err != nil {
 		logrus.Warnf("[mediaparser] media_shield_forward_archive_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
+		if shieldCard != "" {
+			ctx.SendChain(message.Image(mediaShieldCardTarget(ctx, shieldCard)))
+		}
 		if err := uploadMediaShieldArchive(ctx, archive); err != nil {
 			return fmt.Errorf("upload zip: %w", err)
 		}
@@ -295,30 +296,42 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 }
 
 func sendMediaShieldCard(ctx *zero.Ctx, cfg config, meta mediaMeta) error {
-	card, err := renderInfoCard(meta)
+	shieldCard, err := createMediaShieldCard(cfg, meta)
 	if err != nil {
 		return err
+	}
+	ctx.SendChain(message.Image(mediaShieldCardTarget(ctx, shieldCard)))
+	return nil
+}
+
+func createMediaShieldCard(cfg config, meta mediaMeta) (string, error) {
+	card, err := renderInfoCard(meta)
+	if err != nil {
+		return "", err
 	}
 	defer scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 	img, err := imaging.Open(card)
 	if err != nil {
-		return err
+		return "", err
 	}
 	img = imaging.Blur(img, 16)
 	shieldCard := cacheFile(&meta, "shield_card", 0, ".png")
 	if err := os.MkdirAll(filepath.Dir(shieldCard), 0755); err != nil {
-		return err
+		return "", err
 	}
 	if err := imaging.Save(img, shieldCard); err != nil {
-		return err
+		return "", err
 	}
+	scheduleDelete(shieldCard, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
+	return shieldCard, nil
+}
+
+func mediaShieldCardTarget(ctx *zero.Ctx, shieldCard string) string {
 	target := oneBotLocalMediaTarget(shieldCard)
 	if isOfficialQQBotEvent(ctx) {
 		target = fileURI(shieldCard)
 	}
-	ctx.SendChain(message.Image(target))
-	scheduleDelete(shieldCard, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-	return nil
+	return target
 }
 
 func mediaShieldLocalFiles(meta *mediaMeta) []string {
@@ -414,14 +427,18 @@ func uploadMediaShieldArchive(ctx *zero.Ctx, path string) error {
 	return nil
 }
 
-func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password string) error {
+func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password, cardPath string, active bool) error {
 	if ctx == nil || ctx.Event == nil {
 		return fmt.Errorf("missing event")
 	}
 	uploadPath := oneBotUploadFilePath(path)
 	name := filepath.Base(path)
 	nickname, userID := mediaShieldForwardSender(ctx)
-	nodes := mediaShieldArchiveForwardNodes(nickname, userID, uploadPath, name, mediaShieldReplyText(cfg, password))
+	cardTarget := ""
+	if strings.TrimSpace(cardPath) != "" {
+		cardTarget = mediaShieldCardTarget(ctx, cardPath)
+	}
+	nodes := mediaShieldArchiveForwardNodes(nickname, userID, uploadPath, name, mediaShieldReplyText(cfg, password), cardTarget, active, strings.TrimSpace(cfg.MediaShieldEmoji))
 	var resp zero.APIResponse
 	started := time.Now()
 	if ctx.Event.GroupID != 0 {
@@ -439,6 +456,10 @@ func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password str
 	}
 	elapsed := time.Since(started)
 	if resp.Status == "failed" {
+		if mediaShieldForwardMayStillComplete(resp, elapsed) {
+			logrus.Warnf("[mediaparser] media_shield_archive_forward_pending sender=%s(%d) file=%s elapsed=%s reason=%s", nickname, userID, name, elapsed.Round(time.Millisecond), mediaShieldForwardFailureText(resp))
+			return nil
+		}
 		return fmt.Errorf("forward failed: %s%s", resp.Message, resp.Wording)
 	}
 	resID := resp.Data.Get("message_id").Int()
@@ -454,37 +475,63 @@ func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password str
 }
 
 func mediaShieldForwardMayStillComplete(resp zero.APIResponse, elapsed time.Duration) bool {
-	return resp.Status == "" && !resp.Data.Exists() && elapsed >= 20*time.Second
+	if elapsed < 20*time.Second {
+		return false
+	}
+	if resp.Status == "" && !resp.Data.Exists() {
+		return true
+	}
+	return resp.Status == "failed" && mediaShieldForwardTimeoutLike(resp)
 }
 
-func mediaShieldArchiveForwardNodes(nickname string, userID int64, file, name, reply string) []map[string]any {
-	return []map[string]any{
-		{
-			"type": "node",
-			"data": map[string]any{
-				"name": nickname,
-				"uin":  fmt.Sprintf("%d", userID),
-				"content": []map[string]any{{
-					"type": "file",
-					"data": map[string]any{
-						"file": file,
-						"name": name,
-					},
-				}},
-			},
+func mediaShieldForwardTimeoutLike(resp zero.APIResponse) bool {
+	text := strings.ToLower(mediaShieldForwardFailureText(resp))
+	return strings.Contains(text, "context deadline exceeded") ||
+		strings.Contains(text, "timeout") ||
+		strings.Contains(text, "timed out")
+}
+
+func mediaShieldForwardFailureText(resp zero.APIResponse) string {
+	return strings.TrimSpace(resp.Message + resp.Wording)
+}
+
+func mediaShieldArchiveForwardNodes(nickname string, userID int64, file, name, reply, card string, active bool, emoji string) []map[string]any {
+	nodes := []map[string]any{}
+	if active && emoji != "" {
+		nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
+			"type": "text",
+			"data": map[string]any{"text": emoji},
+		}}))
+	}
+	if strings.TrimSpace(card) != "" {
+		nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
+			"type": "image",
+			"data": map[string]any{"file": card},
+		}}))
+	}
+	nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
+		"type": "file",
+		"data": map[string]any{
+			"file": file,
+			"name": name,
 		},
-		{
-			"type": "node",
-			"data": map[string]any{
-				"name": nickname,
-				"uin":  fmt.Sprintf("%d", userID),
-				"content": []map[string]any{{
-					"type": "text",
-					"data": map[string]any{
-						"text": reply,
-					},
-				}},
-			},
+	}}))
+	nodes = append(nodes, mediaShieldForwardNode(nickname, userID, []map[string]any{{
+		"type": "text",
+		"data": map[string]any{
+			"text": reply,
+		},
+	}}))
+	return nodes
+}
+
+func mediaShieldForwardNode(nickname string, userID int64, content []map[string]any) map[string]any {
+	return map[string]any{
+		"type": "node",
+		"data": map[string]any{
+			"name":    nickname,
+			"uin":     fmt.Sprintf("%d", userID),
+			"content": content,
 		},
 	}
 }

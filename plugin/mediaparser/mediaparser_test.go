@@ -2338,13 +2338,13 @@ func TestMediaShieldForwardSenderUsesOriginalSender(t *testing.T) {
 }
 
 func TestMediaShieldArchiveForwardNodesUseNativeFileContent(t *testing.T) {
-	nodes := mediaShieldArchiveForwardNodes("sender", 12345, "/host/data/shield.zip", "shield.zip", "password: 123456")
-	if len(nodes) != 2 {
-		t.Fatalf("nodes=%d, want 2", len(nodes))
+	nodes := mediaShieldArchiveForwardNodes("sender", 12345, "/host/data/shield.zip", "shield.zip", "password: 123456", "file:///host/card.png", true, "smirk")
+	if len(nodes) != 4 {
+		t.Fatalf("nodes=%d, want 4", len(nodes))
 	}
-	data, ok := nodes[0]["data"].(map[string]any)
+	data, ok := nodes[2]["data"].(map[string]any)
 	if !ok {
-		t.Fatalf("file node data has unexpected type %T", nodes[0]["data"])
+		t.Fatalf("file node data has unexpected type %T", nodes[2]["data"])
 	}
 	content, ok := data["content"].([]map[string]any)
 	if !ok || len(content) != 1 {
@@ -2362,6 +2362,21 @@ func TestMediaShieldArchiveForwardNodesUseNativeFileContent(t *testing.T) {
 	}
 }
 
+func TestMediaShieldArchiveForwardNodesCanOmitPreview(t *testing.T) {
+	nodes := mediaShieldArchiveForwardNodes("sender", 12345, "/host/data/shield.zip", "shield.zip", "password: 123456", "", false, "")
+	if len(nodes) != 2 {
+		t.Fatalf("nodes=%d, want 2", len(nodes))
+	}
+	data, ok := nodes[0]["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("file node data has unexpected type %T", nodes[0]["data"])
+	}
+	content, ok := data["content"].([]map[string]any)
+	if !ok || len(content) != 1 || content[0]["type"] != "file" {
+		t.Fatalf("first node should be file content=%v", data["content"])
+	}
+}
+
 func TestMediaShieldForwardMayStillCompleteOnlyForLongEmptyResponse(t *testing.T) {
 	if !mediaShieldForwardMayStillComplete(zero.APIResponse{}, 25*time.Second) {
 		t.Fatalf("long empty response should be treated as pending")
@@ -2371,6 +2386,12 @@ func TestMediaShieldForwardMayStillCompleteOnlyForLongEmptyResponse(t *testing.T
 	}
 	if mediaShieldForwardMayStillComplete(zero.APIResponse{Status: "failed"}, 25*time.Second) {
 		t.Fatalf("failed response should not be treated as pending")
+	}
+	if !mediaShieldForwardMayStillComplete(zero.APIResponse{Status: "failed", Message: "context deadline exceeded"}, 25*time.Second) {
+		t.Fatalf("long timeout-like forward failure should be treated as pending")
+	}
+	if mediaShieldForwardMayStillComplete(zero.APIResponse{Status: "failed", Message: "permission denied"}, 25*time.Second) {
+		t.Fatalf("non-timeout forward failure should not be treated as pending")
 	}
 }
 
