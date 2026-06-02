@@ -284,10 +284,13 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 		return fmt.Errorf("create zip: %w", err)
 	}
 	scheduleDelete(archive, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-	if err := uploadMediaShieldArchive(ctx, archive); err != nil {
-		return fmt.Errorf("upload zip: %w", err)
+	if err := sendMediaShieldArchiveForward(ctx, cfg, archive, password); err != nil {
+		logrus.Warnf("[mediaparser] media_shield_forward_archive_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
+		if err := uploadMediaShieldArchive(ctx, archive); err != nil {
+			return fmt.Errorf("upload zip: %w", err)
+		}
+		ctx.SendChain(message.Text(mediaShieldReplyText(cfg, password)))
 	}
-	ctx.SendChain(message.Text(mediaShieldReplyText(cfg, password)))
 	return nil
 }
 
@@ -409,6 +412,56 @@ func uploadMediaShieldArchive(ctx *zero.Ctx, path string) error {
 		}
 	}
 	return nil
+}
+
+func sendMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password string) error {
+	if ctx == nil || ctx.Event == nil {
+		return fmt.Errorf("missing event")
+	}
+	uploadPath := oneBotUploadFilePath(path)
+	name := filepath.Base(path)
+	nickname, userID := mediaShieldForwardSender(ctx)
+	nodes := message.Message{
+		message.CustomNode(nickname, userID, message.Message{message.File(uploadPath, name)}),
+		message.CustomNode(nickname, userID, message.Message{message.Text(mediaShieldReplyText(cfg, password))}),
+	}
+	var resID int64
+	if ctx.Event.GroupID != 0 {
+		resID = ctx.SendGroupForwardMessage(ctx.Event.GroupID, nodes).Get("message_id").Int()
+	} else if ctx.Event.UserID != 0 {
+		resID = ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes).Get("message_id").Int()
+	} else {
+		return fmt.Errorf("missing target")
+	}
+	if resID == 0 {
+		return fmt.Errorf("empty forward response")
+	}
+	logrus.Infof("[mediaparser] media_shield_archive_forward_sent sender=%s(%d) file=%s message_id=%d", nickname, userID, name, resID)
+	return nil
+}
+
+func mediaShieldForwardSender(ctx *zero.Ctx) (string, int64) {
+	if ctx == nil || ctx.Event == nil {
+		return "MediaShield", 0
+	}
+	userID := ctx.Event.UserID
+	nickname := ""
+	if ctx.Event.Sender != nil {
+		nickname = firstNonEmpty(ctx.Event.Sender.Card, ctx.Event.Sender.NickName, ctx.Event.Sender.AnonymousName)
+		if userID == 0 {
+			userID = ctx.Event.Sender.ID
+		}
+	}
+	if nickname == "" && userID != 0 {
+		nickname = fmt.Sprintf("%d", userID)
+	}
+	if nickname == "" {
+		nickname = "MediaShield"
+	}
+	if userID == 0 {
+		userID = ctx.Event.SelfID
+	}
+	return nickname, userID
 }
 
 func mediaShieldPassword() (string, error) {

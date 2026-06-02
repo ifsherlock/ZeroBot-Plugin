@@ -18,6 +18,7 @@ import (
 	"github.com/FloatTech/gg"
 	zip "github.com/alexmullins/zip"
 	"github.com/disintegration/imaging"
+	zero "github.com/wdvxdr1123/ZeroBot"
 )
 
 func TestPermissionOKSeparatesPrivateAndGroupAccess(t *testing.T) {
@@ -2315,6 +2316,23 @@ func TestMediaShieldActiveTriggeredSupportsCustomKeywords(t *testing.T) {
 	}
 	if mediaShieldActiveTriggered(cfg, "普通 X 链接") {
 		t.Fatalf("unexpected active trigger")
+	}
+}
+
+func TestMediaShieldForwardSenderUsesOriginalSender(t *testing.T) {
+	ctx := &zero.Ctx{Event: &zero.Event{
+		SelfID: 10000,
+		UserID: 12345,
+		Sender: &zero.User{
+			ID:       12345,
+			NickName: "nickname",
+			Card:     "group-card",
+		},
+	}}
+
+	name, id := mediaShieldForwardSender(ctx)
+	if name != "group-card" || id != 12345 {
+		t.Fatalf("sender=%s(%d), want group-card(12345)", name, id)
 	}
 }
 
