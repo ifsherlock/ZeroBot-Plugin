@@ -278,19 +278,14 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 		return fmt.Errorf("generate password: %w", err)
 	}
 	archive := cacheFile(meta, "shield", 0, ".zip")
+	zipStarted := time.Now()
 	if err := createMediaShieldZip(files, archive, password); err != nil {
 		return fmt.Errorf("create zip: %w", err)
 	}
+	logrus.Infof("[mediaparser] media_shield_zip_created platform=%s title=%q file=%s size_mb=%.1f elapsed=%s", meta.Platform, truncate(meta.Title, 80), filepath.Base(archive), fileSizeMB(archive), time.Since(zipStarted).Round(time.Millisecond))
 	scheduleDelete(archive, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-	if err := sendMediaShieldArchiveForward(ctx, cfg, archive, password, shieldCard, reason.Active); err != nil {
-		logrus.Warnf("[mediaparser] media_shield_forward_archive_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
-		if shieldCard != "" {
-			ctx.SendChain(message.Image(mediaShieldCardTarget(ctx, shieldCard)))
-		}
-		if err := uploadMediaShieldArchive(ctx, archive); err != nil {
-			return fmt.Errorf("upload zip: %w", err)
-		}
-		ctx.SendChain(message.Text(mediaShieldReplyText(cfg, password)))
+	if err := queueMediaShieldArchiveForward(ctx, cfg, archive, password, shieldCard, reason.Active, meta.Platform, meta.Title); err != nil {
+		return fmt.Errorf("queue forward: %w", err)
 	}
 	return nil
 }
@@ -424,6 +419,26 @@ func uploadMediaShieldArchive(ctx *zero.Ctx, path string) error {
 			return fmt.Errorf("private upload failed: %s", ret)
 		}
 	}
+	return nil
+}
+
+func queueMediaShieldArchiveForward(ctx *zero.Ctx, cfg config, path, password, cardPath string, active bool, platform, title string) error {
+	if ctx == nil || ctx.Event == nil {
+		return fmt.Errorf("missing event")
+	}
+	if ctx.Event.GroupID == 0 && ctx.Event.UserID == 0 {
+		return fmt.Errorf("missing target")
+	}
+	name := filepath.Base(path)
+	logrus.Infof("[mediaparser] media_shield_archive_forward_queued platform=%s title=%q file=%s", platform, truncate(title, 80), name)
+	go func() {
+		started := time.Now()
+		if err := sendMediaShieldArchiveForward(ctx, cfg, path, password, cardPath, active); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_archive_forward_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond), err)
+			return
+		}
+		logrus.Infof("[mediaparser] media_shield_archive_forward_async_done platform=%s title=%q file=%s elapsed=%s", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond))
+	}()
 	return nil
 }
 
