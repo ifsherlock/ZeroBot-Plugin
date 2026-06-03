@@ -134,11 +134,25 @@ func TestLinuxdoTopicID(t *testing.T) {
 	cases := map[string]string{
 		"https://linux.do/t/topic-title/12345":   "12345",
 		"https://linux.do/t/topic-title/12345/2": "12345",
+		"https://linux.do/t/12345/2":             "12345",
 		"https://linux.do/t/12345.json":          "12345",
 	}
 	for raw, want := range cases {
 		if got := linuxdoTopicID(raw); got != want {
 			t.Fatalf("linuxdoTopicID(%q)=%q, want %q", raw, got, want)
+		}
+	}
+}
+
+func TestLinuxdoPostNumber(t *testing.T) {
+	cases := map[string]string{
+		"https://linux.do/t/topic-title/12345":   "",
+		"https://linux.do/t/topic-title/12345/3": "3",
+		"https://linux.do/t/12345/3":             "3",
+	}
+	for raw, want := range cases {
+		if got := linuxdoPostNumber(raw); got != want {
+			t.Fatalf("linuxdoPostNumber(%q)=%q, want %q", raw, got, want)
 		}
 	}
 }
@@ -177,6 +191,95 @@ func TestParseLinuxdoTopicJSON(t *testing.T) {
 	}
 	if meta.Avatar != "https://linux.do/user_avatar/linux.do/neo/120/1_2.png" {
 		t.Fatalf("avatar=%q", meta.Avatar)
+	}
+}
+
+func TestParseLinuxdoTopicJSONSelectsRequestedPost(t *testing.T) {
+	body := `{
+	  "id": 12345,
+	  "slug": "topic-title",
+	  "title": "Linux.do 楼层链接",
+	  "post_stream": {
+	    "stream": [101,102,103],
+	    "posts": [{
+	      "id": 101,
+	      "post_number": 1,
+	      "username": "neo",
+	      "cooked": "<p>主帖内容</p>"
+	    },{
+	      "id": 103,
+	      "post_number": 3,
+	      "username": "ada",
+	      "name": "Ada",
+	      "cooked": "<p>第三楼内容</p>"
+	    }]
+	  }
+	}`
+	meta, err := parseLinuxdoTopicJSON("https://linux.do/t/topic-title/12345/3", "https://linux.do/t/12345.json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Author != "Ada" || !strings.Contains(meta.Desc, "第三楼内容") {
+		t.Fatalf("meta=%+v", meta)
+	}
+	if meta.URL != "https://linux.do/t/topic-title/12345/3" {
+		t.Fatalf("url=%q", meta.URL)
+	}
+}
+
+func TestLinuxdoMergePostIntoTopic(t *testing.T) {
+	topic := `{
+	  "id": 12345,
+	  "slug": "topic-title",
+	  "title": "Linux.do 楼层链接",
+	  "post_stream": {
+	    "stream": [101,102,103],
+	    "posts": [{
+	      "id": 101,
+	      "post_number": 1,
+	      "username": "neo",
+	      "cooked": "<p>主帖内容</p>"
+	    }]
+	  }
+	}`
+	postID, loaded := linuxdoPostIDForNumber(topic, "3")
+	if loaded || postID != "103" {
+		t.Fatalf("postID=%q loaded=%v", postID, loaded)
+	}
+	merged, err := linuxdoMergePostIntoTopic(topic, `{
+	  "id": 103,
+	  "post_number": 3,
+	  "username": "ada",
+	  "name": "Ada",
+	  "cooked": "<p>第三楼补充内容</p>"
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta, err := parseLinuxdoTopicJSON("https://linux.do/t/topic-title/12345/3", "https://linux.do/posts/103.json", merged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Author != "Ada" || !strings.Contains(meta.Desc, "第三楼补充内容") {
+		t.Fatalf("meta=%+v", meta)
+	}
+}
+
+func TestLinuxdoCleanCookedStripsPromotionDeclaration(t *testing.T) {
+	cooked := `<p>本帖使用社区开源推广，符合推广要求。我申明并遵循社区要求的以下内容：</p>
+<p>我的帖子已经打上 开源推广 标签： 是</p>
+<p>我的开源项目完整开源，无未开源部分： 是</p>
+<p>我的开源项目已链接认可 LINUX DO 社区： 是</p>
+<p>我帖子内的项目介绍，AI生成、润色内容部分已截图发出： 是</p>
+<p>以上选择我承诺是永久有效的，接受社区和佬友监督： 是</p>
+<p>以下为项目介绍正文内容，AI生成、润色内容已使用截图方式发出</p>
+<p>这里是真正的项目介绍。</p>`
+	got := linuxdoCleanCooked(cooked)
+	if strings.Contains(got, "开源推广") || strings.Contains(got, "社区要求") || strings.Contains(got, "以上选择") {
+		t.Fatalf("promotion declaration was not stripped: %q", got)
+	}
+	if !strings.Contains(got, "这里是真正的项目介绍") {
+		t.Fatalf("project body missing: %q", got)
 	}
 }
 

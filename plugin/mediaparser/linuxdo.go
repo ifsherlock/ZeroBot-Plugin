@@ -21,6 +21,7 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 	if topicID == "" {
 		return mediaMeta{}, fmt.Errorf("linux.do topic id not found")
 	}
+	postNumber := linuxdoPostNumber(raw)
 	api := linuxdoBase + "/t/" + topicID + ".json"
 	headers := linuxdoHeaders(cfg, raw)
 	body, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", api, headers, true)
@@ -29,6 +30,11 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 	}
 	if status >= 400 {
 		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg))
+	}
+	if postNumber != "" {
+		if body, finalURL, err = linuxdoEnsurePostLoaded(cfg, raw, body, postNumber, finalURL); err != nil {
+			return mediaMeta{}, err
+		}
 	}
 	meta, err := parseLinuxdoTopicJSON(raw, finalURL, body)
 	if err != nil {
@@ -42,6 +48,27 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		meta.ImageHeads["Cookie"] = cfg.LinuxdoCookie
 	}
 	return meta, nil
+}
+
+func linuxdoEnsurePostLoaded(cfg config, referer, topicBody, postNumber, finalURL string) (string, string, error) {
+	postID, hasPost := linuxdoPostIDForNumber(topicBody, postNumber)
+	if hasPost || postID == "" {
+		return topicBody, finalURL, nil
+	}
+	headers := linuxdoHeaders(cfg, referer)
+	api := linuxdoBase + "/posts/" + postID + ".json"
+	postBody, postFinalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", api, headers, true)
+	if err != nil {
+		return "", "", err
+	}
+	if status >= 400 {
+		return "", "", fmt.Errorf("linux.do post API HTTP %d final=%s %s request=%s", status, postFinalURL, linuxdoErrorSummary(postBody), linuxdoRequestSummary(cfg))
+	}
+	merged, err := linuxdoMergePostIntoTopic(topicBody, postBody)
+	if err != nil {
+		return "", "", err
+	}
+	return merged, postFinalURL, nil
 }
 
 func linuxdoHeaders(cfg config, referer string) map[string]string {
@@ -203,14 +230,85 @@ func linuxdoSelectPost(posts []any, postNumber string) map[string]any {
 	return post
 }
 
+func linuxdoPostIDForNumber(body, postNumber string) (string, bool) {
+	postNumber = strings.TrimSpace(postNumber)
+	if postNumber == "" {
+		return "", true
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		return "", false
+	}
+	for _, item := range getSlice(data, "post_stream", "posts") {
+		post, _ := item.(map[string]any)
+		if getString(post, "post_number") == postNumber {
+			return getString(post, "id"), true
+		}
+	}
+	stream := getSlice(data, "post_stream", "stream")
+	idx, err := strconv.Atoi(postNumber)
+	if err != nil || idx <= 0 || idx > len(stream) {
+		return "", false
+	}
+	return getString(stream[idx-1]), false
+}
+
+func linuxdoMergePostIntoTopic(topicBody, postBody string) (string, error) {
+	var topic map[string]any
+	if err := json.Unmarshal([]byte(topicBody), &topic); err != nil {
+		return "", err
+	}
+	var post map[string]any
+	if err := json.Unmarshal([]byte(postBody), &post); err != nil {
+		return "", err
+	}
+	if post == nil {
+		return topicBody, nil
+	}
+	stream := getMap(topic, "post_stream")
+	if stream == nil {
+		stream = map[string]any{}
+		topic["post_stream"] = stream
+	}
+	posts := getSlice(stream, "posts")
+	targetNumber := getString(post, "post_number")
+	replaced := false
+	for i, item := range posts {
+		old, _ := item.(map[string]any)
+		if getString(old, "post_number") == targetNumber {
+			posts[i] = post
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		posts = append(posts, post)
+	}
+	stream["posts"] = posts
+	out, err := json.Marshal(topic)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
 func linuxdoPostNumber(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return ""
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) >= 4 && parts[0] == "t" && regexp.MustCompile(`^\d+$`).MatchString(parts[3]) {
-		return parts[3]
+	if len(parts) < 3 || parts[0] != "t" {
+		return ""
+	}
+	numeric := []string{}
+	for _, part := range parts[1:] {
+		if regexp.MustCompile(`^\d+$`).MatchString(part) {
+			numeric = append(numeric, part)
+		}
+	}
+	if len(numeric) >= 2 {
+		return numeric[1]
 	}
 	return ""
 }
@@ -309,7 +407,65 @@ func linuxdoCleanCooked(cooked string) string {
 	s = html.UnescapeString(htmlUnescape(s))
 	s = regexp.MustCompile(`[ \t\r\f\v]+`).ReplaceAllString(s, " ")
 	s = regexp.MustCompile(`\n{3,}`).ReplaceAllString(s, "\n\n")
+	s = linuxdoStripPromotionDeclarations(s)
 	return strings.TrimSpace(s)
+}
+
+func linuxdoStripPromotionDeclarations(s string) string {
+	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	out := make([]string, 0, len(lines))
+	skipping := false
+	seenIntro := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if linuxdoPromotionDeclarationStart(trimmed) {
+			skipping = true
+			seenIntro = false
+			continue
+		}
+		if skipping {
+			if strings.Contains(trimmed, "以下为项目介绍正文内容") {
+				seenIntro = true
+				continue
+			}
+			if seenIntro && !linuxdoPromotionDeclarationLine(trimmed) {
+				skipping = false
+			} else {
+				continue
+			}
+		}
+		out = append(out, line)
+	}
+	cleaned := strings.Join(out, "\n")
+	cleaned = regexp.MustCompile(`\n{3,}`).ReplaceAllString(cleaned, "\n\n")
+	return strings.TrimSpace(cleaned)
+}
+
+func linuxdoPromotionDeclarationStart(s string) bool {
+	return strings.Contains(s, "本帖使用社区开源推广") ||
+		strings.Contains(s, "本帖使用社区公益推广")
+}
+
+func linuxdoPromotionDeclarationLine(s string) bool {
+	if s == "" {
+		return true
+	}
+	keys := []string{
+		"我的帖子已经打上",
+		"我的开源项目",
+		"我的项目",
+		"我帖子内的项目介绍",
+		"我的站点存在登录",
+		"以上选择我承诺",
+		"以下为项目介绍正文内容",
+		"AI生成、润色内容",
+	}
+	for _, key := range keys {
+		if strings.Contains(s, key) {
+			return true
+		}
+	}
+	return regexp.MustCompile(`^(?:是|否|是 / 否)\s*$`).MatchString(s)
 }
 
 func linuxdoTime(raw string) string {

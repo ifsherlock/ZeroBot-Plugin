@@ -104,9 +104,9 @@ func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		body = "暂无正文摘要"
 	}
 	bodyLines := wrapTextByPixels(gg.NewContext(w, 100), bodyFontBytes, 24, body, float64(boxW-36))
-	maxBodyLines := 12
+	maxBodyLines := 22
 	if imageH > 0 {
-		maxBodyLines = 8
+		maxBodyLines = 14
 	}
 	if len(bodyLines) > maxBodyLines {
 		bodyLines = bodyLines[:maxBodyLines]
