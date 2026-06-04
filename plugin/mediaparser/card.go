@@ -569,13 +569,74 @@ func unifiedLayout() (panelX, panelY, panelW, panelPad, contentW int) {
 	return
 }
 
+func cardDisplayTitle(meta mediaMeta, kind string) string {
+	if title := strings.TrimSpace(meta.Title); title != "" {
+		return title
+	}
+	if line := firstNonEmptyLine(meta.Desc); line != "" {
+		return line
+	}
+	return cardPlatformFallbackTitle(meta.Platform, kind)
+}
+
+func cardPlatformFallbackTitle(platform, kind string) string {
+	switch platform {
+	case "bilibili":
+		if kind == "video" {
+			return "B站视频"
+		}
+		return "B站图文"
+	case "weibo":
+		if kind == "video" {
+			return "微博视频"
+		}
+		return "微博图文"
+	case "douyin":
+		if kind == "video" {
+			return "抖音视频"
+		}
+		return "抖音图文"
+	case "tiktok":
+		if kind == "video" {
+			return "TikTok视频"
+		}
+		return "TikTok图文"
+	case "kuaishou":
+		if kind == "video" {
+			return "快手视频"
+		}
+		return "快手图文"
+	case "xiaohongshu":
+		if kind == "video" {
+			return "小红书视频"
+		}
+		return "小红书图文"
+	case "twitter":
+		if kind == "video" {
+			return "X视频"
+		}
+		return "X图文"
+	case "youtube":
+		return "YouTube视频"
+	case "instagram":
+		if kind == "video" {
+			return "Instagram视频"
+		}
+		return "Instagram图文"
+	}
+	if kind == "video" {
+		return "视频内容"
+	}
+	return "图文内容"
+}
+
 func renderUnifiedVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	bodyFontBytes := keylolBodyFontBytes(fontBytes)
 	tm := unifiedThemeNow()
 	panelX, panelY, panelW, panelPad, contentW := unifiedLayout()
 	coverImg := fetchCardImage(firstCardCover(meta), meta.ImageHeads)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
-	title := firstNonEmpty(meta.Title, meta.Desc, "媒体解析")
+	title := cardDisplayTitle(meta, "video")
 	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
 	if len(titleLines) == 0 {
 		titleLines = []string{title}
@@ -622,7 +683,7 @@ func renderUnifiedGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) 
 	}
 	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
 	debugDumpCardImages(meta.Platform, images)
-	title := firstNonEmpty(meta.Title, "媒体解析")
+	title := cardDisplayTitle(meta, "gallery")
 	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
 	if len(titleLines) == 0 {
 		titleLines = []string{title}
@@ -667,7 +728,7 @@ func renderUnifiedLongImageCard(meta mediaMeta, fontBytes []byte) (string, error
 	tm := unifiedThemeNow()
 	panelX, panelY, panelW, panelPad, contentW := unifiedLayout()
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
-	title := firstNonEmpty(meta.Title, "媒体解析")
+	title := cardDisplayTitle(meta, "long_image")
 	titleLines := wrapDisplayTextByPixels(fontBytes, 31, title, float64(contentW), 2)
 	descLines := wrapTextByPixels(gg.NewContext(unifiedCardW, 100), bodyFontBytes, 22, meta.Desc, float64(contentW-34))
 	if len(descLines) > 12 {
@@ -911,7 +972,7 @@ func renderVideoCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	coverImg := fetchCardImage(firstCardCover(meta), meta.ImageHeads)
 	avatarImg := fetchCardImage(meta.Avatar, meta.ImageHeads)
 
-	title := firstNonEmpty(meta.Title, meta.Desc, "媒体解析")
+	title := cardDisplayTitle(meta, "video")
 	titleLines := []string{}
 	summaryLines := []string{}
 	if len(summaryLines) == 0 {
@@ -993,7 +1054,7 @@ func renderGalleryCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	}
 	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
 
-	title := firstNonEmpty(meta.Title, "媒体解析")
+	title := cardDisplayTitle(meta, "gallery")
 	titleLines := []string{}
 	descLines := []string{}
 

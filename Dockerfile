@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM ${ALPINE_IMAGE} AS runtime
 
-RUN apk add --no-cache ca-certificates tzdata nginx
+RUN apk add --no-cache ca-certificates tzdata nginx ffmpeg
 
 WORKDIR /app
 

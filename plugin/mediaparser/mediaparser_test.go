@@ -2766,6 +2766,39 @@ func TestCreateMediaShieldZipRequiresPassword(t *testing.T) {
 	}
 }
 
+func TestCardDisplayTitleUsesDescFirstLine(t *testing.T) {
+	title := cardDisplayTitle(mediaMeta{
+		Platform: "weibo",
+		Desc:     "\n正文第一行\n正文第二行",
+	}, "gallery")
+	if title != "正文第一行" {
+		t.Fatalf("title=%q, want desc first line", title)
+	}
+	if strings.Contains(title, "媒体解析") {
+		t.Fatalf("title should not use generic fallback: %q", title)
+	}
+}
+
+func TestCardDisplayTitlePlatformFallback(t *testing.T) {
+	tests := []struct {
+		name string
+		meta mediaMeta
+		kind string
+		want string
+	}{
+		{name: "weibo gallery", meta: mediaMeta{Platform: "weibo"}, kind: "gallery", want: "微博图文"},
+		{name: "bilibili video", meta: mediaMeta{Platform: "bilibili"}, kind: "video", want: "B站视频"},
+		{name: "unknown gallery", meta: mediaMeta{Platform: "unknown"}, kind: "gallery", want: "图文内容"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cardDisplayTitle(tt.meta, tt.kind); got != tt.want {
+				t.Fatalf("title=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func containsString(list []string, want string) bool {
 	for _, item := range list {
 		if item == want {

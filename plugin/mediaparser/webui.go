@@ -1741,7 +1741,7 @@ function qqbotStatusText(){
 }
 function qqbotPolicyText(){
  if(!qqbotAvailable()) return qqbotUnavailableText();
- return (sys&&sys.qqbot_enabled?(sys.qqbot_card_enabled?'卡片开启':'卡片关闭'):'未启用')+' / 媒体图片 '+onText(sys&&sys.qqbot_media_enabled);
+ return (sys&&sys.qqbot_enabled?(sys.qqbot_card_enabled?'卡片开启':'卡片关闭'):'未启用')+' / 媒体图片/视频 '+onText(sys&&sys.qqbot_media_enabled);
 }
 function renderQQBotAvailability(){
  const available=qqbotAvailable();
