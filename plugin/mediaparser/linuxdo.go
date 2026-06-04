@@ -29,6 +29,9 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, err
 	}
 	if status >= 400 {
+		if htmlMeta, htmlErr := linuxdoParseHTMLFallback(cfg, raw, topicID, postNumber); htmlErr == nil {
+			return htmlMeta, nil
+		}
 		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg))
 	}
 	if postNumber != "" {
@@ -48,6 +51,110 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		meta.ImageHeads["Cookie"] = cfg.LinuxdoCookie
 	}
 	return meta, nil
+}
+
+func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string) (mediaMeta, error) {
+	pageURL := linuxdoTopicPageURL(sourceURL, topicID, postNumber)
+	headers := linuxdoHeaders(cfg, sourceURL)
+	htmlBody, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", pageURL, headers, true)
+	if err != nil {
+		return mediaMeta{}, err
+	}
+	if status >= 400 {
+		return mediaMeta{}, fmt.Errorf("linux.do page HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(htmlBody), linuxdoRequestSummary(cfg))
+	}
+	if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
+		return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+	}
+	meta := mediaMeta{
+		URL:        pageURL,
+		SourceURL:  sourceURL,
+		Platform:   "linuxdo",
+		Title:      firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
+		Desc:       linuxdoHTMLBodyText(htmlBody),
+		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
+		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
+	}
+	return meta, nil
+}
+
+func linuxdoTopicPageURL(sourceURL, topicID, postNumber string) string {
+	if sourceURL != "" && !strings.HasSuffix(strings.ToLower(sourceURL), ".json") {
+		return sourceURL
+	}
+	if postNumber == "" || postNumber == "0" {
+		postNumber = "1"
+	}
+	return linuxdoBase + "/t/" + topicID + "/" + postNumber
+}
+
+func linuxdoExtractTopicJSONFromHTML(htmlBody string) map[string]any {
+	for _, marker := range []string{
+		"data-preloaded",
+		"window.__PRELOADED_STATE__",
+		"window.__data",
+		"Discourse._preloadedState",
+	} {
+		if root, err := extractAssignedJSONObject(htmlBody, marker); err == nil {
+			if topic := linuxdoFindTopicMap(root); topic != nil {
+				return topic
+			}
+		}
+	}
+	return nil
+}
+
+func linuxdoFindTopicMap(v any) map[string]any {
+	switch x := v.(type) {
+	case map[string]any:
+		if _, ok := x["post_stream"]; ok {
+			return x
+		}
+		for _, item := range x {
+			if topic := linuxdoFindTopicMap(item); topic != nil {
+				return topic
+			}
+		}
+	case []any:
+		for _, item := range x {
+			if topic := linuxdoFindTopicMap(item); topic != nil {
+				return topic
+			}
+		}
+	}
+	return nil
+}
+
+func linuxdoHTMLTitle(body string) string {
+	if title := titleTag(body); title != "" {
+		return title
+	}
+	if m := regexp.MustCompile(`(?is)<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']`).FindStringSubmatch(body); len(m) > 1 {
+		return htmlUnescape(m[1])
+	}
+	return ""
+}
+
+func linuxdoHTMLBodyText(body string) string {
+	parts := []string{}
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`),
+		regexp.MustCompile(`(?is)<main\b[^>]*>(.*?)</main>`),
+		regexp.MustCompile(`(?is)<div\b[^>]+class=["'][^"']*cooked[^"']*["'][^>]*>(.*?)</div>`),
+	} {
+		if m := re.FindStringSubmatch(body); len(m) > 1 {
+			text := linuxdoCleanCooked(m[1])
+			if text != "" {
+				parts = append(parts, text)
+			}
+		}
+	}
+	return firstNonEmpty(parts...)
+}
+
+func mustJSON(v any) string {
+	data, _ := json.Marshal(v)
+	return string(data)
 }
 
 func linuxdoEnsurePostLoaded(cfg config, referer, topicBody, postNumber, finalURL string) (string, string, error) {
