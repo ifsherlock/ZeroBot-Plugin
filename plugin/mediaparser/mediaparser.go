@@ -1516,7 +1516,7 @@ func sendQQBotRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 	videoCount := 0
 	imageCount := 0
 	for i := range meta.VideoURLs {
-		target := mediaVideoTarget(meta, i)
+		target := qqBotMediaVideoTarget(meta, i)
 		if target == "" {
 			continue
 		}
@@ -1525,7 +1525,7 @@ func sendQQBotRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 		logrus.Infof("[mediaparser] sent_qqbot_video platform=%s title=%q index=%d target=%s", meta.Platform, meta.Title, i, target)
 	}
 	for i := range meta.ImageURLs {
-		target := mediaImageTarget(meta, i)
+		target := qqBotMediaImageTarget(meta, i)
 		if target == "" {
 			continue
 		}
@@ -1535,6 +1535,47 @@ func sendQQBotRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 	}
 	logrus.Infof("[mediaparser] sent_qqbot_media platform=%s title=%q videos=%d images=%d public_base=%v", meta.Platform, meta.Title, videoCount, imageCount, qqBotPublicImageEnabled())
 	return nil
+}
+
+func qqBotMediaVideoTarget(meta *mediaMeta, i int) string {
+	if i < 0 || i >= len(meta.VideoURLs) {
+		return ""
+	}
+	if i < len(meta.VideoModes) && meta.VideoModes[i] == "skip" {
+		return ""
+	}
+	if i < len(meta.FilePaths) && meta.FilePaths[i] != "" {
+		return localMediaPathForQQBot(meta.FilePaths[i])
+	}
+	if len(meta.VideoURLs[i]) > 0 {
+		return stripMediaPrefix(meta.VideoURLs[i][0])
+	}
+	return ""
+}
+
+func qqBotMediaImageTarget(meta *mediaMeta, i int) string {
+	if i < 0 || i >= len(meta.ImageURLs) {
+		return ""
+	}
+	if i < len(meta.ImageModes) && meta.ImageModes[i] == "skip" {
+		return ""
+	}
+	offset := len(meta.VideoURLs)
+	if offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
+		return localMediaPathForQQBot(meta.FilePaths[offset+i])
+	}
+	if len(meta.ImageURLs[i]) > 0 {
+		return stripMediaPrefix(meta.ImageURLs[i][0])
+	}
+	return ""
+}
+
+func localMediaPathForQQBot(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return abs
 }
 
 func shouldForwardCombinedMedia(meta *mediaMeta) bool {

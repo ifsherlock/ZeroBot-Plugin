@@ -357,11 +357,7 @@ func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, gr
 	for _, item := range attachments {
 		resp, err := d.sendOfficialMedia(ctx, openID, group, item)
 		if err != nil {
-			fallback := strings.TrimSpace(d.messageText(msg))
-			if fallback != "" {
-				logrus.Warnf("[qqbot] media_send_failed target=%s error=%v; falling back to markdown text", item.target, err)
-				return d.sendOfficialText(ctx, openID, group, fallback)
-			}
+			logrus.Warnf("[qqbot] media_send_failed target=%s file_type=%d error=%v", item.target, item.fileType, err)
 			return resp, err
 		}
 		last = resp

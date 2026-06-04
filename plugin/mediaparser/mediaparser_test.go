@@ -1257,6 +1257,48 @@ func TestOneBotLocalMediaTargetFallsBackToPublicURL(t *testing.T) {
 	}
 }
 
+func TestQQBotMediaTargetUsesContainerLocalPath(t *testing.T) {
+	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
+	cacheDir = filepath.Join(t.TempDir(), "data", "mediaparser", "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	video := filepath.Join(cacheDir, "bilibili_test", "dash_0.mp4")
+	image := filepath.Join(cacheDir, "weibo_test", "image_0.jpg")
+	for _, path := range []string{video, image} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("media"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	SetRuntimeSystemSettings(SystemSettings{
+		WSURL:           "ws://127.0.0.1:3001",
+		OneBotDataDir:   "/host/data",
+		QQBotPublicBase: "https://public.example/cache/",
+	})
+	defer func() {
+		cacheDir = oldCacheDir
+		SetRuntimeSystemSettings(oldSystem)
+	}()
+
+	meta := mediaMeta{
+		VideoURLs:  [][]string{{"https://example.com/video.mp4"}},
+		ImageURLs:  [][]string{{"https://example.com/image.jpg"}},
+		VideoModes: []string{"local"},
+		ImageModes: []string{"local"},
+		FilePaths:  []string{video, image},
+	}
+	if got, want := qqBotMediaVideoTarget(&meta, 0), filepath.Clean(video); filepath.Clean(got) != want {
+		t.Fatalf("qqbot video target=%q, want local %q", got, want)
+	}
+	if got, want := qqBotMediaImageTarget(&meta, 0), filepath.Clean(image); filepath.Clean(got) != want {
+		t.Fatalf("qqbot image target=%q, want local %q", got, want)
+	}
+}
+
 func TestOneBotUploadFilePathPrefersMappedHostPath(t *testing.T) {
 	oldCacheDir := cacheDir
 	oldSystem := runtimeSystem
