@@ -73,6 +73,9 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 	}
 
 	messageHTML := firstNonEmpty(getString(post, "message"), getString(post, "message_html"))
+	if keylolRequiresReplyVisible(messageHTML) {
+		return mediaMeta{}, fmt.Errorf("keylol reply-visible content requires manual unlock")
+	}
 	blocks := keylolBuildBlocks(messageHTML, getMap(post, "attachments"), finalURL)
 	blocks = keylolEnrichSteamBlocks(blocks)
 	blocks = keylolEnsureASFSteamCards(blocks)
@@ -101,6 +104,16 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 		KeylolBlocks:   blocks,
 		KeylolCategory: category,
 	}, nil
+}
+
+func keylolRequiresReplyVisible(messageHTML string) bool {
+	lower := strings.ToLower(messageHTML)
+	if strings.Contains(lower, "replycredit") {
+		return true
+	}
+	hasShowhideButton := strings.Contains(lower, "showhide-btn")
+	hasHiddenHint := strings.Contains(messageHTML, "隐藏内容") || strings.Contains(messageHTML, "回复可见") || strings.Contains(messageHTML, "回帖后可见") || strings.Contains(messageHTML, "回帖可见")
+	return hasShowhideButton && hasHiddenHint
 }
 
 func keylolCategoryLabel(thread map[string]any, rawURL string) string {

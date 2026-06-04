@@ -103,21 +103,7 @@ func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	if body == "" {
 		body = "暂无正文摘要"
 	}
-	bodyLines := wrapTextByPixels(gg.NewContext(w, 100), bodyFontBytes, 24, body, float64(boxW-36))
-	maxBodyLines := 22
-	if imageH > 0 {
-		maxBodyLines = 14
-	}
-	if len(bodyLines) > maxBodyLines {
-		bodyLines = bodyLines[:maxBodyLines]
-		rs := []rune(bodyLines[len(bodyLines)-1])
-		if len(rs) > 1 {
-			bodyLines[len(bodyLines)-1] = strings.TrimRight(string(rs[:len(rs)-1]), "，。！？；：,.!?;: ") + "..."
-		}
-	}
-	if len(bodyLines) == 0 {
-		bodyLines = []string{"暂无正文摘要"}
-	}
+	bodyLines := linuxdoBodyLines(bodyFontBytes, body, boxW)
 	contentBoxH := 34 + len(bodyLines)*34 + 32
 	if contentBoxH < 118 {
 		contentBoxH = 118
@@ -192,6 +178,27 @@ func renderLinuxdoShareCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	footer = truncateTextByPixels(fontBytes, 18, "🔗 "+footer, float64(contentW))
 	drawInlineEmoji(dc, fontBytes, 18, mutedColor, footer, float64(x), float64(y))
 	return saveCardPNG(dc, meta)
+}
+
+func linuxdoBodyLines(fontBytes []byte, body string, boxW int) []string {
+	if len(fontBytes) == 0 {
+		lines := []string{}
+		for _, line := range strings.Split(body, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				lines = append(lines, line)
+			}
+		}
+		if len(lines) == 0 {
+			return []string{"暂无正文摘要"}
+		}
+		return lines
+	}
+	bodyLines := wrapTextByPixels(gg.NewContext(760, 100), fontBytes, 24, body, float64(boxW-36))
+	if len(bodyLines) == 0 {
+		return []string{"暂无正文摘要"}
+	}
+	return bodyLines
 }
 
 func linuxdoContentBoxColor(theme keylolCardTheme) color.RGBA {

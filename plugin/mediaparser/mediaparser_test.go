@@ -326,6 +326,18 @@ func TestLinuxdoCleanCookedStripsPromotionDeclaration(t *testing.T) {
 	}
 }
 
+func TestLinuxdoBodyLinesKeepsLongBody(t *testing.T) {
+	body := strings.Repeat("Linux.do full body line with enough words to wrap.\n", 40)
+	lines := linuxdoBodyLines(nil, body, 620)
+	if len(lines) <= 22 {
+		t.Fatalf("linuxdo body should not be capped at 22 lines, got %d", len(lines))
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "Linux.do full body line") {
+		t.Fatalf("body content missing: %q", joined)
+	}
+}
+
 func TestLinuxdoHeadersIncludeCookieAndUA(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.LinuxdoCookie = "_t=token; cf_clearance=clearance"
@@ -500,6 +512,16 @@ func TestKeylolBuildBlocksCleansBBCollapse(t *testing.T) {
 	got := keylolDescFromBlocks(blocks)
 	if strings.Contains(got, "collapse") || !strings.Contains(got, "正文") {
 		t.Fatalf("collapse tag leaked into desc=%q blocks=%#v", got, blocks)
+	}
+}
+
+func TestKeylolRequiresReplyVisible(t *testing.T) {
+	html := `<div class="showhide"><p>隐藏内容，<a href="javascript:;" class="showhide-btn">点击显示</a></p></div>`
+	if !keylolRequiresReplyVisible(html) {
+		t.Fatalf("reply-visible showhide should be detected")
+	}
+	if keylolRequiresReplyVisible(`<div class="sff_collapse"><p>隐藏内容</p></div>`) {
+		t.Fatalf("plain collapse should not be treated as reply-visible")
 	}
 }
 
