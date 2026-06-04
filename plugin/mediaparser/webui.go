@@ -1528,7 +1528,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsFields">
 <label class="field">Linux.do Cookie <textarea id="linuxdoCookie" placeholder="_t=...; cf_clearance=..."></textarea></label>
 <label class="field">Linux.do User-Agent <textarea id="linuxdoUA" placeholder="同一浏览器 UA；留空用默认"></textarea></label>
+<label class="field">FlareSolverr 地址 <input id="linuxdoFlaresolverrURL" placeholder="http://10.10.10.x:8191"></label>
+<label class="field">FlareSolverr 等待秒数 <input id="linuxdoFlaresolverrWait" type="number" min="0" placeholder="2"></label>
+<label class="field">FlareSolverr 超时毫秒 <input id="linuxdoFlaresolverrTimeout" type="number" min="1000" placeholder="60000"></label>
 </div>
+<div class="controlPills"><label class="row">FlareSolverr 使用代理 <span id="linuxdoFlaresolverrProxySwitch"></span></label><span class="muted">Linux.do 优先使用 FlareSolverr。地址为空则使用普通请求。</span></div>
 <div class="runtimeNote">日志会显示 403、页面标题和 Cloudflare 信号。</div>
 </div>
 </div>
@@ -1801,6 +1805,10 @@ function render(){
 	setSecretInput('keylolCookie', cfg.keylol_cookie_set, 'key=value; key2=value2');
 	setSecretInput('linuxdoCookie', cfg.linuxdo_cookie_set, '_t=...; cf_clearance=...');
 	$('linuxdoUA').value=cfg.linuxdo_ua||'';
+	$('linuxdoFlaresolverrURL').value=cfg.linuxdo_flaresolverr_url||'';
+	$('linuxdoFlaresolverrWait').value=cfg.linuxdo_flaresolverr_wait_seconds||2;
+	$('linuxdoFlaresolverrTimeout').value=cfg.linuxdo_flaresolverr_timeout_ms||60000;
+	$('linuxdoFlaresolverrProxySwitch').innerHTML=switchHTML('cfg.linuxdo_flaresolverr_use_proxy',!!cfg.linuxdo_flaresolverr_use_proxy);
 	renderCookieCloudSettings();
 	$('keylolFooter').value=cfg.keylol_footer||'Keylol 帖子截图 · 浏览器渲染 · {time}';
  renderKeylolThemeSwitches();
@@ -2136,7 +2144,7 @@ async function save(){
  if($('safetyNoticeText')) cfg.safety_filter_notice_text=String($('safetyNoticeText').value||'').trim();
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
  cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim();
-	cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim(); cfg.linuxdo_cookie=String($('linuxdoCookie').value||'').trim(); cfg.linuxdo_ua=String($('linuxdoUA').value||'').trim();
+	cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim(); cfg.linuxdo_cookie=String($('linuxdoCookie').value||'').trim(); cfg.linuxdo_ua=String($('linuxdoUA').value||'').trim(); cfg.linuxdo_flaresolverr_url=String($('linuxdoFlaresolverrURL').value||'').trim(); cfg.linuxdo_flaresolverr_wait_seconds=Number($('linuxdoFlaresolverrWait').value||2); cfg.linuxdo_flaresolverr_timeout_ms=Number($('linuxdoFlaresolverrTimeout').value||60000); cfg.linuxdo_flaresolverr_use_proxy=!!cfg.linuxdo_flaresolverr_use_proxy;
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
  cfg.keylol_theme=String(cfg.keylol_theme||'auto').trim()||'auto';
  cfg.keylol_light_theme=keylolLightThemeValue($('keylolLightTheme')?$('keylolLightTheme').value:cfg.keylol_light_theme);

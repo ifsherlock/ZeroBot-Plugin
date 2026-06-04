@@ -3,6 +3,7 @@ package mediaparser
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"image"
 	"image/color"
 	"image/draw"
@@ -12,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -256,6 +258,95 @@ func TestLinuxdoExtractDiscoursePreloadedTopic(t *testing.T) {
 	}
 	if meta.Title != "Linux.do Preloaded" || !strings.Contains(meta.Desc, "full body from preloaded") {
 		t.Fatalf("meta=%+v", meta)
+	}
+}
+
+func TestLinuxdoExtractDataPreloadedTopic(t *testing.T) {
+	topicJSON := `{"id":12345,"slug":"topic-title","title":"Linux.do Data Preloaded","post_stream":{"posts":[{"post_number":1,"username":"neo","cooked":"<p>full body from data preloaded</p>"}]}}`
+	attrJSON := `{"topic_12345":` + strconv.Quote(topicJSON) + `}`
+	html := `<html><body><div id="data-preloaded" data-preloaded="` + html.EscapeString(attrJSON) + `"></div></body></html>`
+	topic := linuxdoExtractTopicJSONFromHTML(html)
+	if topic == nil {
+		t.Fatal("topic not extracted")
+	}
+	meta, err := parseLinuxdoTopicJSON("https://linux.do/t/topic-title/12345", "https://linux.do/t/topic-title/12345", mustJSON(topic))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Title != "Linux.do Data Preloaded" || !strings.Contains(meta.Desc, "full body from data preloaded") {
+		t.Fatalf("meta=%+v", meta)
+	}
+}
+
+func TestParseLinuxdoUsesFlaresolverrFirst(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if r.URL.Path != "/v1" || r.Method != http.MethodPost {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req linuxdoFlaresolverrRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req.Cmd != "request.get" || req.URL != "https://linux.do/t/topic-title/12345" {
+			t.Fatalf("bad flaresolverr request: %+v", req)
+		}
+		if req.MaxTimeout != 12345 || req.Wait != 3 {
+			t.Fatalf("bad timeout/wait: %+v", req)
+		}
+		if len(req.Cookies) != 2 || req.Cookies[0].Name != "_t" || req.Cookies[1].Name != "cf_clearance" {
+			t.Fatalf("bad cookies: %+v", req.Cookies)
+		}
+		topicJSON := `{"id":12345,"slug":"topic-title","title":"Linux.do FlareSolverr","post_stream":{"posts":[{"post_number":1,"username":"neo","cooked":"<p>body from flaresolverr</p>"}]}}`
+		attrJSON := `{"topic_12345":` + strconv.Quote(topicJSON) + `}`
+		htmlBody := `<html><body><div id="data-preloaded" data-preloaded="` + html.EscapeString(attrJSON) + `"></div></body></html>`
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "ok",
+			"solution": map[string]any{
+				"url":       "https://linux.do/t/topic-title/12345/1",
+				"status":    200,
+				"response":  htmlBody,
+				"userAgent": "UnitTest/Chrome",
+			},
+		})
+	}))
+	defer srv.Close()
+	cfg := config{
+		LinuxdoCookie:                "_t=token; cf_clearance=clear",
+		LinuxdoUA:                    "UnitTest/Linuxdo",
+		LinuxdoFlaresolverrURL:       srv.URL,
+		LinuxdoFlaresolverrTimeoutMS: 12345,
+		LinuxdoFlaresolverrWaitSec:   3,
+	}
+	meta, err := parseLinuxdo(cfg, "https://linux.do/t/topic-title/12345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("flaresolverr was not called")
+	}
+	if meta.Title != "Linux.do FlareSolverr" || !strings.Contains(meta.Desc, "body from flaresolverr") {
+		t.Fatalf("meta=%+v", meta)
+	}
+	if meta.ImageHeads["Cookie"] != cfg.LinuxdoCookie || meta.ImageHeads["User-Agent"] != cfg.LinuxdoUA {
+		t.Fatalf("headers=%v", meta.ImageHeads)
+	}
+}
+
+func TestLinuxdoFlaresolverrCookies(t *testing.T) {
+	got := linuxdoFlaresolverrCookies("_t=token; cf_clearance=clear; broken; empty=")
+	if len(got) != 3 {
+		t.Fatalf("cookies=%+v", got)
+	}
+	if got[0].Name != "_t" || got[0].Value != "token" || got[0].Domain != "linux.do" || got[0].Path != "/" {
+		t.Fatalf("first cookie=%+v", got[0])
+	}
+	if got[1].Name != "cf_clearance" || got[1].Value != "clear" {
+		t.Fatalf("second cookie=%+v", got[1])
+	}
+	if got[2].Name != "empty" || got[2].Value != "" {
+		t.Fatalf("third cookie=%+v", got[2])
 	}
 }
 

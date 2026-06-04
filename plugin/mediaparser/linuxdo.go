@@ -1,13 +1,17 @@
 package mediaparser
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -22,6 +26,13 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, fmt.Errorf("linux.do topic id not found")
 	}
 	postNumber := linuxdoPostNumber(raw)
+	if strings.TrimSpace(cfg.LinuxdoFlaresolverrURL) != "" {
+		if meta, err := linuxdoParseWithFlaresolverr(cfg, raw, topicID, postNumber); err == nil {
+			return meta, nil
+		} else {
+			logDebug(cfg, "linuxdo_flaresolverr_failed url=%s error=%v", raw, err)
+		}
+	}
 	api := linuxdoBase + "/t/" + topicID + ".json"
 	headers := linuxdoHeaders(cfg, raw)
 	body, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", api, headers, true)
@@ -44,6 +55,11 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 	if err != nil {
 		return mediaMeta{}, err
 	}
+	linuxdoApplyMetaHeaders(cfg, &meta)
+	return meta, nil
+}
+
+func linuxdoApplyMetaHeaders(cfg config, meta *mediaMeta) {
 	ua := linuxdoUserAgent(cfg)
 	meta.VideoHeads = buildHeaders(true, linuxdoReferer, ua)
 	meta.ImageHeads = buildHeaders(false, linuxdoReferer, ua)
@@ -51,7 +67,160 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 		meta.VideoHeads["Cookie"] = cfg.LinuxdoCookie
 		meta.ImageHeads["Cookie"] = cfg.LinuxdoCookie
 	}
+}
+
+type linuxdoFlaresolverrRequest struct {
+	Cmd        string                      `json:"cmd"`
+	URL        string                      `json:"url"`
+	MaxTimeout int                         `json:"maxTimeout"`
+	Wait       int                         `json:"wait,omitempty"`
+	Cookies    []linuxdoFlaresolverrCookie `json:"cookies,omitempty"`
+	Proxy      *linuxdoFlaresolverrProxy   `json:"proxy,omitempty"`
+}
+
+type linuxdoFlaresolverrCookie struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Domain string `json:"domain,omitempty"`
+	Path   string `json:"path,omitempty"`
+}
+
+type linuxdoFlaresolverrProxy struct {
+	URL string `json:"url"`
+}
+
+type linuxdoFlaresolverrResponse struct {
+	Status   string `json:"status"`
+	Message  string `json:"message"`
+	Solution struct {
+		URL       string `json:"url"`
+		Status    int    `json:"status"`
+		Response  string `json:"response"`
+		UserAgent string `json:"userAgent"`
+	} `json:"solution"`
+}
+
+func linuxdoParseWithFlaresolverr(cfg config, sourceURL, topicID, postNumber string) (mediaMeta, error) {
+	pageURL := linuxdoTopicPageURL(sourceURL, topicID, postNumber)
+	htmlBody, finalURL, err := linuxdoFetchWithFlaresolverr(cfg, pageURL)
+	if err != nil {
+		return mediaMeta{}, err
+	}
+	if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
+		logDebug(cfg, "linuxdo_flaresolverr stage=html_preloaded final=%s body_len=%d markers=%s", finalURL, len(htmlBody), linuxdoHTMLMarkerSummary(htmlBody))
+		meta, err := parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+		if err != nil {
+			return mediaMeta{}, err
+		}
+		linuxdoApplyMetaHeaders(cfg, &meta)
+		return meta, nil
+	}
+	desc := linuxdoHTMLBodyText(htmlBody)
+	images := linuxdoExtractImages(htmlBody, finalURL)
+	logDebug(cfg, "linuxdo_flaresolverr stage=html_shell final=%s body_len=%d desc_len=%d images=%d markers=%s", finalURL, len(htmlBody), len(desc), len(images), linuxdoHTMLMarkerSummary(htmlBody))
+	if strings.TrimSpace(desc) == "" && len(images) == 0 {
+		return mediaMeta{}, fmt.Errorf("linux.do flaresolverr got no body: final=%s body_len=%d markers=%s", finalURL, len(htmlBody), linuxdoHTMLMarkerSummary(htmlBody))
+	}
+	meta := mediaMeta{
+		URL:        pageURL,
+		SourceURL:  sourceURL,
+		Platform:   "linuxdo",
+		Title:      firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
+		Desc:       desc,
+		Cover:      firstImageURL(images),
+		ImageURLs:  images,
+		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
+		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
+	}
+	linuxdoApplyMetaHeaders(cfg, &meta)
 	return meta, nil
+}
+
+func linuxdoFetchWithFlaresolverr(cfg config, targetURL string) (string, string, error) {
+	endpoint := strings.TrimRight(strings.TrimSpace(cfg.LinuxdoFlaresolverrURL), "/")
+	if endpoint == "" {
+		return "", targetURL, fmt.Errorf("linux.do flaresolverr url is empty")
+	}
+	timeoutMS := cfg.LinuxdoFlaresolverrTimeoutMS
+	if timeoutMS <= 0 {
+		timeoutMS = 60000
+	}
+	waitSec := cfg.LinuxdoFlaresolverrWaitSec
+	if waitSec <= 0 {
+		waitSec = 2
+	}
+	reqBody := linuxdoFlaresolverrRequest{
+		Cmd:        "request.get",
+		URL:        targetURL,
+		MaxTimeout: timeoutMS,
+		Wait:       waitSec,
+		Cookies:    linuxdoFlaresolverrCookies(cfg.LinuxdoCookie),
+	}
+	if cfg.LinuxdoFlaresolverrUseProxy {
+		if proxyURL := proxyForPlatform(cfg, "linuxdo"); proxyURL != "" {
+			reqBody.Proxy = &linuxdoFlaresolverrProxy{URL: proxyURL}
+		}
+	}
+	payload, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", targetURL, err
+	}
+	client := &http.Client{Timeout: time.Duration(timeoutMS+10000) * time.Millisecond}
+	req, err := http.NewRequest(http.MethodPost, endpoint+"/v1", bytes.NewReader(payload))
+	if err != nil {
+		return "", targetURL, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", targetURL, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return "", targetURL, err
+	}
+	if resp.StatusCode >= 400 {
+		return "", targetURL, fmt.Errorf("linux.do flaresolverr HTTP %d body_len=%d", resp.StatusCode, len(data))
+	}
+	var out linuxdoFlaresolverrResponse
+	if err := json.Unmarshal(data, &out); err != nil {
+		return "", targetURL, fmt.Errorf("linux.do flaresolverr decode: %w body_len=%d", err, len(data))
+	}
+	if strings.ToLower(strings.TrimSpace(out.Status)) != "ok" {
+		return "", firstNonEmpty(out.Solution.URL, targetURL), fmt.Errorf("linux.do flaresolverr status=%q message=%q", out.Status, truncate(out.Message, 160))
+	}
+	if strings.TrimSpace(out.Solution.Response) == "" {
+		return "", firstNonEmpty(out.Solution.URL, targetURL), fmt.Errorf("linux.do flaresolverr empty response status=%d", out.Solution.Status)
+	}
+	logDebug(cfg, "linuxdo_flaresolverr_ok final=%s status=%d body_len=%d ua_len=%d", firstNonEmpty(out.Solution.URL, targetURL), out.Solution.Status, len(out.Solution.Response), len(out.Solution.UserAgent))
+	return out.Solution.Response, firstNonEmpty(out.Solution.URL, targetURL), nil
+}
+
+func linuxdoFlaresolverrCookies(raw string) []linuxdoFlaresolverrCookie {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	cookies := []linuxdoFlaresolverrCookie{}
+	for _, part := range strings.Split(raw, ";") {
+		part = strings.TrimSpace(part)
+		if part == "" || !strings.Contains(part, "=") {
+			continue
+		}
+		name, value, _ := strings.Cut(part, "=")
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		cookies = append(cookies, linuxdoFlaresolverrCookie{
+			Name:   name,
+			Value:  strings.TrimSpace(value),
+			Domain: "linux.do",
+			Path:   "/",
+		})
+	}
+	return cookies
 }
 
 func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string) (mediaMeta, error) {
@@ -65,7 +234,12 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 	if htmlErr == nil {
 		if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
 			logDebug(cfg, "linuxdo_fallback stage=html_preloaded final=%s body_len=%d", finalURL, len(htmlBody))
-			return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+			meta, err := parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+			if err != nil {
+				return mediaMeta{}, err
+			}
+			linuxdoApplyMetaHeaders(cfg, &meta)
+			return meta, nil
 		}
 	}
 	title := ""
@@ -77,7 +251,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		desc := linuxdoCleanRaw(rawBody)
 		images := linuxdoExtractImagesFromText(rawBody, rawFinalURL)
 		logDebug(cfg, "linuxdo_fallback stage=raw final=%s raw_len=%d desc_len=%d images=%d", rawFinalURL, len(rawBody), len(desc), len(images))
-		return mediaMeta{
+		meta := mediaMeta{
 			URL:        pageURL,
 			SourceURL:  sourceURL,
 			Platform:   "linuxdo",
@@ -87,14 +261,21 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 			ImageURLs:  images,
 			ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
 			VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
-		}, nil
+		}
+		linuxdoApplyMetaHeaders(cfg, &meta)
+		return meta, nil
 	}
 	if htmlErr != nil {
 		return mediaMeta{}, htmlErr
 	}
 	if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
 		logDebug(cfg, "linuxdo_fallback stage=html_preloaded_retry final=%s body_len=%d", finalURL, len(htmlBody))
-		return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+		meta, err := parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+		if err != nil {
+			return mediaMeta{}, err
+		}
+		linuxdoApplyMetaHeaders(cfg, &meta)
+		return meta, nil
 	}
 	desc := linuxdoHTMLBodyText(htmlBody)
 	images := linuxdoExtractImages(htmlBody, finalURL)
@@ -113,6 +294,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
 		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
 	}
+	linuxdoApplyMetaHeaders(cfg, &meta)
 	return meta, nil
 }
 
@@ -147,6 +329,9 @@ func linuxdoExtractTopicJSONFromHTML(htmlBody string) map[string]any {
 	if topic := linuxdoExtractDiscoursePreloadedTopic(htmlBody); topic != nil {
 		return topic
 	}
+	if topic := linuxdoExtractDataPreloadedTopic(htmlBody); topic != nil {
+		return topic
+	}
 	for _, marker := range []string{
 		"data-preloaded",
 		"window.__PRELOADED_STATE__",
@@ -157,6 +342,24 @@ func linuxdoExtractTopicJSONFromHTML(htmlBody string) map[string]any {
 			if topic := linuxdoFindTopicMap(root); topic != nil {
 				return topic
 			}
+		}
+	}
+	return nil
+}
+
+func linuxdoExtractDataPreloadedTopic(htmlBody string) map[string]any {
+	for _, m := range regexp.MustCompile(`(?is)\bdata-preloaded="([^"]*)"|\bdata-preloaded='([^']*)'`).FindAllStringSubmatch(htmlBody, -1) {
+		rawAttr := firstNonEmpty(m[1], m[2])
+		raw := strings.TrimSpace(html.UnescapeString(htmlUnescape(rawAttr)))
+		if raw == "" {
+			continue
+		}
+		var root any
+		if err := json.Unmarshal([]byte(raw), &root); err != nil {
+			continue
+		}
+		if topic := linuxdoFindTopicMapDeep(root); topic != nil {
+			return topic
 		}
 	}
 	return nil
@@ -178,6 +381,37 @@ func linuxdoExtractDiscoursePreloadedTopic(htmlBody string) map[string]any {
 		if topic := linuxdoFindTopicMap(root); topic != nil {
 			return topic
 		}
+	}
+	return nil
+}
+
+func linuxdoFindTopicMapDeep(v any) map[string]any {
+	if topic := linuxdoFindTopicMap(v); topic != nil {
+		return topic
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		for _, item := range x {
+			if topic := linuxdoFindTopicMapDeep(item); topic != nil {
+				return topic
+			}
+		}
+	case []any:
+		for _, item := range x {
+			if topic := linuxdoFindTopicMapDeep(item); topic != nil {
+				return topic
+			}
+		}
+	case string:
+		raw := strings.TrimSpace(html.UnescapeString(htmlUnescape(x)))
+		if raw == "" || (!strings.HasPrefix(raw, "{") && !strings.HasPrefix(raw, "[")) {
+			return nil
+		}
+		var nested any
+		if err := json.Unmarshal([]byte(raw), &nested); err != nil {
+			return nil
+		}
+		return linuxdoFindTopicMapDeep(nested)
 	}
 	return nil
 }

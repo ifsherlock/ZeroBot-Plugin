@@ -139,21 +139,25 @@ type config struct {
 	MediaShieldGroupEnabled    map[int64]bool                  `json:"media_shield_group_enabled"`
 	MediaShieldSeedVersion     int                             `json:"media_shield_seed_version"`
 
-	BilibiliUseCookie  bool   `json:"bilibili_use_cookie"`
-	BilibiliCookie     string `json:"bilibili_cookie"`
-	BilibiliMaxQuality string `json:"bilibili_max_quality"`
-	XiaohongshuCookie  string `json:"xiaohongshu_cookie"`
-	YouTubeCookie      string `json:"youtube_cookie"`
-	InstagramCookie    string `json:"instagram_cookie"`
-	KeylolCookie       string `json:"keylol_cookie"`
-	LinuxdoCookie      string `json:"linuxdo_cookie"`
-	LinuxdoUA          string `json:"linuxdo_ua"`
-	KeylolFooter       string `json:"keylol_footer"`
-	KeylolTheme        string `json:"keylol_theme"`
-	KeylolLightTheme   string `json:"keylol_light_theme"`
-	KeylolDarkTheme    string `json:"keylol_dark_theme"`
-	KeylolASFForward   bool   `json:"keylol_asf_forward"`
-	AvoidAV1           bool   `json:"avoid_av1"`
+	BilibiliUseCookie            bool   `json:"bilibili_use_cookie"`
+	BilibiliCookie               string `json:"bilibili_cookie"`
+	BilibiliMaxQuality           string `json:"bilibili_max_quality"`
+	XiaohongshuCookie            string `json:"xiaohongshu_cookie"`
+	YouTubeCookie                string `json:"youtube_cookie"`
+	InstagramCookie              string `json:"instagram_cookie"`
+	KeylolCookie                 string `json:"keylol_cookie"`
+	LinuxdoCookie                string `json:"linuxdo_cookie"`
+	LinuxdoUA                    string `json:"linuxdo_ua"`
+	LinuxdoFlaresolverrURL       string `json:"linuxdo_flaresolverr_url"`
+	LinuxdoFlaresolverrTimeoutMS int    `json:"linuxdo_flaresolverr_timeout_ms"`
+	LinuxdoFlaresolverrWaitSec   int    `json:"linuxdo_flaresolverr_wait_seconds"`
+	LinuxdoFlaresolverrUseProxy  bool   `json:"linuxdo_flaresolverr_use_proxy"`
+	KeylolFooter                 string `json:"keylol_footer"`
+	KeylolTheme                  string `json:"keylol_theme"`
+	KeylolLightTheme             string `json:"keylol_light_theme"`
+	KeylolDarkTheme              string `json:"keylol_dark_theme"`
+	KeylolASFForward             bool   `json:"keylol_asf_forward"`
+	AvoidAV1                     bool   `json:"avoid_av1"`
 
 	CookieCloudEnabled         bool            `json:"cookiecloud_enabled"`
 	CookieCloudServer          string          `json:"cookiecloud_server"`
@@ -533,6 +537,15 @@ func normalizeConfig(cfg *config) bool {
 	cfg.KeylolCookie = strings.TrimSpace(cfg.KeylolCookie)
 	cfg.LinuxdoCookie = strings.TrimSpace(cfg.LinuxdoCookie)
 	cfg.LinuxdoUA = strings.TrimSpace(cfg.LinuxdoUA)
+	cfg.LinuxdoFlaresolverrURL = strings.TrimSpace(cfg.LinuxdoFlaresolverrURL)
+	if cfg.LinuxdoFlaresolverrTimeoutMS <= 0 {
+		cfg.LinuxdoFlaresolverrTimeoutMS = 60000
+		changed = true
+	}
+	if cfg.LinuxdoFlaresolverrWaitSec <= 0 {
+		cfg.LinuxdoFlaresolverrWaitSec = 2
+		changed = true
+	}
 	cfg.CookieCloudServer = strings.TrimSpace(cfg.CookieCloudServer)
 	cfg.CookieCloudUUID = strings.TrimSpace(cfg.CookieCloudUUID)
 	cfg.CookieCloudPassword = strings.TrimSpace(cfg.CookieCloudPassword)
