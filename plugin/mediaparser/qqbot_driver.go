@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -32,6 +33,10 @@ const (
 	qqBotTokenURL  = "https://bots.qq.com/app/getAppAccessToken"
 	qqBotIntents   = 1 << 25
 	qqBotUserAgent = "ZeroBot-Plugin/QQBot"
+
+	qqBotMediaTypeImage     = 1
+	qqBotMediaTypeVideo     = 2
+	qqBotMediaMaxUploadSize = 10 << 20
 )
 
 var qqBotCQCodePattern = regexp.MustCompile(`\[CQ:([^,\]]+)([^\]]*)\]`)
@@ -60,6 +65,11 @@ type qqBotDriver struct {
 type qqBotTarget struct {
 	openID string
 	group  bool
+}
+
+type qqBotMediaAttachment struct {
+	fileType int
+	target   string
 }
 
 // NewQQBotDriver creates the optional official QQBot driver from system settings.
@@ -332,7 +342,38 @@ func (d *qqBotDriver) zeroEvent(eventType string, raw json.RawMessage) []byte {
 }
 
 func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, group bool, msg any) (zero.APIResponse, error) {
-	content := strings.TrimSpace(d.messageText(msg))
+	content, attachments := d.messageParts(msg)
+	if len(attachments) == 0 {
+		return d.sendOfficialText(ctx, openID, group, content)
+	}
+	var last zero.APIResponse
+	if strings.TrimSpace(content) != "" {
+		resp, err := d.sendOfficialText(ctx, openID, group, content)
+		if err != nil {
+			return resp, err
+		}
+		last = resp
+	}
+	for _, item := range attachments {
+		resp, err := d.sendOfficialMedia(ctx, openID, group, item)
+		if err != nil {
+			fallback := strings.TrimSpace(d.messageText(msg))
+			if fallback != "" {
+				logrus.Warnf("[qqbot] media_send_failed target=%s error=%v; falling back to markdown text", item.target, err)
+				return d.sendOfficialText(ctx, openID, group, fallback)
+			}
+			return resp, err
+		}
+		last = resp
+	}
+	if last.Status == "" {
+		return qqBotAPIError("empty message"), nil
+	}
+	return last, nil
+}
+
+func (d *qqBotDriver) sendOfficialText(ctx context.Context, openID string, group bool, content string) (zero.APIResponse, error) {
+	content = strings.TrimSpace(content)
 	if content == "" {
 		return qqBotAPIError("empty message"), nil
 	}
@@ -360,6 +401,71 @@ func (d *qqBotDriver) sendOfficialMessage(ctx context.Context, openID string, gr
 	}
 	logrus.Infof("[qqbot] sent message target_type=%s message_id=%d markdown=%v content_len=%d", targetType, id, useMarkdown, len(content))
 	return qqBotAPIOK(map[string]any{"message_id": id}), nil
+}
+
+func (d *qqBotDriver) sendOfficialMedia(ctx context.Context, openID string, group bool, item qqBotMediaAttachment) (zero.APIResponse, error) {
+	token, err := d.accessToken()
+	if err != nil {
+		return zero.APIResponse{}, err
+	}
+	fileInfo, err := d.uploadOfficialMedia(ctx, token, openID, group, item)
+	if err != nil {
+		return zero.APIResponse{}, err
+	}
+	path := "/v2/users/" + openID + "/messages"
+	targetType := "private"
+	if group {
+		path = "/v2/groups/" + openID + "/messages"
+		targetType = "group"
+	}
+	body := map[string]any{
+		"msg_type": 7,
+		"media": map[string]any{
+			"file_info": fileInfo,
+		},
+	}
+	data, err := d.apiRequest(ctx, token, http.MethodPost, path, body)
+	if err != nil {
+		return zero.APIResponse{}, err
+	}
+	id := qqBotStableID("media:" + firstNonEmpty(gjson.GetBytes(data, "id").String(), gjson.GetBytes(data, "message_id").String(), time.Now().String()))
+	logrus.Infof("[qqbot] sent media target_type=%s message_id=%d file_type=%d target=%s", targetType, id, item.fileType, item.target)
+	return qqBotAPIOK(map[string]any{"message_id": id}), nil
+}
+
+func (d *qqBotDriver) uploadOfficialMedia(ctx context.Context, token, openID string, group bool, item qqBotMediaAttachment) (string, error) {
+	path := "/v2/users/" + openID + "/files"
+	if group {
+		path = "/v2/groups/" + openID + "/files"
+	}
+	body := map[string]any{
+		"file_type":    item.fileType,
+		"srv_send_msg": false,
+	}
+	if strings.HasPrefix(item.target, "http://") || strings.HasPrefix(item.target, "https://") {
+		body["url"] = item.target
+	} else {
+		data, err := os.ReadFile(item.target)
+		if err != nil {
+			return "", err
+		}
+		if len(data) > qqBotMediaMaxUploadSize {
+			return "", fmt.Errorf("qqbot media too large: %.2fMB", float64(len(data))/1024/1024)
+		}
+		body["file_data"] = base64.StdEncoding.EncodeToString(data)
+	}
+	data, err := d.apiRequest(ctx, token, http.MethodPost, path, body)
+	if err != nil {
+		return "", err
+	}
+	fileInfo := firstNonEmpty(
+		gjson.GetBytes(data, "file_info").String(),
+		gjson.GetBytes(data, "data.file_info").String(),
+	)
+	if fileInfo == "" {
+		return "", fmt.Errorf("qqbot upload response missing file_info: %s", truncate(string(data), 240))
+	}
+	return fileInfo, nil
 }
 
 func (d *qqBotDriver) accessToken() (string, error) {
@@ -509,6 +615,160 @@ func (d *qqBotDriver) messageText(v any) string {
 	}
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func (d *qqBotDriver) messageParts(v any) (string, []qqBotMediaAttachment) {
+	switch msg := v.(type) {
+	case message.Message:
+		return d.segmentsParts(msg)
+	case []message.Segment:
+		return d.segmentsParts(message.Message(msg))
+	case []any:
+		segments := make(message.Message, 0, len(msg))
+		for _, item := range msg {
+			if seg, ok := item.(message.Segment); ok {
+				segments = append(segments, seg)
+			}
+		}
+		if len(segments) > 0 {
+			return d.segmentsParts(segments)
+		}
+	case string:
+		content, items := d.mediaLineParts(msg)
+		if len(items) > 0 {
+			return qqBotCleanCQText(content), items
+		}
+	}
+	return d.messageText(v), nil
+}
+
+func (d *qqBotDriver) segmentsParts(msg message.Message) (string, []qqBotMediaAttachment) {
+	var b strings.Builder
+	items := []qqBotMediaAttachment{}
+	for _, seg := range msg {
+		switch seg.Type {
+		case "text":
+			text, mediaItems := d.mediaLineParts(seg.Data["text"])
+			b.WriteString(text)
+			items = append(items, mediaItems...)
+		case "image":
+			file := strings.TrimSpace(seg.Data["file"])
+			if item, ok := d.mediaAttachment(file, qqBotMediaTypeImage); ok {
+				items = append(items, item)
+			} else if markdown, ok := d.imageMarkdown(file); ok {
+				b.WriteString(markdown)
+			} else {
+				b.WriteString("\n[图片]\n")
+			}
+		case "video":
+			file := strings.TrimSpace(firstNonEmpty(seg.Data["file"], seg.Data["url"]))
+			if item, ok := d.mediaAttachment(file, qqBotMediaTypeVideo); ok {
+				items = append(items, item)
+			} else if file != "" {
+				b.WriteString("\n")
+				b.WriteString(file)
+				b.WriteString("\n")
+			}
+		case "at":
+			b.WriteString("@")
+			b.WriteString(seg.Data["qq"])
+			b.WriteString(" ")
+		case "node":
+			if name := strings.TrimSpace(seg.Data["name"]); name != "" {
+				b.WriteString(name)
+				b.WriteString(": ")
+			}
+			b.WriteString(qqBotCleanCQText(seg.Data["content"]))
+			b.WriteString("\n")
+		}
+	}
+	return strings.TrimSpace(b.String()), items
+}
+
+func (d *qqBotDriver) mediaLineParts(text string) (string, []qqBotMediaAttachment) {
+	lines := strings.Split(text, "\n")
+	items := []qqBotMediaAttachment{}
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		raw := strings.TrimSpace(line)
+		if !strings.HasPrefix(strings.ToUpper(raw), "MEDIA:") {
+			kept = append(kept, line)
+			continue
+		}
+		target := strings.TrimSpace(raw[len("MEDIA:"):])
+		item, ok := d.mediaAttachment(target, qqBotMediaTypeImage)
+		if !ok {
+			kept = append(kept, line)
+			continue
+		}
+		items = append(items, item)
+	}
+	return strings.Join(kept, "\n"), items
+}
+
+func (d *qqBotDriver) mediaAttachment(file string, fallbackType int) (qqBotMediaAttachment, bool) {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		return qqBotMediaAttachment{}, false
+	}
+	if strings.HasPrefix(file, "http://") || strings.HasPrefix(file, "https://") {
+		return qqBotMediaAttachment{fileType: qqBotMediaTypeByName(file, fallbackType), target: file}, true
+	}
+	localPath := qqBotLocalMediaPath(file)
+	if localPath == "" || !qqBotAllowedLocalMediaPath(localPath) {
+		return qqBotMediaAttachment{}, false
+	}
+	if st, err := os.Stat(localPath); err != nil || st.IsDir() {
+		return qqBotMediaAttachment{}, false
+	}
+	return qqBotMediaAttachment{fileType: qqBotMediaTypeByName(localPath, fallbackType), target: localPath}, true
+}
+
+func qqBotLocalMediaPath(file string) string {
+	file = strings.TrimSpace(file)
+	if strings.HasPrefix(file, "file://") {
+		u, err := url.Parse(file)
+		if err != nil {
+			return ""
+		}
+		file = u.Path
+	}
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		return ""
+	}
+	return abs
+}
+
+func qqBotAllowedLocalMediaPath(path string) bool {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	allowed := []string{cacheDir, os.TempDir()}
+	for _, root := range allowed {
+		rootAbs, err := filepath.Abs(root)
+		if err != nil || rootAbs == "" {
+			continue
+		}
+		rel, err := filepath.Rel(rootAbs, abs)
+		if err == nil && rel != "." && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
+			return true
+		}
+	}
+	return false
+}
+
+func qqBotMediaTypeByName(name string, fallback int) int {
+	ext := strings.ToLower(filepath.Ext(strings.Split(name, "?")[0]))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+		return qqBotMediaTypeImage
+	case ".mp4", ".mov", ".m4v":
+		return qqBotMediaTypeVideo
+	default:
+		return fallback
+	}
 }
 
 func (d *qqBotDriver) segmentsText(msg message.Message) string {

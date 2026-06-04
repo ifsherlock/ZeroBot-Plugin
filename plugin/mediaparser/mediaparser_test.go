@@ -40,6 +40,49 @@ func TestPermissionOKSeparatesPrivateAndGroupAccess(t *testing.T) {
 	}
 }
 
+func TestQQBotMediaLinePartsOnlyAllowsCacheMedia(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
+	allowed := filepath.Join(cacheDir, "card.png")
+	if err := os.WriteFile(allowed, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	blockedDir, err := os.MkdirTemp(".", ".qqbot-media-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(blockedDir) })
+	blocked, err := filepath.Abs(filepath.Join(blockedDir, "secret.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blocked, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	driver := &qqBotDriver{}
+	text, items := driver.mediaLineParts("前置\nMEDIA:" + allowed + "\n后置")
+	if len(items) != 1 {
+		t.Fatalf("expected one media item, got %d", len(items))
+	}
+	if items[0].target != allowed || items[0].fileType != qqBotMediaTypeImage {
+		t.Fatalf("unexpected media item: %#v", items[0])
+	}
+	if strings.Contains(text, "MEDIA:") || !strings.Contains(text, "前置") || !strings.Contains(text, "后置") {
+		t.Fatalf("unexpected remaining text: %q", text)
+	}
+
+	text, items = driver.mediaLineParts("MEDIA:" + blocked)
+	if len(items) != 0 {
+		t.Fatalf("cache-external media should be rejected: %#v", items)
+	}
+	if !strings.Contains(text, "MEDIA:") {
+		t.Fatalf("rejected media line should stay visible, got %q", text)
+	}
+}
+
 func TestLiveUserLinks(t *testing.T) {
 	if os.Getenv("MEDIAPARSER_LIVE") == "" {
 		t.Skip("set MEDIAPARSER_LIVE=1 to hit live platforms")

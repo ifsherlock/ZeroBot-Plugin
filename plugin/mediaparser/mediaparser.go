@@ -1253,19 +1253,13 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		cardEnabled = cardEnabled && qqBotCardEnabled()
 	}
 	if cardEnabled {
-		if qqbotEvent && !qqBotPublicImageEnabled() {
-			ctx.SendChain(message.Text(buildText(meta)))
-			infoCardSent = true
-			logrus.Infof("[mediaparser] sent_info_card_text_fallback channel=qqbot platform=%s title=%q", meta.Platform, meta.Title)
-		} else {
-			infoCardSent = sendInfoCard(ctx, cfg, meta)
-		}
+		infoCardSent = sendInfoCard(ctx, cfg, meta)
 	}
 	if cfg.KeylolASFForward && meta.Platform == "keylol" && !qqbotEvent {
 		sendKeylolASFForward(ctx, meta)
 	}
 	if qqbotEvent && qqBotMediaEnabled() {
-		if err := sendQQBotImageMedia(ctx, cfg, &meta); err != nil {
+		if err := sendQQBotRichMedia(ctx, cfg, &meta); err != nil {
 			return err
 		}
 		logrus.Infof("[mediaparser] success platform=%s url=%s elapsed=%s", link.Platform, link.URL, time.Since(started).Round(time.Millisecond))
@@ -1512,63 +1506,34 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 	return nil
 }
 
-func sendQQBotImageMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
-	if meta == nil || len(meta.ImageURLs) == 0 || !wantsRich(cfg, meta.Platform) {
+func sendQQBotRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
+	if meta == nil || !wantsRich(cfg, meta.Platform) || (len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 0) {
 		return nil
 	}
-	if qqBotPublicImageEnabled() {
-		if err := processQQBotImageDownloads(cfg, meta); err != nil {
-			logrus.Warnf("[mediaparser] qqbot_image_download_failed platform=%s error=%v", meta.Platform, err)
-		}
+	if err := processDownloads(cfg, meta); err != nil {
+		logrus.Warnf("[mediaparser] qqbot_media_download_failed platform=%s error=%v", meta.Platform, err)
 	}
-	count := 0
+	videoCount := 0
+	imageCount := 0
+	for i := range meta.VideoURLs {
+		target := mediaVideoTarget(meta, i)
+		if target == "" {
+			continue
+		}
+		ctx.SendChain(message.Video(target))
+		videoCount++
+		logrus.Infof("[mediaparser] sent_qqbot_video platform=%s title=%q index=%d target=%s", meta.Platform, meta.Title, i, target)
+	}
 	for i := range meta.ImageURLs {
 		target := mediaImageTarget(meta, i)
 		if target == "" {
 			continue
 		}
 		ctx.SendChain(message.Image(target))
-		count++
+		imageCount++
 		logrus.Infof("[mediaparser] sent_qqbot_image platform=%s title=%q index=%d target=%s", meta.Platform, meta.Title, i, target)
 	}
-	logrus.Infof("[mediaparser] sent_qqbot_images platform=%s title=%q images=%d public_base=%v", meta.Platform, meta.Title, count, qqBotPublicImageEnabled())
-	return nil
-}
-
-func processQQBotImageDownloads(cfg config, meta *mediaMeta) error {
-	videoCount := len(meta.VideoURLs)
-	imageCount := len(meta.ImageURLs)
-	if len(meta.FilePaths) < videoCount+imageCount {
-		meta.FilePaths = make([]string, videoCount+imageCount)
-	}
-	meta.ImageModes = make([]string, imageCount)
-	meta.ImageSkipReasons = make([]string, imageCount)
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 6)
-	for i, group := range meta.ImageURLs {
-		i, group := i, group
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if len(group) == 0 {
-				meta.ImageModes[i] = "skip"
-				meta.ImageSkipReasons[i] = "未找到图片 URL"
-				return
-			}
-			sem <- struct{}{}
-			path, _, err := downloadHTTPFile(cfg, meta.Platform, group[0], meta.ImageHeads, cacheFile(meta, "qqbot_image", i, ".jpg"))
-			<-sem
-			if err != nil {
-				meta.ImageModes[i] = "skip"
-				meta.ImageSkipReasons[i] = "图片下载失败: " + err.Error()
-				return
-			}
-			meta.FilePaths[videoCount+i] = path
-			meta.ImageModes[i] = "local"
-			scheduleDelete(path, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-		}()
-	}
-	wg.Wait()
+	logrus.Infof("[mediaparser] sent_qqbot_media platform=%s title=%q videos=%d images=%d public_base=%v", meta.Platform, meta.Title, videoCount, imageCount, qqBotPublicImageEnabled())
 	return nil
 }
 
