@@ -57,11 +57,37 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 	pageURL := linuxdoTopicPageURL(sourceURL, topicID, postNumber)
 	headers := linuxdoHeaders(cfg, sourceURL)
 	htmlBody, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", pageURL, headers, true)
-	if err != nil {
-		return mediaMeta{}, err
+	htmlErr := err
+	if err == nil && status >= 400 {
+		htmlErr = fmt.Errorf("linux.do page HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(htmlBody), linuxdoRequestSummary(cfg))
 	}
-	if status >= 400 {
-		return mediaMeta{}, fmt.Errorf("linux.do page HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(htmlBody), linuxdoRequestSummary(cfg))
+	if htmlErr == nil {
+		if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
+			return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+		}
+	}
+	title := ""
+	if htmlErr == nil {
+		title = linuxdoHTMLTitle(htmlBody)
+	}
+	rawBody, rawFinalURL, rawErr := linuxdoFetchRawPost(cfg, sourceURL, topicID, postNumber)
+	if rawErr == nil && strings.TrimSpace(rawBody) != "" {
+		desc := linuxdoCleanRaw(rawBody)
+		images := linuxdoExtractImagesFromText(rawBody, rawFinalURL)
+		return mediaMeta{
+			URL:        pageURL,
+			SourceURL:  sourceURL,
+			Platform:   "linuxdo",
+			Title:      firstNonEmpty(title, "Linux.do Topic "+topicID),
+			Desc:       desc,
+			Cover:      firstImageURL(images),
+			ImageURLs:  images,
+			ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
+			VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
+		}, nil
+	}
+	if htmlErr != nil {
+		return mediaMeta{}, htmlErr
 	}
 	if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
 		return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
@@ -76,6 +102,23 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
 	}
 	return meta, nil
+}
+
+func linuxdoFetchRawPost(cfg config, sourceURL, topicID, postNumber string) (string, string, error) {
+	if postNumber == "" || postNumber == "0" {
+		postNumber = "1"
+	}
+	rawURL := linuxdoBase + "/raw/" + topicID + "/" + postNumber
+	headers := linuxdoHeaders(cfg, sourceURL)
+	headers["Accept"] = "text/plain,*/*"
+	body, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", rawURL, headers, true)
+	if err != nil {
+		return "", finalURL, err
+	}
+	if status >= 400 {
+		return "", finalURL, fmt.Errorf("linux.do raw HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg))
+	}
+	return body, finalURL, nil
 }
 
 func linuxdoTopicPageURL(sourceURL, topicID, postNumber string) string {
@@ -150,6 +193,51 @@ func linuxdoHTMLBodyText(body string) string {
 		}
 	}
 	return firstNonEmpty(parts...)
+}
+
+func linuxdoCleanRaw(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = regexp.MustCompile(`(?m)^!\[[^\]]*\]\([^)]+\)\s*$`).ReplaceAllString(s, "[图片]")
+	s = regexp.MustCompile(`(?m)^\s*https?://\S+\.(?:png|jpe?g|webp|gif)(?:\?\S*)?\s*$`).ReplaceAllString(s, "[图片]")
+	s = html.UnescapeString(htmlUnescape(s))
+	s = regexp.MustCompile(`[ \t\r\f\v]+`).ReplaceAllString(s, " ")
+	s = regexp.MustCompile(`\n{3,}`).ReplaceAllString(s, "\n\n")
+	s = linuxdoStripPromotionDeclarations(s)
+	return strings.TrimSpace(s)
+}
+
+func linuxdoExtractImagesFromText(raw, base string) [][]string {
+	seen := map[string]bool{}
+	out := [][]string{}
+	add := func(u string) {
+		u = strings.Trim(strings.TrimSpace(html.UnescapeString(htmlUnescape(u))), ` "'`)
+		if u == "" {
+			return
+		}
+		u = absolutize(base, ensureHTTPS(u))
+		if !linuxdoUsableImage(u) || seen[u] {
+			return
+		}
+		seen[u] = true
+		out = append(out, []string{u})
+	}
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)`),
+		regexp.MustCompile(`https?://\S+\.(?:png|jpe?g|webp|gif)(?:\?\S*)?`),
+		regexp.MustCompile(`(?is)<img\b[^>]+src=["']([^"']+)["']`),
+	} {
+		for _, m := range re.FindAllStringSubmatch(raw, -1) {
+			add(m[1])
+		}
+	}
+	return dedupeMediaGroups(out)
+}
+
+func firstImageURL(groups [][]string) string {
+	if len(groups) == 0 || len(groups[0]) == 0 {
+		return ""
+	}
+	return groups[0][0]
 }
 
 func mustJSON(v any) string {
