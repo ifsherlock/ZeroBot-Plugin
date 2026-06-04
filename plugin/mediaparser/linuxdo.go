@@ -143,6 +143,9 @@ func linuxdoTopicPageURL(sourceURL, topicID, postNumber string) string {
 }
 
 func linuxdoExtractTopicJSONFromHTML(htmlBody string) map[string]any {
+	if topic := linuxdoExtractDiscoursePreloadedTopic(htmlBody); topic != nil {
+		return topic
+	}
 	for _, marker := range []string{
 		"data-preloaded",
 		"window.__PRELOADED_STATE__",
@@ -153,6 +156,26 @@ func linuxdoExtractTopicJSONFromHTML(htmlBody string) map[string]any {
 			if topic := linuxdoFindTopicMap(root); topic != nil {
 				return topic
 			}
+		}
+	}
+	return nil
+}
+
+func linuxdoExtractDiscoursePreloadedTopic(htmlBody string) map[string]any {
+	for _, m := range regexp.MustCompile(`(?is)<script\b[^>]*\bdata-discourse-preloaded=["'][^"']*(?:topic|post_stream)[^"']*["'][^>]*>(.*?)</script>`).FindAllStringSubmatch(htmlBody, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		raw := strings.TrimSpace(html.UnescapeString(htmlUnescape(m[1])))
+		if raw == "" {
+			continue
+		}
+		var root any
+		if err := json.Unmarshal([]byte(raw), &root); err != nil {
+			continue
+		}
+		if topic := linuxdoFindTopicMap(root); topic != nil {
+			return topic
 		}
 	}
 	return nil

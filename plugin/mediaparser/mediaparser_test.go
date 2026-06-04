@@ -237,6 +237,28 @@ func TestParseLinuxdoTopicJSON(t *testing.T) {
 	}
 }
 
+func TestLinuxdoExtractDiscoursePreloadedTopic(t *testing.T) {
+	html := `<html><head><title>Linux.do</title></head><body>
+<script type="application/json" data-discourse-preloaded="topic_12345">{
+  "id":12345,
+  "slug":"topic-title",
+  "title":"Linux.do Preloaded",
+  "post_stream":{"posts":[{"post_number":1,"username":"neo","cooked":"<p>full body from preloaded</p>"}]}
+}</script>
+</body></html>`
+	topic := linuxdoExtractTopicJSONFromHTML(html)
+	if topic == nil {
+		t.Fatal("topic not extracted")
+	}
+	meta, err := parseLinuxdoTopicJSON("https://linux.do/t/topic-title/12345", "https://linux.do/t/topic-title/12345", mustJSON(topic))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Title != "Linux.do Preloaded" || !strings.Contains(meta.Desc, "full body from preloaded") {
+		t.Fatalf("meta=%+v", meta)
+	}
+}
+
 func TestParseLinuxdoTopicJSONSelectsRequestedPost(t *testing.T) {
 	body := `{
 	  "id": 12345,
