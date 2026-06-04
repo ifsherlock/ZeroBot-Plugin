@@ -31,8 +31,9 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 	if status >= 400 {
 		if htmlMeta, htmlErr := linuxdoParseHTMLFallback(cfg, raw, topicID, postNumber); htmlErr == nil {
 			return htmlMeta, nil
+		} else {
+			return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s request=%s; html fallback: %v", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg), htmlErr)
 		}
-		return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s request=%s", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg))
 	}
 	if postNumber != "" {
 		if body, finalURL, err = linuxdoEnsurePostLoaded(cfg, raw, body, postNumber, finalURL); err != nil {
@@ -97,9 +98,9 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 	}
 	desc := linuxdoHTMLBodyText(htmlBody)
 	images := linuxdoExtractImages(htmlBody, finalURL)
-	logDebug(cfg, "linuxdo_fallback stage=html_shell final=%s body_len=%d title_len=%d desc_len=%d images=%d raw_error=%v", finalURL, len(htmlBody), len(title), len(desc), len(images), rawErr)
+	logDebug(cfg, "linuxdo_fallback stage=html_shell final=%s body_len=%d title_len=%d desc_len=%d images=%d markers=%s raw_error=%v", finalURL, len(htmlBody), len(title), len(desc), len(images), linuxdoHTMLMarkerSummary(htmlBody), rawErr)
 	if strings.TrimSpace(desc) == "" && len(images) == 0 {
-		return mediaMeta{}, fmt.Errorf("linux.do fallback got title only: final=%s body_len=%d raw_error=%v request=%s", finalURL, len(htmlBody), rawErr, linuxdoRequestSummary(cfg))
+		return mediaMeta{}, fmt.Errorf("linux.do fallback got title only: final=%s body_len=%d markers=%s raw_error=%v request=%s", finalURL, len(htmlBody), linuxdoHTMLMarkerSummary(htmlBody), rawErr, linuxdoRequestSummary(cfg))
 	}
 	meta := mediaMeta{
 		URL:        pageURL,
@@ -179,6 +180,19 @@ func linuxdoExtractDiscoursePreloadedTopic(htmlBody string) map[string]any {
 		}
 	}
 	return nil
+}
+
+func linuxdoHTMLMarkerSummary(htmlBody string) string {
+	items := []string{
+		fmt.Sprintf("data_discourse=%d", strings.Count(htmlBody, "data-discourse-preloaded")),
+		fmt.Sprintf("data_preloaded=%d", strings.Count(htmlBody, "data-preloaded")),
+		fmt.Sprintf("application_json=%d", strings.Count(htmlBody, "application/json")),
+		fmt.Sprintf("post_stream=%d", strings.Count(htmlBody, "post_stream")),
+		fmt.Sprintf("cooked=%d", strings.Count(htmlBody, "cooked")),
+		fmt.Sprintf("topic_body=%d", strings.Count(htmlBody, "topic-body")),
+		fmt.Sprintf("crawler_post=%d", strings.Count(htmlBody, "crawler-post")),
+	}
+	return strings.Join(items, ",")
 }
 
 func linuxdoFindTopicMap(v any) map[string]any {
