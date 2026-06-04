@@ -63,6 +63,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 	}
 	if htmlErr == nil {
 		if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
+			logDebug(cfg, "linuxdo_fallback stage=html_preloaded final=%s body_len=%d", finalURL, len(htmlBody))
 			return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
 		}
 	}
@@ -74,6 +75,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 	if rawErr == nil && strings.TrimSpace(rawBody) != "" {
 		desc := linuxdoCleanRaw(rawBody)
 		images := linuxdoExtractImagesFromText(rawBody, rawFinalURL)
+		logDebug(cfg, "linuxdo_fallback stage=raw final=%s raw_len=%d desc_len=%d images=%d", rawFinalURL, len(rawBody), len(desc), len(images))
 		return mediaMeta{
 			URL:        pageURL,
 			SourceURL:  sourceURL,
@@ -90,14 +92,23 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		return mediaMeta{}, htmlErr
 	}
 	if topic := linuxdoExtractTopicJSONFromHTML(htmlBody); topic != nil {
+		logDebug(cfg, "linuxdo_fallback stage=html_preloaded_retry final=%s body_len=%d", finalURL, len(htmlBody))
 		return parseLinuxdoTopicJSON(sourceURL, finalURL, mustJSON(topic))
+	}
+	desc := linuxdoHTMLBodyText(htmlBody)
+	images := linuxdoExtractImages(htmlBody, finalURL)
+	logDebug(cfg, "linuxdo_fallback stage=html_shell final=%s body_len=%d title_len=%d desc_len=%d images=%d raw_error=%v", finalURL, len(htmlBody), len(title), len(desc), len(images), rawErr)
+	if strings.TrimSpace(desc) == "" && len(images) == 0 {
+		return mediaMeta{}, fmt.Errorf("linux.do fallback got title only: final=%s body_len=%d raw_error=%v request=%s", finalURL, len(htmlBody), rawErr, linuxdoRequestSummary(cfg))
 	}
 	meta := mediaMeta{
 		URL:        pageURL,
 		SourceURL:  sourceURL,
 		Platform:   "linuxdo",
 		Title:      firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
-		Desc:       linuxdoHTMLBodyText(htmlBody),
+		Desc:       desc,
+		Cover:      firstImageURL(images),
+		ImageURLs:  images,
 		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
 		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
 	}
