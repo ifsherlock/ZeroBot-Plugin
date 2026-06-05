@@ -503,8 +503,23 @@ func TestApplyCookieCloudCookiesUpdatesSelectedPlatforms(t *testing.T) {
 	if currentConf.LinuxdoCookie != "_t=token" || currentConf.InstagramCookie != "sessionid=ig" {
 		t.Fatalf("cookies not applied: linuxdo=%q instagram=%q", currentConf.LinuxdoCookie, currentConf.InstagramCookie)
 	}
+	if result.Matched["linuxdo"] != 1 || result.Matched["instagram"] != 1 {
+		t.Fatalf("matched=%v", result.Matched)
+	}
+	if !containsString(result.Changed, "linuxdo") || !containsString(result.Changed, "instagram") {
+		t.Fatalf("changed=%v", result.Changed)
+	}
 	if !containsString(result.Warnings, "linuxdo 缺少 cf_clearance") {
 		t.Fatalf("warnings=%v", result.Warnings)
+	}
+
+	result = applyCookieCloudCookies([]cookieCloudPlatformSpec{
+		{Name: "linuxdo", Domains: []string{"linux.do"}},
+	}, []cookieCloudCookie{
+		{Domain: ".linux.do", Name: "_t", Value: "token"},
+	})
+	if !containsString(result.Unchanged, "linuxdo") {
+		t.Fatalf("unchanged=%v", result.Unchanged)
 	}
 }
 

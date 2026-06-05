@@ -32,9 +32,12 @@ type cookieCloudResponse struct {
 }
 
 type cookieCloudSyncResult struct {
-	Updated  []string `json:"updated"`
-	Skipped  []string `json:"skipped"`
-	Warnings []string `json:"warnings"`
+	Updated   []string       `json:"updated"`
+	Changed   []string       `json:"changed"`
+	Unchanged []string       `json:"unchanged"`
+	Skipped   []string       `json:"skipped"`
+	Warnings  []string       `json:"warnings"`
+	Matched   map[string]int `json:"matched"`
 }
 
 type cookieCloudPlatformSpec struct {
@@ -123,11 +126,33 @@ func syncCookieCloudNow(force bool) (cookieCloudSyncResult, error) {
 	result := applyCookieCloudCookies(selected, cookies)
 	if len(result.Updated) > 0 {
 		sort.Strings(result.Updated)
-		logrus.Infof("[mediaparser] cookiecloud_sync_ok updated=%s warnings=%d", strings.Join(result.Updated, ","), len(result.Warnings))
+		sort.Strings(result.Changed)
+		sort.Strings(result.Unchanged)
+		logrus.Infof("[mediaparser] cookiecloud_sync_ok source=%s updated=%s changed=%s unchanged=%s skipped=%s matched=%s warnings=%d",
+			cookieCloudSyncSource(force),
+			strings.Join(result.Updated, ","),
+			strings.Join(result.Changed, ","),
+			strings.Join(result.Unchanged, ","),
+			strings.Join(result.Skipped, ","),
+			cookieCloudMatchedSummary(result.Matched),
+			len(result.Warnings),
+		)
 	} else if force || cfg.CookieCloudEnabled {
-		logrus.Warnf("[mediaparser] cookiecloud_sync_no_update skipped=%s warnings=%d", strings.Join(result.Skipped, ","), len(result.Warnings))
+		logrus.Warnf("[mediaparser] cookiecloud_sync_no_update source=%s skipped=%s matched=%s warnings=%d",
+			cookieCloudSyncSource(force),
+			strings.Join(result.Skipped, ","),
+			cookieCloudMatchedSummary(result.Matched),
+			len(result.Warnings),
+		)
 	}
 	return result, nil
+}
+
+func cookieCloudSyncSource(force bool) string {
+	if force {
+		return "manual"
+	}
+	return "auto"
 }
 
 func cookieCloudSelectedPlatforms(cfg config) []cookieCloudPlatformSpec {
@@ -203,15 +228,17 @@ func fetchCookieCloudCookies(cfg config) ([]cookieCloudCookie, error) {
 }
 
 func applyCookieCloudCookies(platforms []cookieCloudPlatformSpec, cookies []cookieCloudCookie) cookieCloudSyncResult {
-	result := cookieCloudSyncResult{}
+	result := cookieCloudSyncResult{Matched: map[string]int{}}
 	stateMu.Lock()
 	defer stateMu.Unlock()
 	for _, spec := range platforms {
-		header := cookieCloudHeaderForDomains(cookies, spec.Domains)
+		header, matched := cookieCloudHeaderForDomainsWithCount(cookies, spec.Domains)
+		result.Matched[spec.Name] = matched
 		if header == "" {
 			result.Skipped = append(result.Skipped, spec.Name)
 			continue
 		}
+		oldHeader := cookieCloudCurrentHeader(spec.Name)
 		switch spec.Name {
 		case "bilibili":
 			currentConf.BilibiliCookie = header
@@ -231,6 +258,11 @@ func applyCookieCloudCookies(platforms []cookieCloudPlatformSpec, cookies []cook
 			}
 		}
 		result.Updated = append(result.Updated, spec.Name)
+		if oldHeader == header {
+			result.Unchanged = append(result.Unchanged, spec.Name)
+		} else {
+			result.Changed = append(result.Changed, spec.Name)
+		}
 	}
 	if len(result.Updated) > 0 {
 		if err := saveConfigLocked(); err != nil {
@@ -240,14 +272,40 @@ func applyCookieCloudCookies(platforms []cookieCloudPlatformSpec, cookies []cook
 	return result
 }
 
+func cookieCloudCurrentHeader(platform string) string {
+	switch platform {
+	case "bilibili":
+		return currentConf.BilibiliCookie
+	case "xiaohongshu":
+		return currentConf.XiaohongshuCookie
+	case "youtube":
+		return currentConf.YouTubeCookie
+	case "instagram":
+		return currentConf.InstagramCookie
+	case "keylol":
+		return currentConf.KeylolCookie
+	case "linuxdo":
+		return currentConf.LinuxdoCookie
+	default:
+		return ""
+	}
+}
+
 func cookieCloudHeaderForDomains(cookies []cookieCloudCookie, domains []string) string {
+	header, _ := cookieCloudHeaderForDomainsWithCount(cookies, domains)
+	return header
+}
+
+func cookieCloudHeaderForDomainsWithCount(cookies []cookieCloudCookie, domains []string) (string, int) {
 	pairs := []string{}
 	seen := map[string]bool{}
+	matched := 0
 	for _, ck := range cookies {
 		name := strings.TrimSpace(ck.Name)
 		if name == "" || ck.Value == "" || !cookieCloudDomainMatch(ck.Domain, domains) {
 			continue
 		}
+		matched++
 		key := strings.ToLower(name)
 		if seen[key] {
 			continue
@@ -255,7 +313,23 @@ func cookieCloudHeaderForDomains(cookies []cookieCloudCookie, domains []string) 
 		seen[key] = true
 		pairs = append(pairs, name+"="+ck.Value)
 	}
-	return strings.Join(pairs, "; ")
+	return strings.Join(pairs, "; "), matched
+}
+
+func cookieCloudMatchedSummary(matched map[string]int) string {
+	if len(matched) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(matched))
+	for key := range matched {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, matched[key]))
+	}
+	return strings.Join(parts, ",")
 }
 
 func cookieCloudDomainMatch(domain string, targets []string) bool {
