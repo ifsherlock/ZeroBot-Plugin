@@ -41,6 +41,8 @@ type newsSource struct {
 	Params   []newsParam       `json:"params,omitempty"`
 	Commands []string          `json:"commands,omitempty"`
 	Timeout  int               `json:"timeout_seconds,omitempty"`
+	Enabled  bool              `json:"enabled"`
+	Disabled bool              `json:"disabled,omitempty"`
 	Builtin  bool              `json:"builtin,omitempty"`
 }
 
@@ -319,6 +321,7 @@ func normalizeSource(src newsSource) newsSource {
 	if src.Timeout <= 0 || src.Timeout > 120 {
 		src.Timeout = 20
 	}
+	src.Enabled = !src.Disabled
 	if src.Headers == nil {
 		src.Headers = map[string]string{}
 	}
@@ -478,6 +481,9 @@ func matchConfiguredCommand(text string) (sourceID, format string, args []string
 		}
 	}
 	for _, src := range sources {
+		if !src.Enabled || src.Disabled {
+			continue
+		}
 		for _, cmd := range src.Commands {
 			cmd = strings.TrimSpace(cmd)
 			if cmd == "" {
@@ -598,6 +604,9 @@ func buildNewsMessage(sourceID, format string, args []string) (message.Message, 
 	src, ok := findSource(local.Sources, sourceID)
 	if !ok {
 		return nil, fmt.Errorf("接口不存在: %s", sourceID)
+	}
+	if !src.Enabled || src.Disabled {
+		return nil, fmt.Errorf("接口已关闭: %s", sourceID)
 	}
 	if format == "" {
 		if explicitSource {
@@ -990,6 +999,10 @@ func runDueSchedules() {
 		return
 	}
 	for _, task := range tasks {
+		src, ok := findSource(cfg.Sources, task.SourceID)
+		if !ok || !src.Enabled || src.Disabled {
+			continue
+		}
 		sendNews(bot, task.SourceID, task.Format, nil, task.Target)
 	}
 }

@@ -75,6 +75,8 @@ type webDailyNewsSource struct {
 	Params   []webDailyNewsParam `json:"params,omitempty"`
 	Commands []string            `json:"commands,omitempty"`
 	Timeout  int                 `json:"timeout_seconds,omitempty"`
+	Enabled  bool                `json:"enabled"`
+	Disabled bool                `json:"disabled,omitempty"`
 	Builtin  bool                `json:"builtin,omitempty"`
 }
 
@@ -978,6 +980,7 @@ func normalizeWebDailyNewsSource(src webDailyNewsSource) webDailyNewsSource {
 	if src.Timeout <= 0 || src.Timeout > 120 {
 		src.Timeout = 20
 	}
+	src.Enabled = !src.Disabled
 	if src.Headers == nil {
 		src.Headers = map[string]string{}
 	}
@@ -1727,7 +1730,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">插件入口集中管理。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>每天60秒</b><div class="muted">Daily News</div></td><td><span class="ok">已启用</span></td><td>早报接口、文本/图片格式和定时推送</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>60s 技能中心</b><div class="muted">60s Skills</div></td><td><span class="ok">已启用</span></td><td>新闻、热榜、天气、查询和工具接口</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">群管理和提醒。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -1748,13 +1751,13 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="sectionTitle"><b>访问控制</b><span class="muted" id="dailyNewsMsg"></span></div>
 <div class="controlPills"><label class="row">总开关 <span id="dailyEnabledSwitch"></span></label><label class="row">私聊响应 <span id="dailyPrivateSwitch"></span></label></div>
 <div class="settingsFields">
-<label class="field">默认接口 <select id="dailyDefaultSource"></select></label>
-<label class="field">默认格式 <select id="dailyDefaultFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
+<label class="field">旧命令兜底接口 <select id="dailyDefaultSource"></select></label>
+<label class="field">旧命令格式 <select id="dailyDefaultFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
 <label class="field">群模式 <select id="dailyGroupMode" onchange="renderDailyGroupPickers()"><option value="none">所有群开启</option><option value="whitelist">只开白名单群</option><option value="blacklist">关闭黑名单群</option></select></label>
 </div>
 <div class="row"><button onclick="loadGroups(true)">刷新群列表</button><span class="muted">勾选后保存生效</span></div>
-<div class="groupBox"><div class="row"><b>群白名单</b><input id="dailyGroupWhiteSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupWhitePicker"></div></div>
-<div class="groupBox"><div class="row"><b>群黑名单</b><input id="dailyGroupBlackSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupBlackPicker"></div></div>
+<div class="groupBox" id="dailyWhiteBox"><div class="row"><b>群白名单</b><input id="dailyGroupWhiteSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupWhitePicker"></div></div>
+<div class="groupBox" id="dailyBlackBox"><div class="row"><b>群黑名单</b><input id="dailyGroupBlackSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupBlackPicker"></div></div>
 </div>
 <div class="settingsCard">
 <div class="sectionTitle"><b>技能列表</b><span class="muted">选择后编辑命令和定时。</span></div>
@@ -1765,7 +1768,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="sectionTitle"><b>当前技能</b><span class="muted" id="dailySelectedMeta">选择一个技能。</span></div>
 <label class="field dailyCommandBox">监听命令 <textarea id="dailySourceCommands" placeholder="每行一个命令"></textarea></label>
 <div class="dailyParamList" id="dailySourceParams"></div>
-<div class="row"><button onclick="saveDailySourceCommands()">更新命令</button><button onclick="setDailyDefaultSourceFromSelection()">设为默认</button></div>
+<div class="row"><button onclick="saveDailySourceCommands()">更新命令</button><button onclick="toggleDailySelectedSource()">切换开关</button></div>
 <div class="sectionTitle" style="margin-top:10px"><b>添加接口</b><span class="muted">自定义接口可编辑。</span></div>
 <div class="settingsFields">
 <label class="field">ID <input id="dailySourceID" placeholder="my-news"></label>
@@ -1793,8 +1796,8 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div id="dailyTasks" class="dailyList" style="margin-top:12px"></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>全局命令</b><span class="muted">兼容旧早报命令。</span></div>
-<label class="field">默认接口命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
+<div class="sectionTitle"><b>旧命令</b><span class="muted">不带技能名时使用兜底接口。</span></div>
+<label class="field">兼容命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
 <div class="row"><button class="primary" onclick="saveDailyNews()">保存 60s 配置</button><button onclick="testDailyNews()">测试提示</button></div>
 </div>
 </div>
@@ -2173,6 +2176,14 @@ function collectDailyNews(){
  dailyNewsCfg.default_format=$('dailyDefaultFormat').value||'image';
  dailyNewsCfg.commands=String($('dailyCommands').value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
  dailyNewsCfg.access.group_mode=$('dailyGroupMode').value||'none';
+ if(dailyNewsCfg.access.group_mode==='whitelist'){
+  dailyNewsCfg.access.group_blacklist=[];
+ }else if(dailyNewsCfg.access.group_mode==='blacklist'){
+  dailyNewsCfg.access.group_whitelist=[];
+ }else{
+  dailyNewsCfg.access.group_whitelist=[];
+  dailyNewsCfg.access.group_blacklist=[];
+ }
 }
 function setDailyEnabled(v){dailyNewsCfg.access=dailyNewsCfg.access||{};dailyNewsCfg.access.enabled=!!v;renderDailyNewsSettings();$('dailyNewsMsg').textContent='总开关已修改，记得保存'}
 function setDailyPrivateEnabled(v){dailyNewsCfg.access=dailyNewsCfg.access||{};dailyNewsCfg.access.private_enabled=!!v;renderDailyNewsSettings();$('dailyNewsMsg').textContent='私聊开关已修改，记得保存'}
@@ -2191,18 +2202,24 @@ function renderDailySources(){
  }).sort((a,b)=>String(a.category||'').localeCompare(String(b.category||''))||String(a.id).localeCompare(String(b.id)));
  $('dailySources').innerHTML=list.map(s=>{
   const readonly=!!s.builtin;
-  const badge=readonly?'<span class="dailyBadge readonly">内置</span>':'<span class="dailyBadge">自定义</span>';
+  const enabled=!s.disabled;
+  const badge=(enabled?'<span class="dailyBadge">开启</span>':'<span class="dailyBadge readonly">关闭</span>')+(readonly?'<span class="dailyBadge readonly">内置</span>':'<span class="dailyBadge">自定义</span>');
   const actions=readonly
-   ? '<button data-id="'+escapeHTML(s.id)+'" onclick="selectDailySource(this.dataset.id)">选择</button><button data-id="'+escapeHTML(s.id)+'" onclick="setDailyDefaultSource(this.dataset.id)">设为默认</button>'
-   : '<button data-id="'+escapeHTML(s.id)+'" onclick="selectDailySource(this.dataset.id)">选择</button><button data-id="'+escapeHTML(s.id)+'" onclick="editDailySource(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(s.id)+'" onclick="deleteDailySource(this.dataset.id)">删除</button>';
+   ? '<button data-id="'+escapeHTML(s.id)+'" onclick="selectDailySource(this.dataset.id)">选择</button><button data-id="'+escapeHTML(s.id)+'" onclick="toggleDailySourceEnabled(this.dataset.id)">'+(enabled?'关闭':'开启')+'</button>'
+   : '<button data-id="'+escapeHTML(s.id)+'" onclick="selectDailySource(this.dataset.id)">选择</button><button data-id="'+escapeHTML(s.id)+'" onclick="toggleDailySourceEnabled(this.dataset.id)">'+(enabled?'关闭':'开启')+'</button><button data-id="'+escapeHTML(s.id)+'" onclick="editDailySource(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(s.id)+'" onclick="deleteDailySource(this.dataset.id)">删除</button>';
   return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(s.name||s.id)+'</b><div class="dailyItemMeta">'+escapeHTML(dailyCategoryLabel(s.category))+' · '+escapeHTML(s.id)+' · '+dailyEncodingLabel(s.encoding)+'</div></div>'+badge+'</div><div class="dailyItemMeta">'+escapeHTML(s.desc||s.url||'')+'</div><div class="dailyActions">'+actions+'</div></div>';
  }).join('')||'<div class="muted">暂无接口</div>';
 }
 function selectDailySource(id){dailyNewsCfg.selected_source=id;renderDailySelectedSource();renderDailySources()}
+function toggleDailySourceEnabled(id){
+ const s=(dailyNewsCfg.sources||[]).find(x=>x.id===id); if(!s) return;
+ s.disabled=!s.disabled; s.enabled=!s.disabled;
+ renderDailySelectedSource(); renderDailySources(); $('dailyNewsMsg').textContent=(s.disabled?'已关闭 ':'已开启 ')+(s.name||s.id)+'，记得保存';
+}
 function renderDailySelectedSource(){
  const s=dailySelectedSource();
  if(!s){$('dailySelectedMeta').textContent='暂无技能';return}
- $('dailySelectedMeta').textContent=(s.name||s.id)+' · '+dailyCategoryLabel(s.category)+' · '+(s.id||'');
+ $('dailySelectedMeta').textContent=(s.disabled?'已关闭 · ':'已开启 · ')+(s.name||s.id)+' · '+dailyCategoryLabel(s.category)+' · '+(s.id||'');
  $('dailySourceCommands').value=(s.commands||[]).join('\n');
  $('dailySourceParams').innerHTML=(s.params||[]).map(p=>'<span>'+escapeHTML((p.label||p.name)+(p.required?'*':'')+' · '+(p.source||'arg'))+'</span>').join('')||'<span>无参数</span>';
 }
@@ -2211,7 +2228,7 @@ function saveDailySourceCommands(){
  s.commands=String($('dailySourceCommands').value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
  renderDailySources(); $('dailyNewsMsg').textContent='命令已更新，记得保存';
 }
-function setDailyDefaultSourceFromSelection(){const s=dailySelectedSource(); if(s) setDailyDefaultSource(s.id)}
+function toggleDailySelectedSource(){const s=dailySelectedSource(); if(s) toggleDailySourceEnabled(s.id)}
 function clearDailySourceForm(){['dailySourceID','dailySourceName','dailySourceCategory','dailySourceURL'].forEach(id=>$(id).value=''); $('dailySourceEncoding').value='json'; $('dailySourceTimeout').value=20}
 function editDailySource(id){
  const s=(dailyNewsCfg.sources||[]).find(x=>x.id===id); if(!s||s.builtin) return;
@@ -2219,7 +2236,7 @@ function editDailySource(id){
 }
 function addDailySource(){
  collectDailyNews();
- const src={id:String($('dailySourceID').value||'').trim(),name:String($('dailySourceName').value||'').trim(),category:String($('dailySourceCategory').value||'custom').trim(),url:String($('dailySourceURL').value||'').trim(),method:'GET',encoding:$('dailySourceEncoding').value||'json',timeout_seconds:Number($('dailySourceTimeout').value||20),commands:[]};
+ const src={id:String($('dailySourceID').value||'').trim(),name:String($('dailySourceName').value||'').trim(),category:String($('dailySourceCategory').value||'custom').trim(),url:String($('dailySourceURL').value||'').trim(),method:'GET',encoding:$('dailySourceEncoding').value||'json',timeout_seconds:Number($('dailySourceTimeout').value||20),commands:[],enabled:true,disabled:false};
  if(!src.id||!src.url){$('dailyNewsMsg').textContent='接口 ID 和 URL 必填';return}
  const old=(dailyNewsCfg.sources||[]).find(x=>x.id===src.id);
  if(old&&old.builtin){$('dailyNewsMsg').textContent='内置接口不能覆盖';return}
@@ -2238,6 +2255,8 @@ function setDailyDefaultSource(id){dailyNewsCfg.default_source=id; renderDailyNe
 function renderDailyGroupPickers(){
  if(!dailyNewsCfg||!dailyNewsCfg.access) return;
  const mode=dailyNewsCfg.access.group_mode||'none';
+ if($('dailyWhiteBox')) $('dailyWhiteBox').classList.toggle('hidden', mode!=='whitelist');
+ if($('dailyBlackBox')) $('dailyBlackBox').classList.toggle('hidden', mode!=='blacklist');
  const white=new Set((dailyNewsCfg.access.group_whitelist||[]).map(String));
  const black=new Set((dailyNewsCfg.access.group_blacklist||[]).map(String));
  renderDailyGroupPicker('dailyGroupWhitePicker','dailyGroupWhiteSearch',white,'white');
