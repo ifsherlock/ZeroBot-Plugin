@@ -948,7 +948,7 @@ func normalizeWebDailyNewsConfig(in webDailyNewsConfig) webDailyNewsConfig {
 		base.DefaultSource = "60s"
 	}
 	for _, task := range in.Schedules {
-		task = normalizeWebDailyNewsSchedule(task)
+		task = normalizeWebDailyNewsSchedule(task, merged)
 		if task.ID == "" || task.SourceID == "" || task.Target == "" || task.Time == "" {
 			continue
 		}
@@ -1044,7 +1044,7 @@ func normalizeWebDailyNewsIDs(ids []int64) []int64 {
 	return out
 }
 
-func normalizeWebDailyNewsSchedule(task webDailyNewsSchedule) webDailyNewsSchedule {
+func normalizeWebDailyNewsSchedule(task webDailyNewsSchedule, sources map[string]webDailyNewsSource) webDailyNewsSchedule {
 	task.ID = webDailyNewsSanitizeID(task.ID)
 	task.SourceID = webDailyNewsSanitizeID(task.SourceID)
 	task.Target = strings.TrimSpace(task.Target)
@@ -1055,9 +1055,13 @@ func normalizeWebDailyNewsSchedule(task webDailyNewsSchedule) webDailyNewsSchedu
 	if !webDailyNewsTargetOK(task.Target) {
 		task.Target = ""
 	}
-	task.Format = strings.ToLower(strings.TrimSpace(task.Format))
-	if !webDailyNewsFormatOK(task.Format) {
-		task.Format = "image"
+	if src, ok := sources[task.SourceID]; ok {
+		task.Format = webDailyNewsFormatFromEncoding(src.Encoding)
+	} else {
+		task.Format = strings.ToLower(strings.TrimSpace(task.Format))
+		if !webDailyNewsFormatOK(task.Format) {
+			task.Format = "image"
+		}
 	}
 	return task
 }
@@ -1118,6 +1122,21 @@ func webDailyNewsFormatOK(format string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func webDailyNewsFormatFromEncoding(encoding string) string {
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "text":
+		return "text"
+	case "markdown":
+		return "markdown"
+	case "json":
+		return "json"
+	case "image", "image-proxy":
+		return "image"
+	default:
+		return "text"
 	}
 }
 
@@ -1675,6 +1694,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
 .dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:14px;align-items:stretch}.dailyGrid.three{grid-template-columns:minmax(300px,.82fr) minmax(420px,1.18fr) minmax(320px,.9fr)}.dailyList{display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;display:grid;gap:8px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}.dailyFilters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.dailyFilters select,.dailyFilters input{min-width:150px}.dailyCommandBox textarea{min-height:96px}.dailyParamList{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.dailyParamList span{border:1px solid #e5e7eb;border-radius:999px;padding:2px 7px;background:#f8fafc}
+.dailyTaskTarget{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px}.dailyFormatView{height:34px;display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#f8fafc;padding:0 10px;color:#475569;font-weight:650}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
@@ -1786,10 +1806,10 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="sectionTitle"><b>定时任务</b><span class="muted">任意技能都能定时推送。</span></div>
 <div class="settingsFields">
 <label class="field">任务ID <input id="dailyTaskID" placeholder="morning"></label>
-<label class="field">接口 <select id="dailyTaskSource"></select></label>
-<label class="field">目标 <input id="dailyTaskTarget" placeholder="群:123456 或 私聊:123456"></label>
+<label class="field">接口 <select id="dailyTaskSource" onchange="updateDailyTaskFormat()"></select></label>
+<label class="field span2">目标 <span class="dailyTaskTarget"><select id="dailyTaskTargetType" onchange="updateDailyTaskTargetMode()"><option value="group">群聊</option><option value="private">私聊</option></select><select id="dailyTaskGroup"></select><input id="dailyTaskPrivate" class="hidden" placeholder="输入 QQ 号"></span></label>
 <label class="field">时间 <input id="dailyTaskTime" type="time" value="08:30"></label>
-<label class="field">格式 <select id="dailyTaskFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
+<label class="field">发送格式 <span id="dailyTaskFormatView" class="dailyFormatView">随接口</span><input id="dailyTaskFormat" type="hidden" value="image"></label>
 <label class="field">启用 <span class="row"><label class="switch"><input id="dailyTaskEnabled" type="checkbox" checked><span class="slider"></span></label></span></label>
 </div>
 <div class="row"><button onclick="addDailyTask()">添加/更新任务</button><button onclick="clearDailyTaskForm()">清空</button></div>
@@ -2168,6 +2188,9 @@ function renderDailyNewsSettings(){
  renderDailySelectedSource();
  renderDailyTasks();
  renderDailyGroupPickers();
+ renderDailyTaskGroupOptions();
+ updateDailyTaskTargetMode();
+ updateDailyTaskFormat();
 }
 function collectDailyNews(){
  if(!dailyNewsCfg) dailyNewsCfg={};
@@ -2275,21 +2298,74 @@ function toggleDailyGroup(kind,id,on){
  dailyNewsCfg.access[key]=Array.from(set).map(Number).filter(Boolean);
  renderDailyGroupPickers(); $('dailyNewsMsg').textContent='群名单已修改，记得保存';
 }
+function dailySourceByID(id){return (dailyNewsCfg.sources||[]).find(x=>x.id===id)||null}
+function dailyFormatFromEncoding(enc){
+ enc=String(enc||'').toLowerCase();
+ if(enc==='image'||enc==='image-proxy') return 'image';
+ if(enc==='markdown') return 'markdown';
+ if(enc==='json') return 'json';
+ if(enc==='text') return 'text';
+ return 'text';
+}
+function dailyFormatLabel(format){
+ return ({image:'图片',text:'文本',markdown:'Markdown',json:'JSON'})[format]||format||'文本';
+}
+function updateDailyTaskFormat(){
+ const src=dailySourceByID($('dailyTaskSource').value);
+ const format=dailyFormatFromEncoding(src&&src.encoding);
+ $('dailyTaskFormat').value=format;
+ $('dailyTaskFormatView').textContent=dailyFormatLabel(format)+' · '+(src&&src.encoding?src.encoding:'text');
+}
+function parseDailyTaskTarget(target){
+ const m=String(target||'').match(/^([^:：]+)[:：](\d+)$/);
+ if(!m) return {type:'group',id:''};
+ const kind=m[1].trim();
+ return {type:(kind==='私聊'||kind==='private')?'private':'group',id:m[2]};
+}
+function buildDailyTaskTarget(){
+ const type=$('dailyTaskTargetType').value||'group';
+ const id=type==='private'?String($('dailyTaskPrivate').value||'').trim():String($('dailyTaskGroup').value||'').trim();
+ if(!id) return '';
+ return (type==='private'?'私聊':'群')+':'+id;
+}
+function renderDailyTaskGroupOptions(selected){
+ const list=(groups||[]).slice().sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id)));
+ const current=String(selected||$('dailyTaskGroup').value||'');
+ $('dailyTaskGroup').innerHTML=list.map(g=>'<option value="'+escapeHTML(g.id)+'"'+(String(g.id)===current?' selected':'')+'>'+escapeHTML((g.name||'群')+' / '+g.id)+'</option>').join('');
+}
+function updateDailyTaskTargetMode(){
+ const type=$('dailyTaskTargetType').value||'group';
+ $('dailyTaskGroup').classList.toggle('hidden',type!=='group');
+ $('dailyTaskPrivate').classList.toggle('hidden',type!=='private');
+}
+function setDailyTaskTarget(target){
+ const parsed=parseDailyTaskTarget(target);
+ $('dailyTaskTargetType').value=parsed.type;
+ if(parsed.type==='private'){
+  $('dailyTaskPrivate').value=parsed.id;
+ }else{
+  renderDailyTaskGroupOptions(parsed.id);
+ }
+ updateDailyTaskTargetMode();
+}
 function renderDailyTasks(){
  const list=(dailyNewsCfg.schedules||[]).slice().sort((a,b)=>String(a.time||'').localeCompare(String(b.time||''))||String(a.id).localeCompare(String(b.id)));
  $('dailyTasks').innerHTML=list.map(t=>{
   const state=t.enabled?'<span class="dailyBadge">启用</span>':'<span class="dailyBadge readonly">关闭</span>';
-  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(t.id||'-')+'</b><div class="dailyItemMeta">'+escapeHTML(t.time||'--:--')+' · '+escapeHTML(t.source_id||'-')+' · '+escapeHTML(t.format||'image')+'</div></div>'+state+'</div><div class="dailyItemMeta">'+escapeHTML(t.target||'')+(t.last_run?' · 上次 '+escapeHTML(t.last_run):'')+'</div><div class="dailyActions"><button data-id="'+escapeHTML(t.id)+'" onclick="editDailyTask(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(t.id)+'" onclick="toggleDailyTask(this.dataset.id)">开关</button><button data-id="'+escapeHTML(t.id)+'" onclick="deleteDailyTask(this.dataset.id)">删除</button></div></div>';
+  const src=dailySourceByID(t.source_id);
+  const format=dailyFormatFromEncoding(src&&src.encoding);
+  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(t.id||'-')+'</b><div class="dailyItemMeta">'+escapeHTML(t.time||'--:--')+' · '+escapeHTML(t.source_id||'-')+' · '+escapeHTML(dailyFormatLabel(format))+'</div></div>'+state+'</div><div class="dailyItemMeta">'+escapeHTML(t.target||'')+(t.last_run?' · 上次 '+escapeHTML(t.last_run):'')+'</div><div class="dailyActions"><button data-id="'+escapeHTML(t.id)+'" onclick="editDailyTask(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(t.id)+'" onclick="toggleDailyTask(this.dataset.id)">开关</button><button data-id="'+escapeHTML(t.id)+'" onclick="deleteDailyTask(this.dataset.id)">删除</button></div></div>';
  }).join('')||'<div class="muted">暂无定时任务</div>';
 }
-function clearDailyTaskForm(){$('dailyTaskID').value=''; $('dailyTaskTarget').value=''; $('dailyTaskTime').value='08:30'; $('dailyTaskFormat').value='image'; $('dailyTaskEnabled').checked=true; if(dailyNewsCfg) $('dailyTaskSource').value=dailyNewsCfg.default_source||'60s'}
+function clearDailyTaskForm(){$('dailyTaskID').value=''; $('dailyTaskPrivate').value=''; $('dailyTaskTime').value='08:30'; $('dailyTaskEnabled').checked=true; if(dailyNewsCfg) $('dailyTaskSource').value=dailyNewsCfg.default_source||'60s'; $('dailyTaskTargetType').value='group'; renderDailyTaskGroupOptions(); updateDailyTaskTargetMode(); updateDailyTaskFormat()}
 function editDailyTask(id){
  const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(!t) return;
- $('dailyTaskID').value=t.id||''; $('dailyTaskSource').value=t.source_id||dailyNewsCfg.default_source||'60s'; $('dailyTaskTarget').value=t.target||''; $('dailyTaskTime').value=t.time||'08:30'; $('dailyTaskFormat').value=t.format||'image'; $('dailyTaskEnabled').checked=!!t.enabled;
+ $('dailyTaskID').value=t.id||''; $('dailyTaskSource').value=t.source_id||dailyNewsCfg.default_source||'60s'; setDailyTaskTarget(t.target||''); $('dailyTaskTime').value=t.time||'08:30'; $('dailyTaskEnabled').checked=!!t.enabled; updateDailyTaskFormat();
 }
 function addDailyTask(){
  collectDailyNews();
- const task={id:String($('dailyTaskID').value||'').trim(),source_id:$('dailyTaskSource').value||dailyNewsCfg.default_source||'60s',target:String($('dailyTaskTarget').value||'').trim(),time:$('dailyTaskTime').value||'08:30',format:$('dailyTaskFormat').value||'image',enabled:!!$('dailyTaskEnabled').checked};
+ updateDailyTaskFormat();
+ const task={id:String($('dailyTaskID').value||'').trim(),source_id:$('dailyTaskSource').value||dailyNewsCfg.default_source||'60s',target:buildDailyTaskTarget(),time:$('dailyTaskTime').value||'08:30',format:$('dailyTaskFormat').value||'image',enabled:!!$('dailyTaskEnabled').checked};
  if(!task.id||!task.target||!task.time){$('dailyNewsMsg').textContent='任务 ID、目标和时间必填';return}
  dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==task.id);
  dailyNewsCfg.schedules.push(task);
@@ -2568,6 +2644,7 @@ function renderGroupPickers(){
  renderPlatformGroupBlock();
  renderMediaShieldGroups();
  renderDailyGroupPickers();
+ renderDailyTaskGroupOptions();
 }
 function renderGroupPicker(container,searchID,textarea){
  const q=String($(searchID).value||'').toLowerCase().trim();

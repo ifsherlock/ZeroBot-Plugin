@@ -273,7 +273,7 @@ func normalizeConfig(in newsConfig) newsConfig {
 		base.DefaultSource = defaultSourceID
 	}
 	for _, task := range in.Schedules {
-		task = normalizeSchedule(task)
+		task = normalizeSchedule(task, merged)
 		if task.ID == "" || task.SourceID == "" || task.Target == "" || task.Time == "" {
 			continue
 		}
@@ -385,7 +385,7 @@ func normalizeIDs(ids []int64) []int64 {
 	return out
 }
 
-func normalizeSchedule(task newsSchedule) newsSchedule {
+func normalizeSchedule(task newsSchedule, sources map[string]newsSource) newsSchedule {
 	task.ID = sanitizeID(task.ID)
 	task.SourceID = sanitizeID(task.SourceID)
 	task.Target = strings.TrimSpace(task.Target)
@@ -396,9 +396,13 @@ func normalizeSchedule(task newsSchedule) newsSchedule {
 	if _, _, ok := parseTarget(task.Target); !ok {
 		task.Target = ""
 	}
-	task.Format = strings.ToLower(strings.TrimSpace(task.Format))
-	if !isSupportedFormat(task.Format) {
-		task.Format = "image"
+	if src, ok := sources[task.SourceID]; ok {
+		task.Format = formatFromEncoding(src.Encoding)
+	} else {
+		task.Format = strings.ToLower(strings.TrimSpace(task.Format))
+		if !isSupportedFormat(task.Format) {
+			task.Format = "image"
+		}
 	}
 	return task
 }
@@ -1109,19 +1113,20 @@ func handleAddSchedule(ctx *zero.Ctx) {
 	if len(fields) >= 5 {
 		task.Format = fields[4]
 	}
-	task = normalizeSchedule(task)
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	sources := sourcesByID(cfg.Sources)
+	if _, ok := sources[sanitizeID(task.SourceID)]; !ok {
+		ctx.SendChain(message.Text("接口不存在: ", task.SourceID))
+		return
+	}
+	task = normalizeSchedule(task, sources)
 	if task.ID == "" || !isClock(task.Time) {
 		ctx.SendChain(message.Text("定时ID或时间不合法"))
 		return
 	}
 	if _, _, ok := parseTarget(task.Target); !ok {
 		ctx.SendChain(message.Text("目标格式: 群:123456 或 私聊:123456"))
-		return
-	}
-	cfgMu.Lock()
-	defer cfgMu.Unlock()
-	if _, ok := findSource(cfg.Sources, task.SourceID); !ok {
-		ctx.SendChain(message.Text("接口不存在: ", task.SourceID))
 		return
 	}
 	replaced := false
@@ -1214,6 +1219,14 @@ func findSource(sources []newsSource, id string) (newsSource, bool) {
 		}
 	}
 	return newsSource{}, false
+}
+
+func sourcesByID(sources []newsSource) map[string]newsSource {
+	out := make(map[string]newsSource, len(sources))
+	for _, src := range sources {
+		out[src.ID] = src
+	}
+	return out
 }
 
 func parseTarget(target string) (string, int64, bool) {
