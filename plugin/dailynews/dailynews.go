@@ -32,12 +32,25 @@ const (
 type newsSource struct {
 	ID       string            `json:"id"`
 	Name     string            `json:"name"`
+	Category string            `json:"category,omitempty"`
+	Desc     string            `json:"desc,omitempty"`
 	URL      string            `json:"url"`
 	Method   string            `json:"method"`
 	Encoding string            `json:"encoding"`
 	Headers  map[string]string `json:"headers,omitempty"`
+	Params   []newsParam       `json:"params,omitempty"`
+	Commands []string          `json:"commands,omitempty"`
 	Timeout  int               `json:"timeout_seconds,omitempty"`
 	Builtin  bool              `json:"builtin,omitempty"`
+}
+
+type newsParam struct {
+	Name        string `json:"name"`
+	Label       string `json:"label,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Default     string `json:"default,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
 }
 
 type newsSchedule struct {
@@ -56,6 +69,15 @@ type newsConfig struct {
 	Commands      []string       `json:"commands"`
 	Sources       []newsSource   `json:"sources"`
 	Schedules     []newsSchedule `json:"schedules"`
+	Access        newsAccess     `json:"access"`
+}
+
+type newsAccess struct {
+	Enabled        bool    `json:"enabled"`
+	PrivateEnabled bool    `json:"private_enabled"`
+	GroupMode      string  `json:"group_mode"`
+	GroupWhitelist []int64 `json:"group_whitelist,omitempty"`
+	GroupBlacklist []int64 `json:"group_blacklist,omitempty"`
 }
 
 type WebNewsSource = newsSource
@@ -106,11 +128,14 @@ func init() {
 		if text == "" {
 			return
 		}
-		sourceID, format, date, ok := matchConfiguredCommand(text)
+		if !allowAccess(ctx) {
+			return
+		}
+		sourceID, format, args, ok := matchConfiguredCommand(text)
 		if !ok {
 			return
 		}
-		sendNews(ctx, sourceID, format, date, "")
+		sendNews(ctx, sourceID, format, args, "")
 	})
 	engine.OnPrefix("60秒接口添加", zero.AdminPermission).SetBlock(true).Handle(handleAddSource)
 	engine.OnPrefix("60秒接口删除", zero.AdminPermission).SetBlock(true).Handle(handleDeleteSource)
@@ -142,13 +167,54 @@ func defaultConfig() newsConfig {
 		DefaultSource: defaultSourceID,
 		DefaultFormat: "image",
 		Commands:      []string{"今日早报", "60秒读懂世界", "每天60秒读懂世界", "60秒早报", "60s早报"},
+		Access: newsAccess{
+			Enabled:        true,
+			PrivateEnabled: true,
+			GroupMode:      "none",
+		},
 		Sources: []newsSource{
-			{ID: defaultSourceID, Name: "60s API", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true},
-			{ID: "60s-text", Name: "60s 文本", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "text", Timeout: 20, Builtin: true},
-			{ID: "60s-markdown", Name: "60s Markdown", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "markdown", Timeout: 20, Builtin: true},
-			{ID: "60s-image", Name: "60s 图片跳转", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "image", Timeout: 20, Builtin: true},
-			{ID: "60s-image-proxy", Name: "60s 图片代理", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true},
-			{ID: "legacy-image", Name: "旧版早报图片", URL: legacyImageAPI, Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true},
+			{ID: defaultSourceID, Name: "每天60秒", Category: "news", Desc: "每日新闻、微语和图片早报", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"今日早报", "60秒读懂世界", "每天60秒读懂世界", "60秒早报", "60s早报"}, Params: []newsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-text", Name: "60s 文本", Category: "news", Desc: "文本格式早报", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "text", Timeout: 20, Builtin: true, Commands: []string{"文字早报", "早报文本"}, Params: []newsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-markdown", Name: "60s Markdown", Category: "news", Desc: "Markdown 格式早报", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "markdown", Timeout: 20, Builtin: true, Commands: []string{"markdown早报", "md早报"}, Params: []newsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-image", Name: "60s 图片跳转", Category: "news", Desc: "图片跳转早报", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "image", Timeout: 20, Builtin: true, Commands: []string{"图片早报"}, Params: []newsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-image-proxy", Name: "60s 图片代理", Category: "news", Desc: "直接下载图片早报", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"早报图片"}, Params: []newsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "legacy-image", Name: "旧版早报图片", Category: "news", Desc: "旧版图片接口", URL: legacyImageAPI, Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"旧版早报"}},
+			{ID: "weather-realtime", Name: "实时天气", Category: "weather", Desc: "查询城市实时天气", URL: "https://60s.viki.moe/v2/weather/realtime", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"天气", "实时天气"}, Params: []newsParam{{Name: "query", Label: "地点", Source: "rest", Required: true, Placeholder: "北京"}}},
+			{ID: "weather-forecast", Name: "天气预报", Category: "weather", Desc: "查询城市天气预报", URL: "https://60s.viki.moe/v2/weather/forecast", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"天气预报", "未来天气"}, Params: []newsParam{{Name: "query", Label: "地点", Source: "rest", Required: true, Placeholder: "上海"}}},
+			{ID: "weibo", Name: "微博热搜", Category: "hot", Desc: "微博热搜榜", URL: "https://60s.viki.moe/v2/weibo", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"微博热搜", "微博热点"}},
+			{ID: "zhihu", Name: "知乎热榜", Category: "hot", Desc: "知乎热门话题", URL: "https://60s.viki.moe/v2/zhihu", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"知乎热榜", "知乎热点"}},
+			{ID: "baidu-hot", Name: "百度热搜", Category: "hot", Desc: "百度热搜榜", URL: "https://60s.viki.moe/v2/baidu/hot", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"百度热搜", "百度热点"}},
+			{ID: "douyin-hot", Name: "抖音热点", Category: "hot", Desc: "抖音热点榜", URL: "https://60s.viki.moe/v2/douyin", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"抖音热点", "抖音热榜"}},
+			{ID: "toutiao", Name: "头条热点", Category: "hot", Desc: "今日头条热点", URL: "https://60s.viki.moe/v2/toutiao", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"头条热点", "今日头条"}},
+			{ID: "bili-hot", Name: "B站热榜", Category: "hot", Desc: "哔哩哔哩热门视频", URL: "https://60s.viki.moe/v2/bili", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"B站热榜", "b站热榜", "哔哩热榜"}},
+			{ID: "exchange-rate", Name: "汇率查询", Category: "data", Desc: "货币汇率查询", URL: "https://60s.viki.moe/v2/exchange-rate", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"汇率", "汇率查询"}, Params: []newsParam{{Name: "from", Label: "源币种", Source: "arg", Default: "USD", Placeholder: "USD"}, {Name: "to", Label: "目标币种", Source: "arg", Default: "CNY", Placeholder: "CNY"}}},
+			{ID: "lunar", Name: "农历查询", Category: "data", Desc: "公历农历与生肖节气", URL: "https://60s.viki.moe/v2/lunar", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"农历", "今日农历"}, Params: []newsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "today-history", Name: "历史上的今天", Category: "data", Desc: "历史事件查询", URL: "https://60s.viki.moe/v2/today-in-history", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"历史上的今天", "历史今天"}, Params: []newsParam{{Name: "month", Label: "月份", Source: "arg", Placeholder: "1"}, {Name: "day", Label: "日期", Source: "arg", Placeholder: "15"}}},
+			{ID: "baike", Name: "百科查询", Category: "data", Desc: "中文百科搜索", URL: "https://60s.viki.moe/v2/baike", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"百科", "百科查询"}, Params: []newsParam{{Name: "keyword", Label: "关键词", Source: "rest", Required: true, Placeholder: "Python编程"}}},
+			{ID: "fuel-price", Name: "油价查询", Category: "data", Desc: "国内油价", URL: "https://60s.viki.moe/v2/fuel-price", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"油价", "油价查询"}, Params: []newsParam{{Name: "province", Label: "省份", Source: "rest", Required: true, Placeholder: "北京"}}},
+			{ID: "gold-price", Name: "金价查询", Category: "data", Desc: "黄金价格", URL: "https://60s.viki.moe/v2/gold-price", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"金价", "黄金价格"}},
+			{ID: "chemical", Name: "化学元素", Category: "data", Desc: "元素信息查询", URL: "https://60s.viki.moe/v2/chemical", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"化学元素", "元素查询"}, Params: []newsParam{{Name: "query", Label: "元素", Source: "rest", Required: true, Placeholder: "H"}}},
+			{ID: "hitokoto", Name: "一言", Category: "fun", Desc: "随机一句话", URL: "https://60s.viki.moe/v2/hitokoto", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"一言", "来句一言"}, Params: []newsParam{{Name: "category", Label: "分类", Source: "arg", Placeholder: "anime"}}},
+			{ID: "dad-joke", Name: "英文冷笑话", Category: "fun", Desc: "Dad joke", URL: "https://60s.viki.moe/v2/dad-joke", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"英文笑话", "dad joke"}},
+			{ID: "duanzi", Name: "中文段子", Category: "fun", Desc: "随机中文段子", URL: "https://60s.viki.moe/v2/duanzi", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"讲个笑话", "段子", "笑话"}},
+			{ID: "luck", Name: "今日运势", Category: "fun", Desc: "每日运势", URL: "https://60s.viki.moe/v2/luck", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"今日运势", "运势"}},
+			{ID: "kfc", Name: "疯狂星期四", Category: "fun", Desc: "KFC 梗文案", URL: "https://60s.viki.moe/v2/kfc", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"疯狂星期四", "kfc"}},
+			{ID: "moyu", Name: "摸鱼日历", Category: "fun", Desc: "摸鱼日历图片", URL: "https://60s.viki.moe/v2/moyu", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"摸鱼日历", "摸鱼"}},
+			{ID: "ncm-rank-list", Name: "网易云榜单", Category: "media", Desc: "音乐榜单列表", URL: "https://60s.viki.moe/v2/ncm-rank/list", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网易云榜单", "音乐榜单"}},
+			{ID: "ncm-rank", Name: "网易云榜单详情", Category: "media", Desc: "音乐榜单歌曲", URL: "https://60s.viki.moe/v2/ncm-rank/{id}", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网易云热歌", "音乐排行"}, Params: []newsParam{{Name: "id", Label: "榜单ID", Source: "arg", Default: "3778678", Placeholder: "3778678"}}},
+			{ID: "lyric", Name: "歌词搜索", Category: "media", Desc: "搜索歌词", URL: "https://60s.viki.moe/v2/lyric", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"歌词", "歌词搜索"}, Params: []newsParam{{Name: "keyword", Label: "歌曲", Source: "rest", Required: true, Placeholder: "稻香 周杰伦"}}},
+			{ID: "maoyan-all-movie", Name: "电影资料", Category: "media", Desc: "猫眼电影资料", URL: "https://60s.viki.moe/v2/maoyan/all/movie", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"电影资料"}},
+			{ID: "maoyan-movie", Name: "实时票房", Category: "media", Desc: "电影票房排行", URL: "https://60s.viki.moe/v2/maoyan/realtime/movie", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"电影票房", "实时票房"}},
+			{ID: "maoyan-tv", Name: "电视剧收视", Category: "media", Desc: "电视剧收视率", URL: "https://60s.viki.moe/v2/maoyan/realtime/tv", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"电视剧收视", "收视率"}},
+			{ID: "maoyan-web", Name: "网剧热度", Category: "media", Desc: "网剧热度排行", URL: "https://60s.viki.moe/v2/maoyan/realtime/web", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网剧热度", "网剧排行"}},
+			{ID: "ip", Name: "IP 查询", Category: "tool", Desc: "IP 归属地和运营商", URL: "https://60s.viki.moe/v2/ip", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"ip查询", "查ip"}, Params: []newsParam{{Name: "ip", Label: "IP", Source: "rest", Placeholder: "8.8.8.8"}}},
+			{ID: "fanyi", Name: "文本翻译", Category: "tool", Desc: "多语言翻译", URL: "https://60s.viki.moe/v2/fanyi", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"翻译"}, Params: []newsParam{{Name: "text", Label: "文本", Source: "rest", Required: true, Placeholder: "你好世界"}, {Name: "from", Label: "源语言", Source: "default", Default: "auto"}, {Name: "to", Label: "目标语言", Source: "arg", Default: "zh", Placeholder: "en"}}},
+			{ID: "fanyi-langs", Name: "翻译语言", Category: "tool", Desc: "支持语言列表", URL: "https://60s.viki.moe/v2/fanyi/langs", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"翻译语言"}},
+			{ID: "qrcode", Name: "二维码", Category: "tool", Desc: "生成二维码图片", URL: "https://60s.viki.moe/v2/qrcode", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"二维码", "生成二维码"}, Params: []newsParam{{Name: "text", Label: "内容", Source: "rest", Required: true, Placeholder: "https://example.com"}, {Name: "size", Label: "尺寸", Source: "arg", Default: "300", Placeholder: "300"}}},
+			{ID: "hash", Name: "哈希计算", Category: "tool", Desc: "MD5/SHA 计算", URL: "https://60s.viki.moe/v2/hash", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"哈希", "hash"}, Params: []newsParam{{Name: "text", Label: "文本", Source: "rest", Required: true, Placeholder: "Hello World"}, {Name: "algorithm", Label: "算法", Source: "arg", Default: "md5", Placeholder: "sha256"}}},
+			{ID: "og", Name: "网页元信息", Category: "tool", Desc: "提取网页标题描述图片", URL: "https://60s.viki.moe/v2/og", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网页信息", "og"}, Params: []newsParam{{Name: "url", Label: "网址", Source: "rest", Required: true, Placeholder: "https://example.com"}}},
+			{ID: "whois", Name: "WHOIS 查询", Category: "tool", Desc: "域名注册信息", URL: "https://60s.viki.moe/v2/whois", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"whois", "域名查询"}, Params: []newsParam{{Name: "domain", Label: "域名", Source: "rest", Required: true, Placeholder: "github.com"}}},
+			{ID: "password", Name: "密码生成", Category: "tool", Desc: "生成随机密码", URL: "https://60s.viki.moe/v2/password", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"生成密码", "随机密码"}, Params: []newsParam{{Name: "length", Label: "长度", Source: "arg", Default: "16", Placeholder: "16"}, {Name: "numbers", Label: "数字", Source: "default", Default: "true"}, {Name: "lowercase", Label: "小写", Source: "default", Default: "true"}, {Name: "uppercase", Label: "大写", Source: "default", Default: "true"}, {Name: "symbols", Label: "符号", Source: "default", Default: "true"}}},
 		},
 	}
 }
@@ -182,6 +248,7 @@ func normalizeConfig(in newsConfig) newsConfig {
 	if commands := normalizeCommands(in.Commands); len(commands) > 0 {
 		base.Commands = commands
 	}
+	base.Access = normalizeAccess(in.Access)
 	merged := make(map[string]newsSource)
 	for _, src := range base.Sources {
 		merged[src.ID] = normalizeSource(src)
@@ -193,6 +260,9 @@ func normalizeConfig(in newsConfig) newsConfig {
 		}
 		if old, ok := merged[src.ID]; ok && old.Builtin {
 			src.Builtin = true
+			if len(src.Params) == 0 {
+				src.Params = old.Params
+			}
 		}
 		merged[src.ID] = src
 	}
@@ -232,6 +302,8 @@ func SaveWebConfig(next WebNewsConfig) (WebNewsConfig, error) {
 func normalizeSource(src newsSource) newsSource {
 	src.ID = sanitizeID(src.ID)
 	src.Name = strings.TrimSpace(src.Name)
+	src.Category = sanitizeID(src.Category)
+	src.Desc = strings.TrimSpace(src.Desc)
 	src.URL = strings.TrimSpace(src.URL)
 	if u, err := url.Parse(src.URL); err != nil || u.Scheme == "" || u.Host == "" {
 		src.URL = ""
@@ -250,7 +322,64 @@ func normalizeSource(src newsSource) newsSource {
 	if src.Headers == nil {
 		src.Headers = map[string]string{}
 	}
+	src.Commands = normalizeCommands(src.Commands)
+	src.Params = normalizeParams(src.Params)
 	return src
+}
+
+func normalizeParams(params []newsParam) []newsParam {
+	out := make([]newsParam, 0, len(params))
+	for _, param := range params {
+		param.Name = sanitizeParamName(param.Name)
+		param.Label = strings.TrimSpace(param.Label)
+		param.Source = strings.ToLower(strings.TrimSpace(param.Source))
+		if param.Source == "" {
+			param.Source = "arg"
+		}
+		if param.Source != "arg" && param.Source != "rest" && param.Source != "default" {
+			param.Source = "arg"
+		}
+		param.Default = strings.TrimSpace(param.Default)
+		param.Placeholder = strings.TrimSpace(param.Placeholder)
+		if param.Name == "" {
+			continue
+		}
+		out = append(out, param)
+	}
+	return out
+}
+
+func normalizeAccess(in newsAccess) newsAccess {
+	mode := strings.ToLower(strings.TrimSpace(in.GroupMode))
+	if mode != "blacklist" && mode != "whitelist" {
+		mode = "none"
+	}
+	zeroValue := !in.Enabled && !in.PrivateEnabled && mode == "none" && len(in.GroupWhitelist) == 0 && len(in.GroupBlacklist) == 0
+	if zeroValue {
+		in.Enabled = true
+		in.PrivateEnabled = true
+	}
+	return newsAccess{
+		Enabled:        in.Enabled,
+		PrivateEnabled: in.PrivateEnabled,
+		GroupMode:      mode,
+		GroupWhitelist: normalizeIDs(in.GroupWhitelist),
+		GroupBlacklist: normalizeIDs(in.GroupBlacklist),
+	}
+}
+
+func normalizeIDs(ids []int64) []int64 {
+	seen := map[int64]bool{}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 func normalizeSchedule(task newsSchedule) newsSchedule {
@@ -300,25 +429,40 @@ func saveConfig() error {
 	return saveConfigLocked()
 }
 
-func parseFetchArgs(args []string) (sourceID, format, date string) {
+func parseFetchArgs(args []string) (sourceID, format string, rest []string) {
 	for _, arg := range args {
 		arg = strings.TrimSpace(arg)
 		switch {
 		case arg == "":
 		case isSupportedFormat(arg):
 			format = strings.ToLower(arg)
-		case isDate(arg):
-			date = arg
-		default:
+		case sourceID == "":
 			sourceID = sanitizeID(arg)
+		default:
+			rest = append(rest, arg)
 		}
 	}
 	return
 }
 
-func matchConfiguredCommand(text string) (sourceID, format, date string, ok bool) {
+func parseSourceCommandArgs(args []string) (format string, rest []string) {
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		switch {
+		case arg == "":
+		case isSupportedFormat(arg):
+			format = strings.ToLower(arg)
+		default:
+			rest = append(rest, arg)
+		}
+	}
+	return
+}
+
+func matchConfiguredCommand(text string) (sourceID, format string, args []string, ok bool) {
 	cfgMu.RLock()
 	commands := append([]string(nil), cfg.Commands...)
+	sources := append([]newsSource(nil), cfg.Sources...)
 	cfgMu.RUnlock()
 	for _, cmd := range commands {
 		cmd = strings.TrimSpace(cmd)
@@ -326,18 +470,109 @@ func matchConfiguredCommand(text string) (sourceID, format, date string, ok bool
 			continue
 		}
 		if text == cmd {
-			return "", "", "", true
+			return "", "", nil, true
 		}
 		if strings.HasPrefix(text, cmd+" ") {
-			sourceID, format, date = parseFetchArgs(strings.Fields(strings.TrimSpace(strings.TrimPrefix(text, cmd))))
-			return sourceID, format, date, true
+			sourceID, format, args = parseGlobalCommandArgs(strings.Fields(strings.TrimSpace(strings.TrimPrefix(text, cmd))), sources)
+			return sourceID, format, args, true
 		}
 	}
-	return "", "", "", false
+	for _, src := range sources {
+		for _, cmd := range src.Commands {
+			cmd = strings.TrimSpace(cmd)
+			if cmd == "" {
+				continue
+			}
+			if text == cmd {
+				return src.ID, "", nil, true
+			}
+			if strings.HasPrefix(text, cmd+" ") {
+				raw := strings.TrimSpace(strings.TrimPrefix(text, cmd))
+				fields := strings.Fields(raw)
+				format, args = parseSourceCommandArgs(fields)
+				return src.ID, format, args, true
+			}
+		}
+	}
+	return "", "", nil, false
 }
 
-func sendNews(ctx *zero.Ctx, sourceID, format, date, target string) {
-	msg, err := buildNewsMessage(sourceID, format, date)
+func parseGlobalCommandArgs(fields []string, sources []newsSource) (sourceID, format string, args []string) {
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		switch {
+		case field == "":
+		case isSupportedFormat(field):
+			format = strings.ToLower(field)
+		case sourceID == "" && sourceIDExists(sources, field):
+			sourceID = sanitizeID(field)
+		default:
+			args = append(args, field)
+		}
+	}
+	return
+}
+
+func sourceIDExists(sources []newsSource, id string) bool {
+	id = sanitizeID(id)
+	for _, src := range sources {
+		if src.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func buildSourceParams(src newsSource, args []string) (map[string]string, error) {
+	out := map[string]string{}
+	rest := strings.TrimSpace(strings.Join(args, " "))
+	argIndex := 0
+	for _, param := range src.Params {
+		name := sanitizeParamName(param.Name)
+		if name == "" {
+			continue
+		}
+		value := strings.TrimSpace(param.Default)
+		switch strings.ToLower(strings.TrimSpace(param.Source)) {
+		case "rest":
+			if rest != "" {
+				value = rest
+				rest = ""
+			}
+		case "default":
+		default:
+			if argIndex < len(args) {
+				value = strings.TrimSpace(args[argIndex])
+				argIndex++
+			}
+		}
+		if param.Required && value == "" {
+			label := firstNonEmpty(param.Label, param.Name)
+			return nil, fmt.Errorf("缺少参数: %s", label)
+		}
+		if value != "" {
+			out[name] = value
+		}
+	}
+	if len(src.Params) == 0 && rest != "" {
+		out["query"] = rest
+	}
+	return out, nil
+}
+
+func sanitizeParamName(s string) string {
+	s = strings.TrimSpace(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func sendNews(ctx *zero.Ctx, sourceID, format string, args []string, target string) {
+	msg, err := buildNewsMessage(sourceID, format, args)
 	if err != nil {
 		logrus.Warnf("[dailynews] fetch failed source=%s format=%s error=%v", sourceID, format, err)
 		if target == "" {
@@ -352,7 +587,7 @@ func sendNews(ctx *zero.Ctx, sourceID, format, date, target string) {
 	sendToTarget(ctx, target, msg)
 }
 
-func buildNewsMessage(sourceID, format, date string) (message.Message, error) {
+func buildNewsMessage(sourceID, format string, args []string) (message.Message, error) {
 	cfgMu.RLock()
 	local := cfg
 	cfgMu.RUnlock()
@@ -371,21 +606,34 @@ func buildNewsMessage(sourceID, format, date string) (message.Message, error) {
 			format = local.DefaultFormat
 		}
 	}
-	data, contentType, err := fetchSource(src, format, date)
+	params, err := buildSourceParams(src, args)
+	if err != nil {
+		return nil, err
+	}
+	data, contentType, err := fetchSource(src, format, params)
 	if err != nil {
 		return nil, err
 	}
 	return renderMessage(data, contentType, src, format)
 }
 
-func fetchSource(src newsSource, format, date string) ([]byte, string, error) {
+func fetchSource(src newsSource, format string, params map[string]string) ([]byte, string, error) {
 	requestURL, err := url.Parse(src.URL)
 	if err != nil {
 		return nil, "", err
 	}
+	for key, value := range params {
+		placeholder := "{" + key + "}"
+		if strings.Contains(requestURL.Path, placeholder) {
+			requestURL.Path = strings.ReplaceAll(requestURL.Path, placeholder, url.PathEscape(value))
+			delete(params, key)
+		}
+	}
 	query := requestURL.Query()
-	if date != "" {
-		query.Set("date", date)
+	for key, value := range params {
+		if value != "" && strings.ToUpper(src.Method) != http.MethodPost {
+			query.Set(key, value)
+		}
 	}
 	encoding := sourceEncoding(src, format)
 	if encoding != "" && strings.Contains(requestURL.Host, "744524299.xyz") {
@@ -393,9 +641,26 @@ func fetchSource(src newsSource, format, date string) ([]byte, string, error) {
 	}
 	requestURL.RawQuery = query.Encode()
 
-	req, err := http.NewRequest(src.Method, requestURL.String(), nil)
+	var body io.Reader
+	if strings.ToUpper(src.Method) == http.MethodPost {
+		payload := map[string]string{}
+		for key, value := range params {
+			if value != "" {
+				payload[key] = value
+			}
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return nil, "", err
+		}
+		body = strings.NewReader(string(raw))
+	}
+	req, err := http.NewRequest(src.Method, requestURL.String(), body)
 	if err != nil {
 		return nil, "", err
+	}
+	if strings.ToUpper(src.Method) == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	for k, v := range src.Headers {
 		if strings.TrimSpace(k) != "" && strings.TrimSpace(v) != "" {
@@ -469,7 +734,7 @@ func renderMessage(data []byte, contentType string, src newsSource, format strin
 func formatJSONNews(data []byte) string {
 	var resp newsAPIResponse
 	if err := json.Unmarshal(data, &resp); err != nil || len(resp.News) == 0 {
-		return string(data)
+		return formatGenericJSON(data)
 	}
 	var b strings.Builder
 	if resp.Date != "" {
@@ -500,6 +765,125 @@ func formatJSONNews(data []byte) string {
 	return strings.TrimSpace(b.String())
 }
 
+func formatGenericJSON(data []byte) string {
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return strings.TrimSpace(string(data))
+	}
+	lines := make([]string, 0, 24)
+	collectJSONLines("", v, &lines, 0)
+	if len(lines) == 0 {
+		return strings.TrimSpace(string(data))
+	}
+	if len(lines) > 24 {
+		lines = lines[:24]
+		lines = append(lines, "...")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func collectJSONLines(prefix string, v any, lines *[]string, depth int) {
+	if len(*lines) >= 24 || depth > 3 {
+		return
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		if title := firstJSONText(x, "title", "name", "hitokoto", "content", "text", "location", "date"); title != "" && prefix == "" {
+			*lines = append(*lines, title)
+		}
+		if arr, ok := x["data"].([]any); ok {
+			collectJSONLines(prefix, arr, lines, depth+1)
+			return
+		}
+		for _, key := range []string{"result", "summary", "weather", "temperature", "humidity", "wind", "air_quality", "tip", "url", "update_time", "updated"} {
+			if val := valueToText(x[key]); val != "" {
+				label := key
+				if prefix != "" {
+					label = prefix + "." + key
+				}
+				*lines = append(*lines, label+": "+val)
+			}
+		}
+		if len(*lines) <= 1 {
+			keys := make([]string, 0, len(x))
+			for key := range x {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				if val := valueToText(x[key]); val != "" {
+					*lines = append(*lines, key+": "+val)
+				}
+				if len(*lines) >= 24 {
+					return
+				}
+			}
+		}
+	case []any:
+		for i, item := range x {
+			if len(*lines) >= 24 {
+				return
+			}
+			if m, ok := item.(map[string]any); ok {
+				title := firstJSONText(m, "title", "name", "song", "keyword", "content")
+				if title == "" {
+					title = valueToText(item)
+				}
+				if title != "" {
+					*lines = append(*lines, fmt.Sprintf("%d. %s", i+1, title))
+				}
+				continue
+			}
+			if text := valueToText(item); text != "" {
+				*lines = append(*lines, fmt.Sprintf("%d. %s", i+1, text))
+			}
+		}
+	default:
+		if text := valueToText(v); text != "" {
+			*lines = append(*lines, text)
+		}
+	}
+}
+
+func firstJSONText(m map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if text := valueToText(m[key]); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func valueToText(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(x)
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatInt(int64(x), 10)
+		}
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	default:
+		return ""
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 func saveImage(data []byte, sourceID string) (string, error) {
 	ext := ".png"
 	if len(data) > 2 && data[0] == 0xff && data[1] == 0xd8 {
@@ -528,6 +912,36 @@ func sendToTarget(ctx *zero.Ctx, target string, msg message.Message) {
 		return
 	}
 	ctx.SendPrivateMessage(id, msg)
+}
+
+func allowAccess(ctx *zero.Ctx) bool {
+	cfgMu.RLock()
+	access := cfg.Access
+	cfgMu.RUnlock()
+	if !access.Enabled {
+		return false
+	}
+	if ctx.Event.GroupID == 0 {
+		return access.PrivateEnabled
+	}
+	gid := ctx.Event.GroupID
+	switch access.GroupMode {
+	case "whitelist":
+		return containsID(access.GroupWhitelist, gid)
+	case "blacklist":
+		return !containsID(access.GroupBlacklist, gid)
+	default:
+		return true
+	}
+}
+
+func containsID(ids []int64, id int64) bool {
+	for _, item := range ids {
+		if item == id {
+			return true
+		}
+	}
+	return false
 }
 
 func startScheduler() {
@@ -576,7 +990,7 @@ func runDueSchedules() {
 		return
 	}
 	for _, task := range tasks {
-		sendNews(bot, task.SourceID, task.Format, "", task.Target)
+		sendNews(bot, task.SourceID, task.Format, nil, task.Target)
 	}
 }
 

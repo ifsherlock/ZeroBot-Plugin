@@ -64,14 +64,27 @@ type webGroup struct {
 }
 
 type webDailyNewsSource struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	URL      string            `json:"url"`
-	Method   string            `json:"method"`
-	Encoding string            `json:"encoding"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Timeout  int               `json:"timeout_seconds,omitempty"`
-	Builtin  bool              `json:"builtin,omitempty"`
+	ID       string              `json:"id"`
+	Name     string              `json:"name"`
+	Category string              `json:"category,omitempty"`
+	Desc     string              `json:"desc,omitempty"`
+	URL      string              `json:"url"`
+	Method   string              `json:"method"`
+	Encoding string              `json:"encoding"`
+	Headers  map[string]string   `json:"headers,omitempty"`
+	Params   []webDailyNewsParam `json:"params,omitempty"`
+	Commands []string            `json:"commands,omitempty"`
+	Timeout  int                 `json:"timeout_seconds,omitempty"`
+	Builtin  bool                `json:"builtin,omitempty"`
+}
+
+type webDailyNewsParam struct {
+	Name        string `json:"name"`
+	Label       string `json:"label,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Default     string `json:"default,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
 }
 
 type webDailyNewsSchedule struct {
@@ -90,6 +103,15 @@ type webDailyNewsConfig struct {
 	Commands      []string               `json:"commands"`
 	Sources       []webDailyNewsSource   `json:"sources"`
 	Schedules     []webDailyNewsSchedule `json:"schedules"`
+	Access        webDailyNewsAccess     `json:"access"`
+}
+
+type webDailyNewsAccess struct {
+	Enabled        bool    `json:"enabled"`
+	PrivateEnabled bool    `json:"private_enabled"`
+	GroupMode      string  `json:"group_mode"`
+	GroupWhitelist []int64 `json:"group_whitelist,omitempty"`
+	GroupBlacklist []int64 `json:"group_blacklist,omitempty"`
 }
 
 type webLogEntry struct {
@@ -776,7 +798,7 @@ func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, map[string]any{"ok": true, "config": saved})
+		writeJSON(w, map[string]any{"ok": true, "config": saved, "restart_required": true})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -791,13 +813,54 @@ func defaultWebDailyNewsConfig() webDailyNewsConfig {
 		DefaultSource: "60s",
 		DefaultFormat: "image",
 		Commands:      []string{"今日早报", "60秒读懂世界", "每天60秒读懂世界", "60秒早报", "60s早报"},
+		Access: webDailyNewsAccess{
+			Enabled:        true,
+			PrivateEnabled: true,
+			GroupMode:      "none",
+		},
 		Sources: []webDailyNewsSource{
-			{ID: "60s", Name: "60s API", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true},
-			{ID: "60s-text", Name: "60s 文本", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "text", Timeout: 20, Builtin: true},
-			{ID: "60s-markdown", Name: "60s Markdown", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "markdown", Timeout: 20, Builtin: true},
-			{ID: "60s-image", Name: "60s 图片跳转", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "image", Timeout: 20, Builtin: true},
-			{ID: "60s-image-proxy", Name: "60s 图片代理", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true},
-			{ID: "legacy-image", Name: "旧版早报图片", URL: "https://uapis.cn/api/v1/daily/news-image", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true},
+			{ID: "60s", Name: "每天60秒", Category: "news", Desc: "每日新闻、微语和图片早报", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"今日早报", "60秒读懂世界", "每天60秒读懂世界", "60秒早报", "60s早报"}, Params: []webDailyNewsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-text", Name: "60s 文本", Category: "news", Desc: "文本格式早报", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "text", Timeout: 20, Builtin: true, Commands: []string{"文字早报", "早报文本"}, Params: []webDailyNewsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-markdown", Name: "60s Markdown", Category: "news", Desc: "Markdown 格式早报", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "markdown", Timeout: 20, Builtin: true, Commands: []string{"markdown早报", "md早报"}, Params: []webDailyNewsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-image", Name: "60s 图片跳转", Category: "news", Desc: "图片跳转早报", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "image", Timeout: 20, Builtin: true, Commands: []string{"图片早报"}, Params: []webDailyNewsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "60s-image-proxy", Name: "60s 图片代理", Category: "news", Desc: "直接下载图片早报", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"早报图片"}, Params: []webDailyNewsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "legacy-image", Name: "旧版早报图片", Category: "news", Desc: "旧版图片接口", URL: "https://uapis.cn/api/v1/daily/news-image", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"旧版早报"}},
+			{ID: "weather-realtime", Name: "实时天气", Category: "weather", Desc: "查询城市实时天气", URL: "https://60s.viki.moe/v2/weather/realtime", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"天气", "实时天气"}, Params: []webDailyNewsParam{{Name: "query", Label: "地点", Source: "rest", Required: true, Placeholder: "北京"}}},
+			{ID: "weather-forecast", Name: "天气预报", Category: "weather", Desc: "查询城市天气预报", URL: "https://60s.viki.moe/v2/weather/forecast", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"天气预报", "未来天气"}, Params: []webDailyNewsParam{{Name: "query", Label: "地点", Source: "rest", Required: true, Placeholder: "上海"}}},
+			{ID: "weibo", Name: "微博热搜", Category: "hot", Desc: "微博热搜榜", URL: "https://60s.viki.moe/v2/weibo", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"微博热搜", "微博热点"}},
+			{ID: "zhihu", Name: "知乎热榜", Category: "hot", Desc: "知乎热门话题", URL: "https://60s.viki.moe/v2/zhihu", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"知乎热榜", "知乎热点"}},
+			{ID: "baidu-hot", Name: "百度热搜", Category: "hot", Desc: "百度热搜榜", URL: "https://60s.viki.moe/v2/baidu/hot", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"百度热搜", "百度热点"}},
+			{ID: "douyin-hot", Name: "抖音热点", Category: "hot", Desc: "抖音热点榜", URL: "https://60s.viki.moe/v2/douyin", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"抖音热点", "抖音热榜"}},
+			{ID: "toutiao", Name: "头条热点", Category: "hot", Desc: "今日头条热点", URL: "https://60s.viki.moe/v2/toutiao", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"头条热点", "今日头条"}},
+			{ID: "bili-hot", Name: "B站热榜", Category: "hot", Desc: "哔哩哔哩热门视频", URL: "https://60s.viki.moe/v2/bili", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"B站热榜", "b站热榜", "哔哩热榜"}},
+			{ID: "exchange-rate", Name: "汇率查询", Category: "data", Desc: "货币汇率查询", URL: "https://60s.viki.moe/v2/exchange-rate", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"汇率", "汇率查询"}, Params: []webDailyNewsParam{{Name: "from", Label: "源币种", Source: "arg", Default: "USD", Placeholder: "USD"}, {Name: "to", Label: "目标币种", Source: "arg", Default: "CNY", Placeholder: "CNY"}}},
+			{ID: "lunar", Name: "农历查询", Category: "data", Desc: "公历农历与生肖节气", URL: "https://60s.viki.moe/v2/lunar", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"农历", "今日农历"}, Params: []webDailyNewsParam{{Name: "date", Label: "日期", Source: "arg", Placeholder: "YYYY-MM-DD"}}},
+			{ID: "today-history", Name: "历史上的今天", Category: "data", Desc: "历史事件查询", URL: "https://60s.viki.moe/v2/today-in-history", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"历史上的今天", "历史今天"}, Params: []webDailyNewsParam{{Name: "month", Label: "月份", Source: "arg", Placeholder: "1"}, {Name: "day", Label: "日期", Source: "arg", Placeholder: "15"}}},
+			{ID: "baike", Name: "百科查询", Category: "data", Desc: "中文百科搜索", URL: "https://60s.viki.moe/v2/baike", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"百科", "百科查询"}, Params: []webDailyNewsParam{{Name: "keyword", Label: "关键词", Source: "rest", Required: true, Placeholder: "Python编程"}}},
+			{ID: "fuel-price", Name: "油价查询", Category: "data", Desc: "国内油价", URL: "https://60s.viki.moe/v2/fuel-price", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"油价", "油价查询"}, Params: []webDailyNewsParam{{Name: "province", Label: "省份", Source: "rest", Required: true, Placeholder: "北京"}}},
+			{ID: "gold-price", Name: "金价查询", Category: "data", Desc: "黄金价格", URL: "https://60s.viki.moe/v2/gold-price", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"金价", "黄金价格"}},
+			{ID: "chemical", Name: "化学元素", Category: "data", Desc: "元素信息查询", URL: "https://60s.viki.moe/v2/chemical", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"化学元素", "元素查询"}, Params: []webDailyNewsParam{{Name: "query", Label: "元素", Source: "rest", Required: true, Placeholder: "H"}}},
+			{ID: "hitokoto", Name: "一言", Category: "fun", Desc: "随机一句话", URL: "https://60s.viki.moe/v2/hitokoto", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"一言", "来句一言"}, Params: []webDailyNewsParam{{Name: "category", Label: "分类", Source: "arg", Placeholder: "anime"}}},
+			{ID: "dad-joke", Name: "英文冷笑话", Category: "fun", Desc: "Dad joke", URL: "https://60s.viki.moe/v2/dad-joke", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"英文笑话", "dad joke"}},
+			{ID: "duanzi", Name: "中文段子", Category: "fun", Desc: "随机中文段子", URL: "https://60s.viki.moe/v2/duanzi", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"讲个笑话", "段子", "笑话"}},
+			{ID: "luck", Name: "今日运势", Category: "fun", Desc: "每日运势", URL: "https://60s.viki.moe/v2/luck", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"今日运势", "运势"}},
+			{ID: "kfc", Name: "疯狂星期四", Category: "fun", Desc: "KFC 梗文案", URL: "https://60s.viki.moe/v2/kfc", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"疯狂星期四", "kfc"}},
+			{ID: "moyu", Name: "摸鱼日历", Category: "fun", Desc: "摸鱼日历图片", URL: "https://60s.viki.moe/v2/moyu", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"摸鱼日历", "摸鱼"}},
+			{ID: "ncm-rank-list", Name: "网易云榜单", Category: "media", Desc: "音乐榜单列表", URL: "https://60s.viki.moe/v2/ncm-rank/list", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网易云榜单", "音乐榜单"}},
+			{ID: "ncm-rank", Name: "网易云榜单详情", Category: "media", Desc: "音乐榜单歌曲", URL: "https://60s.viki.moe/v2/ncm-rank/{id}", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网易云热歌", "音乐排行"}, Params: []webDailyNewsParam{{Name: "id", Label: "榜单ID", Source: "arg", Default: "3778678", Placeholder: "3778678"}}},
+			{ID: "lyric", Name: "歌词搜索", Category: "media", Desc: "搜索歌词", URL: "https://60s.viki.moe/v2/lyric", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"歌词", "歌词搜索"}, Params: []webDailyNewsParam{{Name: "keyword", Label: "歌曲", Source: "rest", Required: true, Placeholder: "稻香 周杰伦"}}},
+			{ID: "maoyan-all-movie", Name: "电影资料", Category: "media", Desc: "猫眼电影资料", URL: "https://60s.viki.moe/v2/maoyan/all/movie", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"电影资料"}},
+			{ID: "maoyan-movie", Name: "实时票房", Category: "media", Desc: "电影票房排行", URL: "https://60s.viki.moe/v2/maoyan/realtime/movie", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"电影票房", "实时票房"}},
+			{ID: "maoyan-tv", Name: "电视剧收视", Category: "media", Desc: "电视剧收视率", URL: "https://60s.viki.moe/v2/maoyan/realtime/tv", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"电视剧收视", "收视率"}},
+			{ID: "maoyan-web", Name: "网剧热度", Category: "media", Desc: "网剧热度排行", URL: "https://60s.viki.moe/v2/maoyan/realtime/web", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网剧热度", "网剧排行"}},
+			{ID: "ip", Name: "IP 查询", Category: "tool", Desc: "IP 归属地和运营商", URL: "https://60s.viki.moe/v2/ip", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"ip查询", "查ip"}, Params: []webDailyNewsParam{{Name: "ip", Label: "IP", Source: "rest", Placeholder: "8.8.8.8"}}},
+			{ID: "fanyi", Name: "文本翻译", Category: "tool", Desc: "多语言翻译", URL: "https://60s.viki.moe/v2/fanyi", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"翻译"}, Params: []webDailyNewsParam{{Name: "text", Label: "文本", Source: "rest", Required: true, Placeholder: "你好世界"}, {Name: "from", Label: "源语言", Source: "default", Default: "auto"}, {Name: "to", Label: "目标语言", Source: "arg", Default: "zh", Placeholder: "en"}}},
+			{ID: "fanyi-langs", Name: "翻译语言", Category: "tool", Desc: "支持语言列表", URL: "https://60s.viki.moe/v2/fanyi/langs", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"翻译语言"}},
+			{ID: "qrcode", Name: "二维码", Category: "tool", Desc: "生成二维码图片", URL: "https://60s.viki.moe/v2/qrcode", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true, Commands: []string{"二维码", "生成二维码"}, Params: []webDailyNewsParam{{Name: "text", Label: "内容", Source: "rest", Required: true, Placeholder: "https://example.com"}, {Name: "size", Label: "尺寸", Source: "arg", Default: "300", Placeholder: "300"}}},
+			{ID: "hash", Name: "哈希计算", Category: "tool", Desc: "MD5/SHA 计算", URL: "https://60s.viki.moe/v2/hash", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"哈希", "hash"}, Params: []webDailyNewsParam{{Name: "text", Label: "文本", Source: "rest", Required: true, Placeholder: "Hello World"}, {Name: "algorithm", Label: "算法", Source: "arg", Default: "md5", Placeholder: "sha256"}}},
+			{ID: "og", Name: "网页元信息", Category: "tool", Desc: "提取网页标题描述图片", URL: "https://60s.viki.moe/v2/og", Method: http.MethodPost, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"网页信息", "og"}, Params: []webDailyNewsParam{{Name: "url", Label: "网址", Source: "rest", Required: true, Placeholder: "https://example.com"}}},
+			{ID: "whois", Name: "WHOIS 查询", Category: "tool", Desc: "域名注册信息", URL: "https://60s.viki.moe/v2/whois", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"whois", "域名查询"}, Params: []webDailyNewsParam{{Name: "domain", Label: "域名", Source: "rest", Required: true, Placeholder: "github.com"}}},
+			{ID: "password", Name: "密码生成", Category: "tool", Desc: "生成随机密码", URL: "https://60s.viki.moe/v2/password", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true, Commands: []string{"生成密码", "随机密码"}, Params: []webDailyNewsParam{{Name: "length", Label: "长度", Source: "arg", Default: "16", Placeholder: "16"}, {Name: "numbers", Label: "数字", Source: "default", Default: "true"}, {Name: "lowercase", Label: "小写", Source: "default", Default: "true"}, {Name: "uppercase", Label: "大写", Source: "default", Default: "true"}, {Name: "symbols", Label: "符号", Source: "default", Default: "true"}}},
 		},
 	}
 }
@@ -845,6 +908,7 @@ func normalizeWebDailyNewsConfig(in webDailyNewsConfig) webDailyNewsConfig {
 	if commands := normalizeWebDailyNewsCommands(in.Commands); len(commands) > 0 {
 		base.Commands = commands
 	}
+	base.Access = normalizeWebDailyNewsAccess(in.Access)
 	merged := make(map[string]webDailyNewsSource)
 	for _, src := range base.Sources {
 		merged[src.ID] = normalizeWebDailyNewsSource(src)
@@ -856,6 +920,24 @@ func normalizeWebDailyNewsConfig(in webDailyNewsConfig) webDailyNewsConfig {
 		}
 		if old, ok := merged[src.ID]; ok && old.Builtin {
 			src.Builtin = true
+			if src.Category == "" {
+				src.Category = old.Category
+			}
+			if src.Desc == "" {
+				src.Desc = old.Desc
+			}
+			if src.URL == "" {
+				src.URL = old.URL
+			}
+			if src.Method == "" {
+				src.Method = old.Method
+			}
+			if src.Encoding == "" {
+				src.Encoding = old.Encoding
+			}
+			if len(src.Params) == 0 {
+				src.Params = old.Params
+			}
 		}
 		merged[src.ID] = src
 	}
@@ -879,6 +961,8 @@ func normalizeWebDailyNewsConfig(in webDailyNewsConfig) webDailyNewsConfig {
 func normalizeWebDailyNewsSource(src webDailyNewsSource) webDailyNewsSource {
 	src.ID = webDailyNewsSanitizeID(src.ID)
 	src.Name = strings.TrimSpace(src.Name)
+	src.Category = webDailyNewsSanitizeID(src.Category)
+	src.Desc = strings.TrimSpace(src.Desc)
 	src.URL = strings.TrimSpace(src.URL)
 	if u, err := url.Parse(src.URL); err != nil || u.Scheme == "" || u.Host == "" {
 		src.URL = ""
@@ -897,7 +981,64 @@ func normalizeWebDailyNewsSource(src webDailyNewsSource) webDailyNewsSource {
 	if src.Headers == nil {
 		src.Headers = map[string]string{}
 	}
+	src.Commands = normalizeWebDailyNewsCommands(src.Commands)
+	src.Params = normalizeWebDailyNewsParams(src.Params)
 	return src
+}
+
+func normalizeWebDailyNewsParams(params []webDailyNewsParam) []webDailyNewsParam {
+	out := make([]webDailyNewsParam, 0, len(params))
+	for _, param := range params {
+		param.Name = webDailyNewsSanitizeParamName(param.Name)
+		param.Label = strings.TrimSpace(param.Label)
+		param.Source = strings.ToLower(strings.TrimSpace(param.Source))
+		if param.Source == "" {
+			param.Source = "arg"
+		}
+		if param.Source != "arg" && param.Source != "rest" && param.Source != "default" {
+			param.Source = "arg"
+		}
+		param.Default = strings.TrimSpace(param.Default)
+		param.Placeholder = strings.TrimSpace(param.Placeholder)
+		if param.Name == "" {
+			continue
+		}
+		out = append(out, param)
+	}
+	return out
+}
+
+func normalizeWebDailyNewsAccess(in webDailyNewsAccess) webDailyNewsAccess {
+	mode := strings.ToLower(strings.TrimSpace(in.GroupMode))
+	if mode != "blacklist" && mode != "whitelist" {
+		mode = "none"
+	}
+	zeroValue := !in.Enabled && !in.PrivateEnabled && mode == "none" && len(in.GroupWhitelist) == 0 && len(in.GroupBlacklist) == 0
+	if zeroValue {
+		in.Enabled = true
+		in.PrivateEnabled = true
+	}
+	return webDailyNewsAccess{
+		Enabled:        in.Enabled,
+		PrivateEnabled: in.PrivateEnabled,
+		GroupMode:      mode,
+		GroupWhitelist: normalizeWebDailyNewsIDs(in.GroupWhitelist),
+		GroupBlacklist: normalizeWebDailyNewsIDs(in.GroupBlacklist),
+	}
+}
+
+func normalizeWebDailyNewsIDs(ids []int64) []int64 {
+	seen := map[int64]bool{}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 func normalizeWebDailyNewsSchedule(task webDailyNewsSchedule) webDailyNewsSchedule {
@@ -951,6 +1092,17 @@ func webDailyNewsSanitizeID(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func webDailyNewsSanitizeParamName(s string) string {
+	s = strings.TrimSpace(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			b.WriteRune(r)
 		}
 	}
@@ -1519,7 +1671,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .safetyGrid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(460px,1.14fr) minmax(300px,.82fr);gap:14px;align-items:start}.safetyColumn{display:grid;gap:14px;align-content:start}.safetyEditorHead{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.safetyEditorHead .field{gap:5px}.safetyEditorHead select{width:100%}.safetyEditorCard textarea{min-height:96px}.safetyEditorCard #safetyBuiltinPreview{min-height:170px}.safetyWordGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.safetyWordGrid .wide{grid-column:1/-1}.safetyWordGrid textarea{min-height:148px}.safetyEnableCard{padding:12px}.safetyEnableCard .sectionTitle{align-items:flex-start}.safetyEnableCard .groupList{max-height:210px}.safetyEnableCard select{width:100%}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
-.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:14px;align-items:stretch}.dailyList{display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;display:grid;gap:8px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}
+.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:14px;align-items:stretch}.dailyGrid.three{grid-template-columns:minmax(300px,.82fr) minmax(420px,1.18fr) minmax(320px,.9fr)}.dailyList{display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;display:grid;gap:8px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}.dailyFilters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.dailyFilters select,.dailyFilters input{min-width:150px}.dailyCommandBox textarea{min-height:96px}.dailyParamList{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.dailyParamList span{border:1px solid #e5e7eb;border-radius:999px;padding:2px 7px;background:#f8fafc}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
@@ -1590,22 +1742,35 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <p class="muted" style="margin-bottom:0">沿用聊天内权限判断。</p>
 </div>
 <div class="panel span4 page" data-page="dailynews" id="dailynews">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 每天60秒</div><div class="sectionTitle"><b>每天60秒</b><span class="muted">接口、触发词和定时任务。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
-<div class="dailyGrid">
+<div class="pluginHead"><div><div class="crumb">插件中心 / 60s 技能中心</div><div class="sectionTitle"><b>60s 技能中心</b><span class="muted">新闻、热榜、天气、查询和工具接口。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="dailyGrid three">
 <div class="settingsCard">
-<div class="sectionTitle"><b>默认策略</b><span class="muted" id="dailyNewsMsg"></span></div>
+<div class="sectionTitle"><b>访问控制</b><span class="muted" id="dailyNewsMsg"></span></div>
+<div class="controlPills"><label class="row">总开关 <span id="dailyEnabledSwitch"></span></label><label class="row">私聊响应 <span id="dailyPrivateSwitch"></span></label></div>
 <div class="settingsFields">
 <label class="field">默认接口 <select id="dailyDefaultSource"></select></label>
 <label class="field">默认格式 <select id="dailyDefaultFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
+<label class="field">群模式 <select id="dailyGroupMode" onchange="renderDailyGroupPickers()"><option value="none">所有群开启</option><option value="whitelist">只开白名单群</option><option value="blacklist">关闭黑名单群</option></select></label>
 </div>
-<label class="field">监听命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
-<div class="row"><button class="primary" onclick="saveDailyNews()">保存每日早报</button><button onclick="testDailyNews()">测试默认接口</button></div>
+<div class="row"><button onclick="loadGroups(true)">刷新群列表</button><span class="muted">勾选后保存生效</span></div>
+<div class="groupBox"><div class="row"><b>群白名单</b><input id="dailyGroupWhiteSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupWhitePicker"></div></div>
+<div class="groupBox"><div class="row"><b>群黑名单</b><input id="dailyGroupBlackSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupBlackPicker"></div></div>
 </div>
 <div class="settingsCard">
-<div class="sectionTitle"><b>添加接口</b><span class="muted">内置接口只读。</span></div>
+<div class="sectionTitle"><b>技能列表</b><span class="muted">选择后编辑命令和定时。</span></div>
+<div class="dailyFilters"><select id="dailyCategoryFilter" onchange="renderDailySources()"></select><input id="dailySourceSearch" placeholder="搜索技能/命令" oninput="renderDailySources()"></div>
+<div id="dailySources" class="dailyList"></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>当前技能</b><span class="muted" id="dailySelectedMeta">选择一个技能。</span></div>
+<label class="field dailyCommandBox">监听命令 <textarea id="dailySourceCommands" placeholder="每行一个命令"></textarea></label>
+<div class="dailyParamList" id="dailySourceParams"></div>
+<div class="row"><button onclick="saveDailySourceCommands()">更新命令</button><button onclick="setDailyDefaultSourceFromSelection()">设为默认</button></div>
+<div class="sectionTitle" style="margin-top:10px"><b>添加接口</b><span class="muted">自定义接口可编辑。</span></div>
 <div class="settingsFields">
 <label class="field">ID <input id="dailySourceID" placeholder="my-news"></label>
-<label class="field">名称 <input id="dailySourceName" placeholder="自定义早报"></label>
+<label class="field">名称 <input id="dailySourceName" placeholder="自定义接口"></label>
+<label class="field">分类 <input id="dailySourceCategory" placeholder="custom"></label>
 <label class="field span2">URL <input id="dailySourceURL" placeholder="https://example.com/api"></label>
 <label class="field">格式 <select id="dailySourceEncoding"><option value="json">json</option><option value="text">text</option><option value="markdown">markdown</option><option value="image">image</option><option value="image-proxy">image-proxy</option></select></label>
 <label class="field">超时秒数 <input id="dailySourceTimeout" type="number" min="1" max="120" value="20"></label>
@@ -1615,11 +1780,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="dailyGrid" style="margin-top:14px">
 <div class="settingsCard">
-<div class="sectionTitle"><b>接口列表</b><span class="muted">可设默认或编辑自定义接口。</span></div>
-<div id="dailySources" class="dailyList"></div>
-</div>
-<div class="settingsCard">
-<div class="sectionTitle"><b>定时任务</b><span class="muted">到点自动推送。</span></div>
+<div class="sectionTitle"><b>定时任务</b><span class="muted">任意技能都能定时推送。</span></div>
 <div class="settingsFields">
 <label class="field">任务ID <input id="dailyTaskID" placeholder="morning"></label>
 <label class="field">接口 <select id="dailyTaskSource"></select></label>
@@ -1630,6 +1791,11 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="row"><button onclick="addDailyTask()">添加/更新任务</button><button onclick="clearDailyTaskForm()">清空</button></div>
 <div id="dailyTasks" class="dailyList" style="margin-top:12px"></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>全局命令</b><span class="muted">兼容旧早报命令。</span></div>
+<label class="field">默认接口命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
+<div class="row"><button class="primary" onclick="saveDailyNews()">保存 60s 配置</button><button onclick="testDailyNews()">测试提示</button></div>
 </div>
 </div>
 </div>
@@ -1973,44 +2139,87 @@ function dailySourceOptions(selected){
  const sources=(dailyNewsCfg&&dailyNewsCfg.sources)||[];
  return sources.map(s=>'<option value="'+escapeHTML(s.id)+'"'+(s.id===selected?' selected':'')+'>'+escapeHTML(s.name||s.id)+' / '+escapeHTML(s.id)+'</option>').join('');
 }
+function dailyCategoryLabel(cat){
+ const labels={news:'新闻',weather:'天气',hot:'热榜',data:'数据',fun:'娱乐',media:'影音',tool:'工具',custom:'自定义'};
+ return labels[cat]||cat||'未分类';
+}
+function dailySelectedSource(){
+ const id=(dailyNewsCfg&&dailyNewsCfg.selected_source)||dailyNewsCfg.default_source||'60s';
+ return (dailyNewsCfg.sources||[]).find(x=>x.id===id)||(dailyNewsCfg.sources||[])[0]||null;
+}
 function renderDailyNewsSettings(){
  if(!dailyNewsCfg||!$('dailyDefaultSource')) return;
  dailyNewsCfg.sources=dailyNewsCfg.sources||[];
  dailyNewsCfg.schedules=dailyNewsCfg.schedules||[];
  dailyNewsCfg.commands=dailyNewsCfg.commands||[];
+ dailyNewsCfg.access=dailyNewsCfg.access||{enabled:true,private_enabled:true,group_mode:'none'};
  $('dailyDefaultSource').innerHTML=dailySourceOptions(dailyNewsCfg.default_source||'60s');
  $('dailyDefaultFormat').value=dailyNewsCfg.default_format||'image';
  $('dailyCommands').value=dailyNewsCfg.commands.join('\n');
  $('dailyTaskSource').innerHTML=dailySourceOptions($('dailyTaskSource').value||dailyNewsCfg.default_source||'60s');
+ $('dailyEnabledSwitch').innerHTML=actionSwitchHTML('setDailyEnabled',!!dailyNewsCfg.access.enabled);
+ $('dailyPrivateSwitch').innerHTML=actionSwitchHTML('setDailyPrivateEnabled',!!dailyNewsCfg.access.private_enabled);
+ $('dailyGroupMode').value=dailyNewsCfg.access.group_mode||'none';
+ renderDailyCategoryFilter();
  renderDailySources();
+ renderDailySelectedSource();
  renderDailyTasks();
+ renderDailyGroupPickers();
 }
 function collectDailyNews(){
  if(!dailyNewsCfg) dailyNewsCfg={};
+ dailyNewsCfg.access=dailyNewsCfg.access||{};
  dailyNewsCfg.default_source=$('dailyDefaultSource').value||'60s';
  dailyNewsCfg.default_format=$('dailyDefaultFormat').value||'image';
  dailyNewsCfg.commands=String($('dailyCommands').value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
+ dailyNewsCfg.access.group_mode=$('dailyGroupMode').value||'none';
 }
+function setDailyEnabled(v){dailyNewsCfg.access=dailyNewsCfg.access||{};dailyNewsCfg.access.enabled=!!v;renderDailyNewsSettings();$('dailyNewsMsg').textContent='总开关已修改，记得保存'}
+function setDailyPrivateEnabled(v){dailyNewsCfg.access=dailyNewsCfg.access||{};dailyNewsCfg.access.private_enabled=!!v;renderDailyNewsSettings();$('dailyNewsMsg').textContent='私聊开关已修改，记得保存'}
 function dailyEncodingLabel(v){return String(v||'json')}
+function renderDailyCategoryFilter(){
+ const cats=[...new Set((dailyNewsCfg.sources||[]).map(s=>s.category||'custom'))].sort();
+ const current=$('dailyCategoryFilter').value||'all';
+ $('dailyCategoryFilter').innerHTML='<option value="all">全部分类</option>'+cats.map(c=>'<option value="'+escapeHTML(c)+'"'+(c===current?' selected':'')+'>'+escapeHTML(dailyCategoryLabel(c))+'</option>').join('');
+}
 function renderDailySources(){
- const list=(dailyNewsCfg.sources||[]).slice().sort((a,b)=>(b.builtin?1:0)-(a.builtin?1:0)||String(a.id).localeCompare(String(b.id)));
+ const cat=$('dailyCategoryFilter')?$('dailyCategoryFilter').value:'all';
+ const q=String(($('dailySourceSearch')&&$('dailySourceSearch').value)||'').trim().toLowerCase();
+ const list=(dailyNewsCfg.sources||[]).slice().filter(s=>{
+  const text=[s.id,s.name,s.desc,s.category,(s.commands||[]).join(' ')].join(' ').toLowerCase();
+  return (cat==='all'||(s.category||'custom')===cat) && (!q||text.includes(q));
+ }).sort((a,b)=>String(a.category||'').localeCompare(String(b.category||''))||String(a.id).localeCompare(String(b.id)));
  $('dailySources').innerHTML=list.map(s=>{
   const readonly=!!s.builtin;
   const badge=readonly?'<span class="dailyBadge readonly">内置</span>':'<span class="dailyBadge">自定义</span>';
   const actions=readonly
-   ? '<button data-id="'+escapeHTML(s.id)+'" onclick="setDailyDefaultSource(this.dataset.id)">设为默认</button>'
-   : '<button data-id="'+escapeHTML(s.id)+'" onclick="editDailySource(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(s.id)+'" onclick="deleteDailySource(this.dataset.id)">删除</button><button data-id="'+escapeHTML(s.id)+'" onclick="setDailyDefaultSource(this.dataset.id)">设为默认</button>';
-  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(s.name||s.id)+'</b><div class="dailyItemMeta">'+escapeHTML(s.id)+' · '+dailyEncodingLabel(s.encoding)+' · '+escapeHTML(String(s.timeout_seconds||20))+'s</div></div>'+badge+'</div><div class="dailyItemMeta">'+escapeHTML(s.url||'')+'</div><div class="dailyActions">'+actions+'</div></div>';
+   ? '<button data-id="'+escapeHTML(s.id)+'" onclick="selectDailySource(this.dataset.id)">选择</button><button data-id="'+escapeHTML(s.id)+'" onclick="setDailyDefaultSource(this.dataset.id)">设为默认</button>'
+   : '<button data-id="'+escapeHTML(s.id)+'" onclick="selectDailySource(this.dataset.id)">选择</button><button data-id="'+escapeHTML(s.id)+'" onclick="editDailySource(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(s.id)+'" onclick="deleteDailySource(this.dataset.id)">删除</button>';
+  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(s.name||s.id)+'</b><div class="dailyItemMeta">'+escapeHTML(dailyCategoryLabel(s.category))+' · '+escapeHTML(s.id)+' · '+dailyEncodingLabel(s.encoding)+'</div></div>'+badge+'</div><div class="dailyItemMeta">'+escapeHTML(s.desc||s.url||'')+'</div><div class="dailyActions">'+actions+'</div></div>';
  }).join('')||'<div class="muted">暂无接口</div>';
 }
-function clearDailySourceForm(){['dailySourceID','dailySourceName','dailySourceURL'].forEach(id=>$(id).value=''); $('dailySourceEncoding').value='json'; $('dailySourceTimeout').value=20}
+function selectDailySource(id){dailyNewsCfg.selected_source=id;renderDailySelectedSource();renderDailySources()}
+function renderDailySelectedSource(){
+ const s=dailySelectedSource();
+ if(!s){$('dailySelectedMeta').textContent='暂无技能';return}
+ $('dailySelectedMeta').textContent=(s.name||s.id)+' · '+dailyCategoryLabel(s.category)+' · '+(s.id||'');
+ $('dailySourceCommands').value=(s.commands||[]).join('\n');
+ $('dailySourceParams').innerHTML=(s.params||[]).map(p=>'<span>'+escapeHTML((p.label||p.name)+(p.required?'*':'')+' · '+(p.source||'arg'))+'</span>').join('')||'<span>无参数</span>';
+}
+function saveDailySourceCommands(){
+ const s=dailySelectedSource(); if(!s) return;
+ s.commands=String($('dailySourceCommands').value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
+ renderDailySources(); $('dailyNewsMsg').textContent='命令已更新，记得保存';
+}
+function setDailyDefaultSourceFromSelection(){const s=dailySelectedSource(); if(s) setDailyDefaultSource(s.id)}
+function clearDailySourceForm(){['dailySourceID','dailySourceName','dailySourceCategory','dailySourceURL'].forEach(id=>$(id).value=''); $('dailySourceEncoding').value='json'; $('dailySourceTimeout').value=20}
 function editDailySource(id){
  const s=(dailyNewsCfg.sources||[]).find(x=>x.id===id); if(!s||s.builtin) return;
- $('dailySourceID').value=s.id||''; $('dailySourceName').value=s.name||''; $('dailySourceURL').value=s.url||''; $('dailySourceEncoding').value=s.encoding||'json'; $('dailySourceTimeout').value=s.timeout_seconds||20;
+ $('dailySourceID').value=s.id||''; $('dailySourceName').value=s.name||''; $('dailySourceCategory').value=s.category||'custom'; $('dailySourceURL').value=s.url||''; $('dailySourceEncoding').value=s.encoding||'json'; $('dailySourceTimeout').value=s.timeout_seconds||20;
 }
 function addDailySource(){
  collectDailyNews();
- const src={id:String($('dailySourceID').value||'').trim(),name:String($('dailySourceName').value||'').trim(),url:String($('dailySourceURL').value||'').trim(),method:'GET',encoding:$('dailySourceEncoding').value||'json',timeout_seconds:Number($('dailySourceTimeout').value||20)};
+ const src={id:String($('dailySourceID').value||'').trim(),name:String($('dailySourceName').value||'').trim(),category:String($('dailySourceCategory').value||'custom').trim(),url:String($('dailySourceURL').value||'').trim(),method:'GET',encoding:$('dailySourceEncoding').value||'json',timeout_seconds:Number($('dailySourceTimeout').value||20),commands:[]};
  if(!src.id||!src.url){$('dailyNewsMsg').textContent='接口 ID 和 URL 必填';return}
  const old=(dailyNewsCfg.sources||[]).find(x=>x.id===src.id);
  if(old&&old.builtin){$('dailyNewsMsg').textContent='内置接口不能覆盖';return}
@@ -2026,6 +2235,27 @@ function deleteDailySource(id){
  renderDailyNewsSettings(); $('dailyNewsMsg').textContent='接口已删除，记得保存';
 }
 function setDailyDefaultSource(id){dailyNewsCfg.default_source=id; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='默认接口已更新，记得保存'}
+function renderDailyGroupPickers(){
+ if(!dailyNewsCfg||!dailyNewsCfg.access) return;
+ const mode=dailyNewsCfg.access.group_mode||'none';
+ const white=new Set((dailyNewsCfg.access.group_whitelist||[]).map(String));
+ const black=new Set((dailyNewsCfg.access.group_blacklist||[]).map(String));
+ renderDailyGroupPicker('dailyGroupWhitePicker','dailyGroupWhiteSearch',white,'white');
+ renderDailyGroupPicker('dailyGroupBlackPicker','dailyGroupBlackSearch',black,'black');
+}
+function renderDailyGroupPicker(target,searchID,set,kind){
+ const q=String(($(searchID)&&$(searchID).value)||'').trim();
+ const list=(groups||[]).filter(g=>!q||String(g.id).includes(q)||String(g.name||'').includes(q));
+ $(target).innerHTML=list.map(g=>'<label class="groupItem"><input type="checkbox" data-kind="'+kind+'" data-id="'+escapeHTML(g.id)+'" '+checked(set.has(String(g.id)))+' onchange="toggleDailyGroup(this.dataset.kind,this.dataset.id,this.checked)"><span><b>'+escapeHTML(g.name||g.id)+'</b><small>'+escapeHTML(g.id)+'</small></span></label>').join('')||'<div class="muted">暂无群列表</div>';
+}
+function toggleDailyGroup(kind,id,on){
+ dailyNewsCfg.access=dailyNewsCfg.access||{};
+ const key=kind==='white'?'group_whitelist':'group_blacklist';
+ const set=new Set((dailyNewsCfg.access[key]||[]).map(String));
+ if(on) set.add(String(id)); else set.delete(String(id));
+ dailyNewsCfg.access[key]=Array.from(set).map(Number).filter(Boolean);
+ renderDailyGroupPickers(); $('dailyNewsMsg').textContent='群名单已修改，记得保存';
+}
 function renderDailyTasks(){
  const list=(dailyNewsCfg.schedules||[]).slice().sort((a,b)=>String(a.time||'').localeCompare(String(b.time||''))||String(a.id).localeCompare(String(b.id)));
  $('dailyTasks').innerHTML=list.map(t=>{
@@ -2053,7 +2283,7 @@ async function saveDailyNews(){
  $('dailyNewsMsg').textContent='保存中...';
  const r=await apiFetch('/api/dailynews/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dailyNewsCfg)});
  if(!r.ok){$('dailyNewsMsg').textContent='保存失败：'+await r.text(); return}
- const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='已保存';
+ const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='已保存，重启后完全生效';
 }
 async function testDailyNews(){
  $('dailyNewsMsg').textContent='测试请在聊天里发送监听命令，或保存后等待定时任务';
@@ -2318,6 +2548,7 @@ function renderGroupPickers(){
  renderGroupPicker('groupBlackPicker','groupBlackSearch','groupBlacklist');
  renderPlatformGroupBlock();
  renderMediaShieldGroups();
+ renderDailyGroupPickers();
 }
 function renderGroupPicker(container,searchID,textarea){
  const q=String($(searchID).value||'').toLowerCase().trim();
