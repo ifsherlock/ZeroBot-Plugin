@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/FloatTech/ZeroBot-Plugin/plugin/dailynews"
 	"github.com/disintegration/imaging"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
@@ -62,6 +61,35 @@ type webPlatform struct {
 type webGroup struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+type webDailyNewsSource struct {
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	URL      string            `json:"url"`
+	Method   string            `json:"method"`
+	Encoding string            `json:"encoding"`
+	Headers  map[string]string `json:"headers,omitempty"`
+	Timeout  int               `json:"timeout_seconds,omitempty"`
+	Builtin  bool              `json:"builtin,omitempty"`
+}
+
+type webDailyNewsSchedule struct {
+	ID       string `json:"id"`
+	SourceID string `json:"source_id"`
+	Target   string `json:"target"`
+	Time     string `json:"time"`
+	Format   string `json:"format"`
+	Enabled  bool   `json:"enabled"`
+	LastRun  string `json:"last_run,omitempty"`
+}
+
+type webDailyNewsConfig struct {
+	DefaultSource string                 `json:"default_source"`
+	DefaultFormat string                 `json:"default_format"`
+	Commands      []string               `json:"commands"`
+	Sources       []webDailyNewsSource   `json:"sources"`
+	Schedules     []webDailyNewsSchedule `json:"schedules"`
 }
 
 type webLogEntry struct {
@@ -731,14 +759,19 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, map[string]any{"ok": true, "config": dailynews.WebConfig()})
+		cfg, err := loadWebDailyNewsConfig()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "config": cfg})
 	case http.MethodPost:
-		var next dailynews.WebNewsConfig
+		var next webDailyNewsConfig
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&next); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		saved, err := dailynews.SaveWebConfig(next)
+		saved, err := saveWebDailyNewsConfig(next)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -746,6 +779,212 @@ func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "config": saved})
 	default:
 		writeMethodNotAllowed(w)
+	}
+}
+
+func webDailyNewsConfigPath() string {
+	return filepath.Join(filepath.Dir(engine.DataFolder()), "dailynews", "config.json")
+}
+
+func defaultWebDailyNewsConfig() webDailyNewsConfig {
+	return webDailyNewsConfig{
+		DefaultSource: "60s",
+		DefaultFormat: "image",
+		Commands:      []string{"今日早报", "60秒读懂世界", "每天60秒读懂世界", "60秒早报", "60s早报"},
+		Sources: []webDailyNewsSource{
+			{ID: "60s", Name: "60s API", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true},
+			{ID: "60s-text", Name: "60s 文本", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "text", Timeout: 20, Builtin: true},
+			{ID: "60s-markdown", Name: "60s Markdown", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "markdown", Timeout: 20, Builtin: true},
+			{ID: "60s-image", Name: "60s 图片跳转", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "image", Timeout: 20, Builtin: true},
+			{ID: "60s-image-proxy", Name: "60s 图片代理", URL: "https://60s.744524299.xyz/v2/60s", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true},
+			{ID: "legacy-image", Name: "旧版早报图片", URL: "https://uapis.cn/api/v1/daily/news-image", Method: http.MethodGet, Encoding: "image-proxy", Timeout: 20, Builtin: true},
+		},
+	}
+}
+
+func loadWebDailyNewsConfig() (webDailyNewsConfig, error) {
+	cfg := defaultWebDailyNewsConfig()
+	data, err := os.ReadFile(webDailyNewsConfigPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return saveWebDailyNewsConfig(cfg)
+		}
+		return cfg, err
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return defaultWebDailyNewsConfig(), err
+	}
+	return normalizeWebDailyNewsConfig(cfg), nil
+}
+
+func saveWebDailyNewsConfig(next webDailyNewsConfig) (webDailyNewsConfig, error) {
+	cfg := normalizeWebDailyNewsConfig(next)
+	path := webDailyNewsConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return cfg, err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return cfg, err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return cfg, err
+	}
+	return cfg, os.Rename(tmp, path)
+}
+
+func normalizeWebDailyNewsConfig(in webDailyNewsConfig) webDailyNewsConfig {
+	base := defaultWebDailyNewsConfig()
+	if id := webDailyNewsSanitizeID(in.DefaultSource); id != "" {
+		base.DefaultSource = id
+	}
+	if webDailyNewsFormatOK(in.DefaultFormat) {
+		base.DefaultFormat = strings.ToLower(strings.TrimSpace(in.DefaultFormat))
+	}
+	if commands := normalizeWebDailyNewsCommands(in.Commands); len(commands) > 0 {
+		base.Commands = commands
+	}
+	merged := make(map[string]webDailyNewsSource)
+	for _, src := range base.Sources {
+		merged[src.ID] = normalizeWebDailyNewsSource(src)
+	}
+	for _, src := range in.Sources {
+		src = normalizeWebDailyNewsSource(src)
+		if src.ID == "" || src.URL == "" {
+			continue
+		}
+		if old, ok := merged[src.ID]; ok && old.Builtin {
+			src.Builtin = true
+		}
+		merged[src.ID] = src
+	}
+	base.Sources = webDailyNewsSourcesFromMap(merged)
+	if _, ok := merged[base.DefaultSource]; !ok {
+		base.DefaultSource = "60s"
+	}
+	for _, task := range in.Schedules {
+		task = normalizeWebDailyNewsSchedule(task)
+		if task.ID == "" || task.SourceID == "" || task.Target == "" || task.Time == "" {
+			continue
+		}
+		if _, ok := merged[task.SourceID]; !ok {
+			continue
+		}
+		base.Schedules = append(base.Schedules, task)
+	}
+	return base
+}
+
+func normalizeWebDailyNewsSource(src webDailyNewsSource) webDailyNewsSource {
+	src.ID = webDailyNewsSanitizeID(src.ID)
+	src.Name = strings.TrimSpace(src.Name)
+	src.URL = strings.TrimSpace(src.URL)
+	if u, err := url.Parse(src.URL); err != nil || u.Scheme == "" || u.Host == "" {
+		src.URL = ""
+	}
+	src.Method = strings.ToUpper(strings.TrimSpace(src.Method))
+	if src.Method == "" {
+		src.Method = http.MethodGet
+	}
+	src.Encoding = strings.ToLower(strings.TrimSpace(src.Encoding))
+	if src.Encoding == "" {
+		src.Encoding = "json"
+	}
+	if src.Timeout <= 0 || src.Timeout > 120 {
+		src.Timeout = 20
+	}
+	if src.Headers == nil {
+		src.Headers = map[string]string{}
+	}
+	return src
+}
+
+func normalizeWebDailyNewsSchedule(task webDailyNewsSchedule) webDailyNewsSchedule {
+	task.ID = webDailyNewsSanitizeID(task.ID)
+	task.SourceID = webDailyNewsSanitizeID(task.SourceID)
+	task.Target = strings.TrimSpace(task.Target)
+	task.Time = strings.TrimSpace(task.Time)
+	if !webDailyNewsClockOK(task.Time) {
+		task.Time = ""
+	}
+	if !webDailyNewsTargetOK(task.Target) {
+		task.Target = ""
+	}
+	task.Format = strings.ToLower(strings.TrimSpace(task.Format))
+	if !webDailyNewsFormatOK(task.Format) {
+		task.Format = "image"
+	}
+	return task
+}
+
+func webDailyNewsSourcesFromMap(m map[string]webDailyNewsSource) []webDailyNewsSource {
+	out := make([]webDailyNewsSource, 0, len(m))
+	for _, src := range m {
+		out = append(out, src)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Builtin != out[j].Builtin {
+			return out[i].Builtin
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func normalizeWebDailyNewsCommands(commands []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(commands))
+	for _, cmd := range commands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" || seen[cmd] {
+			continue
+		}
+		seen[cmd] = true
+		out = append(out, cmd)
+	}
+	return out
+}
+
+func webDailyNewsSanitizeID(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func webDailyNewsFormatOK(format string) bool {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "image", "text", "markdown", "json":
+		return true
+	default:
+		return false
+	}
+}
+
+func webDailyNewsClockOK(s string) bool {
+	_, err := time.Parse("15:04", s)
+	return err == nil
+}
+
+func webDailyNewsTargetOK(target string) bool {
+	parts := strings.SplitN(target, ":", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if err != nil || id <= 0 {
+		return false
+	}
+	switch strings.TrimSpace(parts[0]) {
+	case "群", "group", "私聊", "private":
+		return true
+	default:
+		return false
 	}
 }
 
