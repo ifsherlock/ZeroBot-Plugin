@@ -1312,7 +1312,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">插件入口集中管理。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>每天60秒</b><div class="muted">Daily News</div></td><td><span class="ok">已启用</span></td><td>早报接口、文本/图片格式和定时推送</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">群管理和提醒。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -1325,6 +1325,16 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="commandItem"><b>轻量功能</b><code>翻牌</code><code>赞我</code><code>群签到</code><code>回应表情 表情</code></div>
 </div>
 <p class="muted" style="margin-bottom:0">沿用聊天内权限判断。</p>
+</div>
+<div class="panel span4 page" data-page="dailynews" id="dailynews">
+<div class="pluginHead"><div><div class="crumb">插件中心 / 每天60秒</div><div class="sectionTitle"><b>每天60秒</b><span class="muted">早报接口和定时推送。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="commandGrid" style="margin-top:12px">
+<div class="commandItem"><b>立即获取</b><code>今日早报</code><code>60秒早报</code><code>60秒早报 60s-text text</code><code>60秒早报 60s-image-proxy image</code></div>
+<div class="commandItem"><b>内置接口</b><code>60s</code><code>60s-text</code><code>60s-markdown</code><code>60s-image</code><code>60s-image-proxy</code><code>legacy-image</code></div>
+<div class="commandItem"><b>接口管理</b><code>60秒接口列表</code><code>60秒接口添加 ID 名称 URL [格式]</code><code>60秒接口删除 ID</code><code>60秒默认接口 ID</code><code>60秒默认格式 image|text|markdown|json</code></div>
+<div class="commandItem"><b>定时推送</b><code>60秒定时添加 morning 60s-image-proxy 群:123456 08:30 image</code><code>60秒定时添加 dm 60s-text 私聊:123456 08:30 text</code><code>60秒定时列表</code><code>60秒定时删除 morning</code></div>
+</div>
+<p class="muted" style="margin-bottom:0">配置保存在 dailynews 插件私有目录。WebUI 当前只提供入口说明，具体增删走聊天命令。</p>
 </div>
 <div class="panel span4 page" data-page="qqbot" id="qqbot">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">官方通道能力有限。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -1603,7 +1613,7 @@ const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
- const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='mediashield')?'plugins':page;
+ const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='mediashield'||page==='dailynews')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
  const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
