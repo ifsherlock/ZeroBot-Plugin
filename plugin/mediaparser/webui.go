@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/FloatTech/ZeroBot-Plugin/plugin/dailynews"
 	"github.com/disintegration/imaging"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
@@ -231,6 +232,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "result": result, "config": configForWeb()})
 	})
+	mux.HandleFunc("/api/dailynews/config", serveDailyNewsConfigAPI)
 	mux.HandleFunc("/api/mediaparser/logos", serveLogoAPI)
 	mux.HandleFunc("/api/mediaparser/logos/image", serveLogoImageAPI)
 	mux.HandleFunc("/api/onebot/groups", serveGroupListAPI)
@@ -721,6 +723,27 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		applyRuntimeSystemSettings(payload)
 		writeJSON(w, map[string]any{"ok": true, "settings": systemSettingsForWeb()})
+	default:
+		writeMethodNotAllowed(w)
+	}
+}
+
+func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"ok": true, "config": dailynews.WebConfig()})
+	case http.MethodPost:
+		var next dailynews.WebNewsConfig
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&next); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		saved, err := dailynews.SaveWebConfig(next)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "config": saved})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -1257,11 +1280,12 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .safetyGrid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(460px,1.14fr) minmax(300px,.82fr);gap:14px;align-items:start}.safetyColumn{display:grid;gap:14px;align-content:start}.safetyEditorHead{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.safetyEditorHead .field{gap:5px}.safetyEditorHead select{width:100%}.safetyEditorCard textarea{min-height:96px}.safetyEditorCard #safetyBuiltinPreview{min-height:170px}.safetyWordGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.safetyWordGrid .wide{grid-column:1/-1}.safetyWordGrid textarea{min-height:148px}.safetyEnableCard{padding:12px}.safetyEnableCard .sectionTitle{align-items:flex-start}.safetyEnableCard .groupList{max-height:210px}.safetyEnableCard select{width:100%}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
+.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:14px;align-items:stretch}.dailyList{display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;display:grid;gap:8px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
 .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.msg{min-height:20px;color:var(--muted)}.statusDot{display:inline-flex;align-items:center;gap:6px}.statusDot:before{content:"";width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px #dcfce7}
-@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.reviewGrid,.safetyGrid,.safetyEditorHead,.proxySummary,.cacheCard{grid-template-columns:1fr}.reviewCard,.reviewCard.tall{min-height:auto}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
+@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.reviewGrid,.safetyGrid,.safetyEditorHead,.proxySummary,.cacheCard,.dailyGrid{grid-template-columns:1fr}.reviewCard,.reviewCard.tall{min-height:auto}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
 </style>
 </head>
 <body>
@@ -1327,14 +1351,48 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <p class="muted" style="margin-bottom:0">沿用聊天内权限判断。</p>
 </div>
 <div class="panel span4 page" data-page="dailynews" id="dailynews">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 每天60秒</div><div class="sectionTitle"><b>每天60秒</b><span class="muted">早报接口和定时推送。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
-<div class="commandGrid" style="margin-top:12px">
-<div class="commandItem"><b>立即获取</b><code>今日早报</code><code>60秒早报</code><code>60秒早报 60s-text text</code><code>60秒早报 60s-image-proxy image</code></div>
-<div class="commandItem"><b>内置接口</b><code>60s</code><code>60s-text</code><code>60s-markdown</code><code>60s-image</code><code>60s-image-proxy</code><code>legacy-image</code></div>
-<div class="commandItem"><b>接口管理</b><code>60秒接口列表</code><code>60秒接口添加 ID 名称 URL [格式]</code><code>60秒接口删除 ID</code><code>60秒默认接口 ID</code><code>60秒默认格式 image|text|markdown|json</code></div>
-<div class="commandItem"><b>定时推送</b><code>60秒定时添加 morning 60s-image-proxy 群:123456 08:30 image</code><code>60秒定时添加 dm 60s-text 私聊:123456 08:30 text</code><code>60秒定时列表</code><code>60秒定时删除 morning</code></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / 每天60秒</div><div class="sectionTitle"><b>每天60秒</b><span class="muted">接口、触发词和定时任务。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="dailyGrid">
+<div class="settingsCard">
+<div class="sectionTitle"><b>默认策略</b><span class="muted" id="dailyNewsMsg"></span></div>
+<div class="settingsFields">
+<label class="field">默认接口 <select id="dailyDefaultSource"></select></label>
+<label class="field">默认格式 <select id="dailyDefaultFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
 </div>
-<p class="muted" style="margin-bottom:0">配置保存在 dailynews 插件私有目录。WebUI 当前只提供入口说明，具体增删走聊天命令。</p>
+<label class="field">监听命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
+<div class="row"><button class="primary" onclick="saveDailyNews()">保存每日早报</button><button onclick="testDailyNews()">测试默认接口</button></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>添加接口</b><span class="muted">内置接口只读。</span></div>
+<div class="settingsFields">
+<label class="field">ID <input id="dailySourceID" placeholder="my-news"></label>
+<label class="field">名称 <input id="dailySourceName" placeholder="自定义早报"></label>
+<label class="field span2">URL <input id="dailySourceURL" placeholder="https://example.com/api"></label>
+<label class="field">格式 <select id="dailySourceEncoding"><option value="json">json</option><option value="text">text</option><option value="markdown">markdown</option><option value="image">image</option><option value="image-proxy">image-proxy</option></select></label>
+<label class="field">超时秒数 <input id="dailySourceTimeout" type="number" min="1" max="120" value="20"></label>
+</div>
+<div class="row"><button onclick="addDailySource()">添加/更新接口</button><button onclick="clearDailySourceForm()">清空</button></div>
+</div>
+</div>
+<div class="dailyGrid" style="margin-top:14px">
+<div class="settingsCard">
+<div class="sectionTitle"><b>接口列表</b><span class="muted">可设默认或编辑自定义接口。</span></div>
+<div id="dailySources" class="dailyList"></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>定时任务</b><span class="muted">到点自动推送。</span></div>
+<div class="settingsFields">
+<label class="field">任务ID <input id="dailyTaskID" placeholder="morning"></label>
+<label class="field">接口 <select id="dailyTaskSource"></select></label>
+<label class="field">目标 <input id="dailyTaskTarget" placeholder="群:123456 或 私聊:123456"></label>
+<label class="field">时间 <input id="dailyTaskTime" type="time" value="08:30"></label>
+<label class="field">格式 <select id="dailyTaskFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
+<label class="field">启用 <span class="row"><label class="switch"><input id="dailyTaskEnabled" type="checkbox" checked><span class="slider"></span></label></span></label>
+</div>
+<div class="row"><button onclick="addDailyTask()">添加/更新任务</button><button onclick="clearDailyTaskForm()">清空</button></div>
+<div id="dailyTasks" class="dailyList" style="margin-top:12px"></div>
+</div>
+</div>
 </div>
 <div class="panel span4 page" data-page="qqbot" id="qqbot">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 官方 QQBot</div><div class="sectionTitle"><b>官方 QQBot</b><span class="muted">官方通道能力有限。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -1602,7 +1660,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </main>
 </div>
 <script>
-let cfg=null, sys=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic', safetyBuiltins=[], selectedSafetyCategory='adult';
+let cfg=null, sys=null, dailyNewsCfg=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic', safetyBuiltins=[], selectedSafetyCategory='adult';
 const safetyCategories=[
  ['adult','色情'],
  ['ad','广告'],
@@ -1671,6 +1729,95 @@ function renderCookieCloudSettings(){
  setSecretInput('cookieCloudPassword', cfg.cookiecloud_password_set, 'CookieCloud 密码');
  $('cookieCloudInterval').value=cfg.cookiecloud_interval_minutes||60;
  $('cookieCloudPlatforms').innerHTML=cookieCloudOptions().map(p=>'<label class="groupItem"><input type="checkbox" data-platform="'+escapeHTML(p.name)+'" '+checked(!!cfg.cookiecloud_platforms[p.name])+' onchange="cfg.cookiecloud_platforms[this.dataset.platform]=this.checked;markDirty()"><span><b>'+escapeHTML(p.label||p.name)+'</b><small>'+escapeHTML(p.name)+'</small></span></label>').join('');
+}
+function dailySourceOptions(selected){
+ const sources=(dailyNewsCfg&&dailyNewsCfg.sources)||[];
+ return sources.map(s=>'<option value="'+escapeHTML(s.id)+'"'+(s.id===selected?' selected':'')+'>'+escapeHTML(s.name||s.id)+' / '+escapeHTML(s.id)+'</option>').join('');
+}
+function renderDailyNewsSettings(){
+ if(!dailyNewsCfg||!$('dailyDefaultSource')) return;
+ dailyNewsCfg.sources=dailyNewsCfg.sources||[];
+ dailyNewsCfg.schedules=dailyNewsCfg.schedules||[];
+ dailyNewsCfg.commands=dailyNewsCfg.commands||[];
+ $('dailyDefaultSource').innerHTML=dailySourceOptions(dailyNewsCfg.default_source||'60s');
+ $('dailyDefaultFormat').value=dailyNewsCfg.default_format||'image';
+ $('dailyCommands').value=dailyNewsCfg.commands.join('\n');
+ $('dailyTaskSource').innerHTML=dailySourceOptions($('dailyTaskSource').value||dailyNewsCfg.default_source||'60s');
+ renderDailySources();
+ renderDailyTasks();
+}
+function collectDailyNews(){
+ if(!dailyNewsCfg) dailyNewsCfg={};
+ dailyNewsCfg.default_source=$('dailyDefaultSource').value||'60s';
+ dailyNewsCfg.default_format=$('dailyDefaultFormat').value||'image';
+ dailyNewsCfg.commands=String($('dailyCommands').value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
+}
+function dailyEncodingLabel(v){return String(v||'json')}
+function renderDailySources(){
+ const list=(dailyNewsCfg.sources||[]).slice().sort((a,b)=>(b.builtin?1:0)-(a.builtin?1:0)||String(a.id).localeCompare(String(b.id)));
+ $('dailySources').innerHTML=list.map(s=>{
+  const readonly=!!s.builtin;
+  const badge=readonly?'<span class="dailyBadge readonly">内置</span>':'<span class="dailyBadge">自定义</span>';
+  const actions=readonly
+   ? '<button data-id="'+escapeHTML(s.id)+'" onclick="setDailyDefaultSource(this.dataset.id)">设为默认</button>'
+   : '<button data-id="'+escapeHTML(s.id)+'" onclick="editDailySource(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(s.id)+'" onclick="deleteDailySource(this.dataset.id)">删除</button><button data-id="'+escapeHTML(s.id)+'" onclick="setDailyDefaultSource(this.dataset.id)">设为默认</button>';
+  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(s.name||s.id)+'</b><div class="dailyItemMeta">'+escapeHTML(s.id)+' · '+dailyEncodingLabel(s.encoding)+' · '+escapeHTML(String(s.timeout_seconds||20))+'s</div></div>'+badge+'</div><div class="dailyItemMeta">'+escapeHTML(s.url||'')+'</div><div class="dailyActions">'+actions+'</div></div>';
+ }).join('')||'<div class="muted">暂无接口</div>';
+}
+function clearDailySourceForm(){['dailySourceID','dailySourceName','dailySourceURL'].forEach(id=>$(id).value=''); $('dailySourceEncoding').value='json'; $('dailySourceTimeout').value=20}
+function editDailySource(id){
+ const s=(dailyNewsCfg.sources||[]).find(x=>x.id===id); if(!s||s.builtin) return;
+ $('dailySourceID').value=s.id||''; $('dailySourceName').value=s.name||''; $('dailySourceURL').value=s.url||''; $('dailySourceEncoding').value=s.encoding||'json'; $('dailySourceTimeout').value=s.timeout_seconds||20;
+}
+function addDailySource(){
+ collectDailyNews();
+ const src={id:String($('dailySourceID').value||'').trim(),name:String($('dailySourceName').value||'').trim(),url:String($('dailySourceURL').value||'').trim(),method:'GET',encoding:$('dailySourceEncoding').value||'json',timeout_seconds:Number($('dailySourceTimeout').value||20)};
+ if(!src.id||!src.url){$('dailyNewsMsg').textContent='接口 ID 和 URL 必填';return}
+ const old=(dailyNewsCfg.sources||[]).find(x=>x.id===src.id);
+ if(old&&old.builtin){$('dailyNewsMsg').textContent='内置接口不能覆盖';return}
+ dailyNewsCfg.sources=(dailyNewsCfg.sources||[]).filter(x=>x.id!==src.id);
+ dailyNewsCfg.sources.push(src);
+ clearDailySourceForm(); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='接口已加入，记得保存';
+}
+function deleteDailySource(id){
+ const s=(dailyNewsCfg.sources||[]).find(x=>x.id===id); if(!s||s.builtin) return;
+ dailyNewsCfg.sources=dailyNewsCfg.sources.filter(x=>x.id!==id);
+ dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.source_id!==id);
+ if(dailyNewsCfg.default_source===id) dailyNewsCfg.default_source='60s';
+ renderDailyNewsSettings(); $('dailyNewsMsg').textContent='接口已删除，记得保存';
+}
+function setDailyDefaultSource(id){dailyNewsCfg.default_source=id; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='默认接口已更新，记得保存'}
+function renderDailyTasks(){
+ const list=(dailyNewsCfg.schedules||[]).slice().sort((a,b)=>String(a.time||'').localeCompare(String(b.time||''))||String(a.id).localeCompare(String(b.id)));
+ $('dailyTasks').innerHTML=list.map(t=>{
+  const state=t.enabled?'<span class="dailyBadge">启用</span>':'<span class="dailyBadge readonly">关闭</span>';
+  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(t.id||'-')+'</b><div class="dailyItemMeta">'+escapeHTML(t.time||'--:--')+' · '+escapeHTML(t.source_id||'-')+' · '+escapeHTML(t.format||'image')+'</div></div>'+state+'</div><div class="dailyItemMeta">'+escapeHTML(t.target||'')+(t.last_run?' · 上次 '+escapeHTML(t.last_run):'')+'</div><div class="dailyActions"><button data-id="'+escapeHTML(t.id)+'" onclick="editDailyTask(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(t.id)+'" onclick="toggleDailyTask(this.dataset.id)">开关</button><button data-id="'+escapeHTML(t.id)+'" onclick="deleteDailyTask(this.dataset.id)">删除</button></div></div>';
+ }).join('')||'<div class="muted">暂无定时任务</div>';
+}
+function clearDailyTaskForm(){$('dailyTaskID').value=''; $('dailyTaskTarget').value=''; $('dailyTaskTime').value='08:30'; $('dailyTaskFormat').value='image'; $('dailyTaskEnabled').checked=true; if(dailyNewsCfg) $('dailyTaskSource').value=dailyNewsCfg.default_source||'60s'}
+function editDailyTask(id){
+ const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(!t) return;
+ $('dailyTaskID').value=t.id||''; $('dailyTaskSource').value=t.source_id||dailyNewsCfg.default_source||'60s'; $('dailyTaskTarget').value=t.target||''; $('dailyTaskTime').value=t.time||'08:30'; $('dailyTaskFormat').value=t.format||'image'; $('dailyTaskEnabled').checked=!!t.enabled;
+}
+function addDailyTask(){
+ collectDailyNews();
+ const task={id:String($('dailyTaskID').value||'').trim(),source_id:$('dailyTaskSource').value||dailyNewsCfg.default_source||'60s',target:String($('dailyTaskTarget').value||'').trim(),time:$('dailyTaskTime').value||'08:30',format:$('dailyTaskFormat').value||'image',enabled:!!$('dailyTaskEnabled').checked};
+ if(!task.id||!task.target||!task.time){$('dailyNewsMsg').textContent='任务 ID、目标和时间必填';return}
+ dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==task.id);
+ dailyNewsCfg.schedules.push(task);
+ clearDailyTaskForm(); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已加入，记得保存';
+}
+function deleteDailyTask(id){dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==id); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已删除，记得保存'}
+function toggleDailyTask(id){const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(t){t.enabled=!t.enabled; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已切换，记得保存'}}
+async function saveDailyNews(){
+ collectDailyNews();
+ $('dailyNewsMsg').textContent='保存中...';
+ const r=await apiFetch('/api/dailynews/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dailyNewsCfg)});
+ if(!r.ok){$('dailyNewsMsg').textContent='保存失败：'+await r.text(); return}
+ const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='已保存';
+}
+async function testDailyNews(){
+ $('dailyNewsMsg').textContent='测试请在聊天里发送监听命令，或保存后等待定时任务';
 }
 function collectCookieCloudSettings(){
  if(!$('cookieCloudServer')) return;
@@ -1783,11 +1930,13 @@ async function loadLogs(){
 async function load(){
  const data=await (await apiFetch('/api/mediaparser/config')).json();
  const sysData=await (await apiFetch('/api/system/settings')).json();
+ const dailyData=await (await apiFetch('/api/dailynews/config')).json();
  const logoData=await (await apiFetch('/api/mediaparser/logos')).json();
  const authData=await (await apiFetch('/api/system/auth')).json();
  await loadCacheStats(false);
  cfg=data.config; platforms=data.platforms; safetyBuiltins=data.safety_builtins||[];
  sys=sysData.settings||{};
+ dailyNewsCfg=(dailyData&&dailyData.config)||{};
  logos=logoData.logos||{};
  if($('webAuthUser')) $('webAuthUser').value=(authData&&authData.user)||'admin';
  await refreshStatus();
@@ -1825,6 +1974,7 @@ function render(){
  renderCacheStats();
  $('keylolASFForwardSwitch').innerHTML=switchHTML('cfg.keylol_asf_forward', cfg.keylol_asf_forward!==false);
  renderSystemSettings();
+ renderDailyNewsSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
  renderSafetySettings();

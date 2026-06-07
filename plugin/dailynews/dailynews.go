@@ -53,9 +53,14 @@ type newsSchedule struct {
 type newsConfig struct {
 	DefaultSource string         `json:"default_source"`
 	DefaultFormat string         `json:"default_format"`
+	Commands      []string       `json:"commands"`
 	Sources       []newsSource   `json:"sources"`
 	Schedules     []newsSchedule `json:"schedules"`
 }
+
+type WebNewsSource = newsSource
+type WebNewsSchedule = newsSchedule
+type WebNewsConfig = newsConfig
 
 type newsAPIResponse struct {
 	Date       string     `json:"date"`
@@ -96,16 +101,17 @@ func init() {
 	loadConfig()
 	startScheduler()
 
-	engine.OnFullMatchGroup([]string{"今日早报", "60秒读懂世界", "每天60秒读懂世界"}).SetBlock(true).
-		Handle(func(ctx *zero.Ctx) {
-			sendNews(ctx, "", "", "", "")
-		})
-	engine.OnPrefixGroup([]string{"60秒早报", "60s早报", "今日早报"}).SetBlock(true).
-		Handle(func(ctx *zero.Ctx) {
-			args := strings.Fields(ctx.State["args"].(string))
-			sourceID, format, date := parseFetchArgs(args)
-			sendNews(ctx, sourceID, format, date, "")
-		})
+	engine.OnMessage().SetBlock(false).Handle(func(ctx *zero.Ctx) {
+		text := strings.TrimSpace(ctx.Event.Message.ExtractPlainText())
+		if text == "" {
+			return
+		}
+		sourceID, format, date, ok := matchConfiguredCommand(text)
+		if !ok {
+			return
+		}
+		sendNews(ctx, sourceID, format, date, "")
+	})
 	engine.OnPrefix("60秒接口添加", zero.AdminPermission).SetBlock(true).Handle(handleAddSource)
 	engine.OnPrefix("60秒接口删除", zero.AdminPermission).SetBlock(true).Handle(handleDeleteSource)
 	engine.OnFullMatch("60秒接口列表", zero.AdminPermission).SetBlock(true).Handle(handleListSources)
@@ -135,6 +141,7 @@ func defaultConfig() newsConfig {
 	return newsConfig{
 		DefaultSource: defaultSourceID,
 		DefaultFormat: "image",
+		Commands:      []string{"今日早报", "60秒读懂世界", "每天60秒读懂世界", "60秒早报", "60s早报"},
 		Sources: []newsSource{
 			{ID: defaultSourceID, Name: "60s API", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "json", Timeout: 20, Builtin: true},
 			{ID: "60s-text", Name: "60s 文本", URL: defaultBaseURL, Method: http.MethodGet, Encoding: "text", Timeout: 20, Builtin: true},
@@ -172,6 +179,9 @@ func normalizeConfig(in newsConfig) newsConfig {
 	if isSupportedFormat(in.DefaultFormat) {
 		base.DefaultFormat = strings.ToLower(in.DefaultFormat)
 	}
+	if commands := normalizeCommands(in.Commands); len(commands) > 0 {
+		base.Commands = commands
+	}
 	merged := make(map[string]newsSource)
 	for _, src := range base.Sources {
 		merged[src.ID] = normalizeSource(src)
@@ -203,10 +213,29 @@ func normalizeConfig(in newsConfig) newsConfig {
 	return base
 }
 
+func WebConfig() WebNewsConfig {
+	cfgMu.RLock()
+	defer cfgMu.RUnlock()
+	return cfg
+}
+
+func SaveWebConfig(next WebNewsConfig) (WebNewsConfig, error) {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	cfg = normalizeConfig(next)
+	if err := saveConfigLocked(); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
 func normalizeSource(src newsSource) newsSource {
 	src.ID = sanitizeID(src.ID)
 	src.Name = strings.TrimSpace(src.Name)
 	src.URL = strings.TrimSpace(src.URL)
+	if u, err := url.Parse(src.URL); err != nil || u.Scheme == "" || u.Host == "" {
+		src.URL = ""
+	}
 	src.Method = strings.ToUpper(strings.TrimSpace(src.Method))
 	if src.Method == "" {
 		src.Method = http.MethodGet
@@ -229,6 +258,12 @@ func normalizeSchedule(task newsSchedule) newsSchedule {
 	task.SourceID = sanitizeID(task.SourceID)
 	task.Target = strings.TrimSpace(task.Target)
 	task.Time = strings.TrimSpace(task.Time)
+	if !isClock(task.Time) {
+		task.Time = ""
+	}
+	if _, _, ok := parseTarget(task.Target); !ok {
+		task.Target = ""
+	}
 	task.Format = strings.ToLower(strings.TrimSpace(task.Format))
 	if !isSupportedFormat(task.Format) {
 		task.Format = "image"
@@ -279,6 +314,26 @@ func parseFetchArgs(args []string) (sourceID, format, date string) {
 		}
 	}
 	return
+}
+
+func matchConfiguredCommand(text string) (sourceID, format, date string, ok bool) {
+	cfgMu.RLock()
+	commands := append([]string(nil), cfg.Commands...)
+	cfgMu.RUnlock()
+	for _, cmd := range commands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
+		if text == cmd {
+			return "", "", "", true
+		}
+		if strings.HasPrefix(text, cmd+" ") {
+			sourceID, format, date = parseFetchArgs(strings.Fields(strings.TrimSpace(strings.TrimPrefix(text, cmd))))
+			return sourceID, format, date, true
+		}
+	}
+	return "", "", "", false
 }
 
 func sendNews(ctx *zero.Ctx, sourceID, format, date, target string) {
@@ -751,6 +806,20 @@ func parseTarget(target string) (string, int64, bool) {
 	default:
 		return "", 0, false
 	}
+}
+
+func normalizeCommands(commands []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(commands))
+	for _, cmd := range commands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" || seen[cmd] {
+			continue
+		}
+		seen[cmd] = true
+		out = append(out, cmd)
+	}
+	return out
 }
 
 func sanitizeID(s string) string {
