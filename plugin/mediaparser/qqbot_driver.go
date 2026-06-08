@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc64"
+	"html"
 	"image"
 	"io"
 	"net/http"
@@ -631,6 +632,8 @@ func (d *qqBotDriver) messageParts(v any) (string, []qqBotMediaAttachment) {
 		}
 	case string:
 		content, items := d.mediaLineParts(msg)
+		content, cqItems := d.cqMediaParts(content)
+		items = append(items, cqItems...)
 		if len(items) > 0 {
 			return qqBotCleanCQText(content), items
 		}
@@ -702,6 +705,32 @@ func (d *qqBotDriver) mediaLineParts(text string) (string, []qqBotMediaAttachmen
 	return strings.Join(kept, "\n"), items
 }
 
+func (d *qqBotDriver) cqMediaParts(text string) (string, []qqBotMediaAttachment) {
+	items := []qqBotMediaAttachment{}
+	kept := qqBotCQCodePattern.ReplaceAllStringFunc(text, func(code string) string {
+		match := qqBotCQCodePattern.FindStringSubmatch(code)
+		if len(match) < 2 {
+			return code
+		}
+		switch strings.ToLower(match[1]) {
+		case "image":
+			target := firstNonEmpty(cqAttr(code, "file"), cqAttr(code, "url"))
+			if item, ok := d.mediaAttachment(target, qqBotMediaTypeImage); ok {
+				items = append(items, item)
+				return ""
+			}
+		case "video":
+			target := firstNonEmpty(cqAttr(code, "file"), cqAttr(code, "url"))
+			if item, ok := d.mediaAttachment(target, qqBotMediaTypeVideo); ok {
+				items = append(items, item)
+				return ""
+			}
+		}
+		return code
+	})
+	return kept, items
+}
+
 func (d *qqBotDriver) mediaAttachment(file string, fallbackType int) (qqBotMediaAttachment, bool) {
 	file = strings.TrimSpace(file)
 	if file == "" {
@@ -733,7 +762,36 @@ func qqBotLocalMediaPath(file string) string {
 	if err != nil {
 		return ""
 	}
+	if mapped := qqBotReverseMappedLocalPath(abs); mapped != "" {
+		return mapped
+	}
 	return abs
+}
+
+func qqBotReverseMappedLocalPath(path string) string {
+	systemMu.RLock()
+	dataDir := strings.TrimSpace(runtimeSystem.OneBotDataDir)
+	systemMu.RUnlock()
+	if dataDir == "" || cacheDir == "" {
+		return ""
+	}
+	hostDataAbs, err := filepath.Abs(dataDir)
+	if err != nil || hostDataAbs == "" {
+		return ""
+	}
+	pathAbs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(hostDataAbs, pathAbs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return ""
+	}
+	appDataAbs, err := filepath.Abs(filepath.Join(cacheDir, "..", ".."))
+	if err != nil || appDataAbs == "" {
+		return ""
+	}
+	return filepath.Join(appDataAbs, rel)
 }
 
 func qqBotAllowedLocalMediaPath(path string) bool {
@@ -921,7 +979,7 @@ func cqAttr(code, key string) string {
 	prefix := key + "="
 	for _, part := range strings.Split(strings.Trim(code, "[]"), ",") {
 		if strings.HasPrefix(part, prefix) {
-			return strings.TrimPrefix(part, prefix)
+			return html.UnescapeString(strings.TrimPrefix(part, prefix))
 		}
 	}
 	return ""

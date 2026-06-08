@@ -44,8 +44,10 @@ func TestPermissionOKSeparatesPrivateAndGroupAccess(t *testing.T) {
 
 func TestQQBotMediaLinePartsOnlyAllowsCacheMedia(t *testing.T) {
 	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
 	cacheDir = t.TempDir()
 	defer func() { cacheDir = oldCacheDir }()
+	defer SetRuntimeSystemSettings(oldSystem)
 
 	allowed := filepath.Join(cacheDir, "card.png")
 	if err := os.WriteFile(allowed, []byte("png"), 0644); err != nil {
@@ -82,6 +84,45 @@ func TestQQBotMediaLinePartsOnlyAllowsCacheMedia(t *testing.T) {
 	}
 	if !strings.Contains(text, "MEDIA:") {
 		t.Fatalf("rejected media line should stay visible, got %q", text)
+	}
+}
+
+func TestQQBotCQImagePartsUsesOfficialMediaAttachment(t *testing.T) {
+	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	cacheDir = filepath.Join(dataRoot, "mediaparser", "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cacheDir = oldCacheDir
+		SetRuntimeSystemSettings(oldSystem)
+	}()
+	SetRuntimeSystemSettings(SystemSettings{OneBotDataDir: "/host/data"})
+
+	localPath := filepath.Join(cacheDir, "dailynews", "card.png")
+	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localPath, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	hostFile := "file:///host/data/mediaparser/cache/dailynews/card.png"
+
+	driver := &qqBotDriver{}
+	text, items := driver.messageParts("[CQ:image,file=" + hostFile + "]")
+	if strings.TrimSpace(text) != "" {
+		t.Fatalf("text = %q, want empty after extracting image", text)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	if items[0].fileType != qqBotMediaTypeImage {
+		t.Fatalf("fileType = %d, want image", items[0].fileType)
+	}
+	if filepath.Clean(items[0].target) != filepath.Clean(localPath) {
+		t.Fatalf("target = %q, want %q", items[0].target, localPath)
 	}
 }
 
