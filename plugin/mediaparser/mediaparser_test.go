@@ -626,6 +626,50 @@ func TestLinuxdoCleanCookedKeepsPollResultsWithoutVoters(t *testing.T) {
 	}
 }
 
+func TestLinuxdoMergeRenderedHTMLAddsPollResults(t *testing.T) {
+	body := `{
+	  "id": 2320981,
+	  "slug": "poll-topic",
+	  "title": "投票帖",
+	  "post_stream": {"posts": [{
+	    "post_number": 1,
+	    "username": "ada",
+	    "created_at": "2026-06-09T00:00:00.000Z",
+	    "cooked": "<p>星光组：特别特别有希望拿满分的模型</p><div data-poll-name=\"starlight\" class=\"poll-outer\"><div class=\"poll\"></div></div><p>阳光组：也有希望</p>"
+	  }]}
+	}`
+	meta, err := parseLinuxdoTopicJSON("https://linux.do/t/topic/2320981", "https://linux.do/t/topic/2320981", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(meta.Desc, "投票结果") {
+		t.Fatalf("raw preloaded poll unexpectedly had rendered result: %q", meta.Desc)
+	}
+	htmlBody := `<article><div class="cooked"><p>星光组：特别特别有希望拿满分的模型</p>
+<div data-poll-name="starlight" class="poll-outer"><div class="poll"><div class="poll-container">
+<ul class="results"><li><span class="percentage">83%</span><span class="option-text">OpenAI - GPT 5.5</span><div class="poll-voters"><img class="avatar" src="https://cdn.ldstatic.com/user_avatar/linux.do/a/48/1.png"></div></li></ul>
+<div class="poll-info"><span class="info-number">703</span><span class="info-label">投票人</span><span class="info-number">1394</span><span class="info-label">总票数</span></div>
+</div></div></div><p>阳光组：也有希望</p></div></article>`
+	linuxdoMergeRenderedHTML(&meta, htmlBody, "https://linux.do/t/topic/2320981")
+	for _, want := range []string{"星光组", "投票结果：", "83% OpenAI - GPT 5.5", "703 投票人 / 1394 总票数", "阳光组"} {
+		if !strings.Contains(meta.Desc, want) {
+			t.Fatalf("merged desc missing %q in %q", want, meta.Desc)
+		}
+	}
+	if strings.Contains(meta.Desc, "[图片]") || len(meta.ImageURLs) != 0 {
+		t.Fatalf("poll avatar or emoji leaked: desc=%q images=%v", meta.Desc, meta.ImageURLs)
+	}
+}
+
+func TestLinuxdoExtractImagesSkipsCustomEmoji(t *testing.T) {
+	cooked := `<p>emoji <img src="https://cdn3.ldstatic.com/original/3X/2/e/2e09f3a3c7b27eacbabe9e9614b06b88d5b06343.png?v=15" title=":tieba_087:" class="emoji emoji-custom" alt=":tieba_087:" width="20" height="20"></p>
+<p>real <img src="https://cdn.ldstatic.com/uploads/default/original/1X/post.png"></p>`
+	images := linuxdoExtractImages(cooked, "https://linux.do/t/topic/2320981")
+	if len(images) != 1 || len(images[0]) != 1 || !strings.Contains(images[0][0], "/uploads/default/original/1X/post.png") {
+		t.Fatalf("unexpected images: %#v", images)
+	}
+}
+
 func TestLinuxdoBodyLinesKeepsLongBody(t *testing.T) {
 	body := strings.Repeat("Linux.do full body line with enough words to wrap.\n", 40)
 	lines := linuxdoBodyLines(nil, body, 620)

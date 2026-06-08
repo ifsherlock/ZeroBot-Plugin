@@ -112,6 +112,7 @@ func linuxdoParseWithFlaresolverr(cfg config, sourceURL, topicID, postNumber str
 		if err != nil {
 			return mediaMeta{}, err
 		}
+		linuxdoMergeRenderedHTML(&meta, htmlBody, finalURL)
 		linuxdoApplyMetaHeaders(cfg, &meta)
 		return meta, nil
 	}
@@ -238,6 +239,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 			if err != nil {
 				return mediaMeta{}, err
 			}
+			linuxdoMergeRenderedHTML(&meta, htmlBody, finalURL)
 			linuxdoApplyMetaHeaders(cfg, &meta)
 			return meta, nil
 		}
@@ -274,6 +276,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		if err != nil {
 			return mediaMeta{}, err
 		}
+		linuxdoMergeRenderedHTML(&meta, htmlBody, finalURL)
 		linuxdoApplyMetaHeaders(cfg, &meta)
 		return meta, nil
 	}
@@ -475,6 +478,38 @@ func linuxdoHTMLBodyText(body string) string {
 		}
 	}
 	return firstNonEmpty(parts...)
+}
+
+func linuxdoMergeRenderedHTML(meta *mediaMeta, htmlBody, finalURL string) {
+	if meta == nil || strings.TrimSpace(htmlBody) == "" {
+		return
+	}
+	renderedDesc := linuxdoHTMLBodyText(htmlBody)
+	if linuxdoPreferRenderedDesc(meta.Desc, renderedDesc) {
+		meta.Desc = renderedDesc
+	}
+	images := linuxdoExtractImages(htmlBody, finalURL)
+	if len(images) > 0 {
+		meta.ImageURLs = images
+		meta.Cover = firstImageURL(images)
+	}
+}
+
+func linuxdoPreferRenderedDesc(current, rendered string) bool {
+	current = strings.TrimSpace(current)
+	rendered = strings.TrimSpace(rendered)
+	if rendered == "" {
+		return false
+	}
+	if current == "" {
+		return true
+	}
+	currentHasPoll := strings.Contains(current, "投票结果")
+	renderedHasPoll := strings.Contains(rendered, "投票结果")
+	if renderedHasPoll && !currentHasPoll {
+		return true
+	}
+	return renderedHasPoll && len(rendered) > len(current)
 }
 
 func linuxdoCleanRaw(raw string) string {
@@ -843,13 +878,14 @@ func linuxdoExtractImages(cooked, base string) [][]string {
 		seen[raw] = true
 		out = append(out, []string{raw})
 	}
-	for _, re := range []*regexp.Regexp{
-		regexp.MustCompile(`(?is)<img\b[^>]+src=["']([^"']+)["']`),
-		regexp.MustCompile(`(?is)<a\b[^>]+href=["']([^"']+\.(?:png|jpe?g|webp|gif)(?:\?[^"']*)?)["']`),
-	} {
-		for _, m := range re.FindAllStringSubmatch(cooked, -1) {
-			add(m[1])
+	for _, tag := range regexp.MustCompile(`(?is)<img\b[^>]+>`).FindAllString(cooked, -1) {
+		if linuxdoImageTagLooksEmoji(tag) {
+			continue
 		}
+		add(linuxdoTagAttr(tag, "src"))
+	}
+	for _, m := range regexp.MustCompile(`(?is)<a\b[^>]+href=["']([^"']+\.(?:png|jpe?g|webp|gif)(?:\?[^"']*)?)["']`).FindAllStringSubmatch(cooked, -1) {
+		add(m[1])
 	}
 	return dedupeMediaGroups(out)
 }
@@ -907,10 +943,13 @@ func linuxdoReplacePolls(s string) string {
 			break
 		}
 		b.WriteString(s[pos:start])
-		if summary := linuxdoPollSummary(s[start:end]); summary != "" {
+		block := s[start:end]
+		if summary := linuxdoPollSummary(block); summary != "" {
 			b.WriteString("\n")
 			b.WriteString(summary)
 			b.WriteString("\n")
+		} else {
+			b.WriteString(block)
 		}
 		pos = end
 	}
