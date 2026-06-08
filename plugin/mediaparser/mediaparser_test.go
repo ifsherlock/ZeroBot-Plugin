@@ -580,11 +580,15 @@ func TestLinuxdoCleanCookedStripsPromotionDeclaration(t *testing.T) {
 
 func TestLinuxdoCleanCookedKeepsEmojiImagesAsText(t *testing.T) {
 	cooked := `<p>hello <img class="emoji" title="smile" alt="🙂" src="/images/emoji/twitter/smile.png?v=12"> world</p>
+<p>shortcode <img class="emoji" title=":laughing:" alt=":laughing:" src="/images/emoji/twitter/laughing.png?v=12"> and <img class="emoji" title=":rofl:" alt=":rofl:" src="/images/emoji/twitter/rofl.png?v=12"></p>
 <p>custom <img class="emoji custom" title="linuxdo" src="/uploads/default/original/1X/custom.png"></p>
 <p><img src="/uploads/default/original/1X/post.png"></p>`
 	got := linuxdoCleanCooked(cooked)
 	if !strings.Contains(got, "hello 🙂 world") {
 		t.Fatalf("unicode emoji was not kept: %q", got)
+	}
+	if !strings.Contains(got, "shortcode 😆 and 🤣") {
+		t.Fatalf("emoji shortcode was not converted: %q", got)
 	}
 	if !strings.Contains(got, "custom :linuxdo:") {
 		t.Fatalf("custom emoji shortcode was not kept: %q", got)

@@ -930,6 +930,9 @@ func linuxdoNormalizeEmojiText(text string) string {
 	if text == "" {
 		return ""
 	}
+	if emoji, ok := linuxdoEmojiShortcodeToUnicode(text); ok {
+		return emoji
+	}
 	if strings.HasPrefix(text, ":") && strings.HasSuffix(text, ":") {
 		return text
 	}
@@ -937,6 +940,66 @@ func linuxdoNormalizeEmojiText(text string) string {
 		return ":" + text + ":"
 	}
 	return text
+}
+
+func linuxdoEmojiShortcodeToUnicode(text string) (string, bool) {
+	key := strings.ToLower(strings.TrimSpace(text))
+	key = strings.Trim(key, ":")
+	key = strings.ReplaceAll(key, "-", "_")
+	if key == "" {
+		return "", false
+	}
+	emoji, ok := linuxdoEmojiShortcodes[key]
+	return emoji, ok
+}
+
+var linuxdoEmojiShortcodes = map[string]string{
+	"+1":                            "\U0001F44D",
+	"-1":                            "\U0001F44E",
+	"100":                           "\U0001F4AF",
+	"angry":                         "\U0001F620",
+	"astonished":                    "\U0001F632",
+	"blush":                         "\U0001F60A",
+	"clap":                          "\U0001F44F",
+	"confused":                      "\U0001F615",
+	"cry":                           "\U0001F622",
+	"disappointed":                  "\U0001F61E",
+	"expressionless":                "\U0001F611",
+	"eyes":                          "\U0001F440",
+	"facepalm":                      "\U0001F926",
+	"fire":                          "\U0001F525",
+	"grin":                          "\U0001F601",
+	"grinning":                      "\U0001F600",
+	"heart":                         "\u2764\uFE0F",
+	"heart_eyes":                    "\U0001F60D",
+	"hugging":                       "\U0001F917",
+	"hugs":                          "\U0001F917",
+	"joy":                           "\U0001F602",
+	"laughing":                      "\U0001F606",
+	"neutral_face":                  "\U0001F610",
+	"ok_hand":                       "\U0001F44C",
+	"open_mouth":                    "\U0001F62E",
+	"partying_face":                 "\U0001F973",
+	"pray":                          "\U0001F64F",
+	"rage":                          "\U0001F621",
+	"raised_hands":                  "\U0001F64C",
+	"rofl":                          "\U0001F923",
+	"rolling_on_the_floor_laughing": "\U0001F923",
+	"scream":                        "\U0001F631",
+	"slight_smile":                  "\U0001F642",
+	"slightly_smiling_face":         "\U0001F642",
+	"smile":                         "\U0001F604",
+	"smiley":                        "\U0001F603",
+	"smiling_face_with_3_hearts":    "\U0001F970",
+	"sob":                           "\U0001F62D",
+	"sweat":                         "\U0001F613",
+	"sweat_smile":                   "\U0001F605",
+	"thinking":                      "\U0001F914",
+	"thinking_face":                 "\U0001F914",
+	"thumbsdown":                    "\U0001F44E",
+	"thumbsup":                      "\U0001F44D",
+	"tada":                          "\U0001F389",
+	"wink":                          "\U0001F609",
 }
 
 func linuxdoTagAttr(tag, name string) string {
