@@ -75,11 +75,14 @@ type newsConfig struct {
 }
 
 type newsAccess struct {
-	Enabled        bool    `json:"enabled"`
-	PrivateEnabled bool    `json:"private_enabled"`
-	GroupMode      string  `json:"group_mode"`
-	GroupWhitelist []int64 `json:"group_whitelist,omitempty"`
-	GroupBlacklist []int64 `json:"group_blacklist,omitempty"`
+	Enabled          bool    `json:"enabled"`
+	PrivateEnabled   bool    `json:"private_enabled"`
+	PrivateMode      string  `json:"private_mode"`
+	PrivateWhitelist []int64 `json:"private_whitelist,omitempty"`
+	PrivateBlacklist []int64 `json:"private_blacklist,omitempty"`
+	GroupMode        string  `json:"group_mode"`
+	GroupWhitelist   []int64 `json:"group_whitelist,omitempty"`
+	GroupBlacklist   []int64 `json:"group_blacklist,omitempty"`
 }
 
 type WebNewsSource = newsSource
@@ -172,6 +175,7 @@ func defaultConfig() newsConfig {
 		Access: newsAccess{
 			Enabled:        true,
 			PrivateEnabled: true,
+			PrivateMode:    "none",
 			GroupMode:      "none",
 		},
 		Sources: []newsSource{
@@ -353,22 +357,31 @@ func normalizeParams(params []newsParam) []newsParam {
 }
 
 func normalizeAccess(in newsAccess) newsAccess {
-	mode := strings.ToLower(strings.TrimSpace(in.GroupMode))
-	if mode != "blacklist" && mode != "whitelist" {
-		mode = "none"
-	}
-	zeroValue := !in.Enabled && !in.PrivateEnabled && mode == "none" && len(in.GroupWhitelist) == 0 && len(in.GroupBlacklist) == 0
+	groupMode := normalizeAccessMode(in.GroupMode)
+	privateMode := normalizeAccessMode(in.PrivateMode)
+	zeroValue := !in.Enabled && !in.PrivateEnabled && groupMode == "none" && privateMode == "none" && len(in.GroupWhitelist) == 0 && len(in.GroupBlacklist) == 0 && len(in.PrivateWhitelist) == 0 && len(in.PrivateBlacklist) == 0
 	if zeroValue {
 		in.Enabled = true
 		in.PrivateEnabled = true
 	}
 	return newsAccess{
-		Enabled:        in.Enabled,
-		PrivateEnabled: in.PrivateEnabled,
-		GroupMode:      mode,
-		GroupWhitelist: normalizeIDs(in.GroupWhitelist),
-		GroupBlacklist: normalizeIDs(in.GroupBlacklist),
+		Enabled:          in.Enabled,
+		PrivateEnabled:   in.PrivateEnabled,
+		PrivateMode:      privateMode,
+		PrivateWhitelist: normalizeIDs(in.PrivateWhitelist),
+		PrivateBlacklist: normalizeIDs(in.PrivateBlacklist),
+		GroupMode:        groupMode,
+		GroupWhitelist:   normalizeIDs(in.GroupWhitelist),
+		GroupBlacklist:   normalizeIDs(in.GroupBlacklist),
 	}
+}
+
+func normalizeAccessMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode != "blacklist" && mode != "whitelist" {
+		return "none"
+	}
+	return mode
 }
 
 func normalizeIDs(ids []int64) []int64 {
@@ -935,7 +948,18 @@ func allowAccess(ctx *zero.Ctx) bool {
 		return false
 	}
 	if ctx.Event.GroupID == 0 {
-		return access.PrivateEnabled
+		if !access.PrivateEnabled {
+			return false
+		}
+		uid := ctx.Event.UserID
+		switch access.PrivateMode {
+		case "whitelist":
+			return containsID(access.PrivateWhitelist, uid)
+		case "blacklist":
+			return !containsID(access.PrivateBlacklist, uid)
+		default:
+			return true
+		}
 	}
 	gid := ctx.Event.GroupID
 	switch access.GroupMode {

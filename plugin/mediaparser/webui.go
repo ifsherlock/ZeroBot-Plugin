@@ -109,11 +109,14 @@ type webDailyNewsConfig struct {
 }
 
 type webDailyNewsAccess struct {
-	Enabled        bool    `json:"enabled"`
-	PrivateEnabled bool    `json:"private_enabled"`
-	GroupMode      string  `json:"group_mode"`
-	GroupWhitelist []int64 `json:"group_whitelist,omitempty"`
-	GroupBlacklist []int64 `json:"group_blacklist,omitempty"`
+	Enabled          bool    `json:"enabled"`
+	PrivateEnabled   bool    `json:"private_enabled"`
+	PrivateMode      string  `json:"private_mode"`
+	PrivateWhitelist []int64 `json:"private_whitelist,omitempty"`
+	PrivateBlacklist []int64 `json:"private_blacklist,omitempty"`
+	GroupMode        string  `json:"group_mode"`
+	GroupWhitelist   []int64 `json:"group_whitelist,omitempty"`
+	GroupBlacklist   []int64 `json:"group_blacklist,omitempty"`
 }
 
 type webLogEntry struct {
@@ -818,6 +821,7 @@ func defaultWebDailyNewsConfig() webDailyNewsConfig {
 		Access: webDailyNewsAccess{
 			Enabled:        true,
 			PrivateEnabled: true,
+			PrivateMode:    "none",
 			GroupMode:      "none",
 		},
 		Sources: []webDailyNewsSource{
@@ -1012,22 +1016,31 @@ func normalizeWebDailyNewsParams(params []webDailyNewsParam) []webDailyNewsParam
 }
 
 func normalizeWebDailyNewsAccess(in webDailyNewsAccess) webDailyNewsAccess {
-	mode := strings.ToLower(strings.TrimSpace(in.GroupMode))
-	if mode != "blacklist" && mode != "whitelist" {
-		mode = "none"
-	}
-	zeroValue := !in.Enabled && !in.PrivateEnabled && mode == "none" && len(in.GroupWhitelist) == 0 && len(in.GroupBlacklist) == 0
+	groupMode := normalizeWebDailyNewsAccessMode(in.GroupMode)
+	privateMode := normalizeWebDailyNewsAccessMode(in.PrivateMode)
+	zeroValue := !in.Enabled && !in.PrivateEnabled && groupMode == "none" && privateMode == "none" && len(in.GroupWhitelist) == 0 && len(in.GroupBlacklist) == 0 && len(in.PrivateWhitelist) == 0 && len(in.PrivateBlacklist) == 0
 	if zeroValue {
 		in.Enabled = true
 		in.PrivateEnabled = true
 	}
 	return webDailyNewsAccess{
-		Enabled:        in.Enabled,
-		PrivateEnabled: in.PrivateEnabled,
-		GroupMode:      mode,
-		GroupWhitelist: normalizeWebDailyNewsIDs(in.GroupWhitelist),
-		GroupBlacklist: normalizeWebDailyNewsIDs(in.GroupBlacklist),
+		Enabled:          in.Enabled,
+		PrivateEnabled:   in.PrivateEnabled,
+		PrivateMode:      privateMode,
+		PrivateWhitelist: normalizeWebDailyNewsIDs(in.PrivateWhitelist),
+		PrivateBlacklist: normalizeWebDailyNewsIDs(in.PrivateBlacklist),
+		GroupMode:        groupMode,
+		GroupWhitelist:   normalizeWebDailyNewsIDs(in.GroupWhitelist),
+		GroupBlacklist:   normalizeWebDailyNewsIDs(in.GroupBlacklist),
 	}
+}
+
+func normalizeWebDailyNewsAccessMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode != "blacklist" && mode != "whitelist" {
+		return "none"
+	}
+	return mode
 }
 
 func normalizeWebDailyNewsIDs(ids []int64) []int64 {
@@ -1693,7 +1706,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .safetyGrid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(460px,1.14fr) minmax(300px,.82fr);gap:14px;align-items:start}.safetyColumn{display:grid;gap:14px;align-content:start}.safetyEditorHead{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.safetyEditorHead .field{gap:5px}.safetyEditorHead select{width:100%}.safetyEditorCard textarea{min-height:96px}.safetyEditorCard #safetyBuiltinPreview{min-height:170px}.safetyWordGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.safetyWordGrid .wide{grid-column:1/-1}.safetyWordGrid textarea{min-height:148px}.safetyEnableCard{padding:12px}.safetyEnableCard .sectionTitle{align-items:flex-start}.safetyEnableCard .groupList{max-height:210px}.safetyEnableCard select{width:100%}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
-.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:14px;align-items:stretch}.dailyGrid.three{grid-template-columns:minmax(300px,.82fr) minmax(420px,1.18fr) minmax(320px,.9fr)}.dailyList{display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:10px;display:grid;gap:8px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}.dailyFilters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.dailyFilters select,.dailyFilters input{min-width:150px}.dailyCommandBox textarea{min-height:96px}.dailyParamList{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.dailyParamList span{border:1px solid #e5e7eb;border-radius:999px;padding:2px 7px;background:#f8fafc}
+.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:12px;align-items:stretch}.dailyGrid.three{grid-template-columns:minmax(340px,.92fr) minmax(420px,1.18fr) minmax(320px,.9fr)}.dailyList{display:grid;gap:7px;max-height:330px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:9px;display:grid;gap:7px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}.dailyFilters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.dailyFilters select,.dailyFilters input{min-width:150px}.dailyCommandBox textarea{min-height:86px}.dailyParamList{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.dailyParamList span{border:1px solid #e5e7eb;border-radius:999px;padding:2px 7px;background:#f8fafc}.dailyAccessCard{gap:10px}.dailyAccessCard .settingsFields{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dailyAccessLists{display:grid;grid-template-columns:1fr;gap:8px}.dailyAccessLists .groupBox{padding:9px}.dailyAccessLists .groupList{max-height:150px}.dailyAccessLists textarea{min-height:72px}
 .dailyTaskTarget{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px}.dailyFormatView{height:34px;display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#f8fafc;padding:0 10px;color:#475569;font-weight:650}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
@@ -1767,17 +1780,22 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel span4 page" data-page="dailynews" id="dailynews">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 60s 技能中心</div><div class="sectionTitle"><b>60s 技能中心</b><span class="muted">新闻、热榜、天气、查询和工具接口。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
 <div class="dailyGrid three">
-<div class="settingsCard">
+<div class="settingsCard dailyAccessCard">
 <div class="sectionTitle"><b>访问控制</b><span class="muted" id="dailyNewsMsg"></span></div>
 <div class="controlPills"><label class="row">总开关 <span id="dailyEnabledSwitch"></span></label><label class="row">私聊响应 <span id="dailyPrivateSwitch"></span></label></div>
 <div class="settingsFields">
 <label class="field">旧命令兜底接口 <select id="dailyDefaultSource"></select></label>
 <label class="field">旧命令格式 <select id="dailyDefaultFormat"><option value="image">图片</option><option value="text">文本</option><option value="markdown">Markdown</option><option value="json">JSON</option></select></label>
 <label class="field">群模式 <select id="dailyGroupMode" onchange="renderDailyGroupPickers()"><option value="none">所有群开启</option><option value="whitelist">只开白名单群</option><option value="blacklist">关闭黑名单群</option></select></label>
+<label class="field">个人模式 <select id="dailyPrivateMode" onchange="renderDailyPrivatePickers()"><option value="none">所有人开启</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
 </div>
 <div class="row"><button onclick="loadGroups(true)">刷新群列表</button><span class="muted">勾选后保存生效</span></div>
+<div class="dailyAccessLists">
 <div class="groupBox" id="dailyWhiteBox"><div class="row"><b>群白名单</b><input id="dailyGroupWhiteSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupWhitePicker"></div></div>
 <div class="groupBox" id="dailyBlackBox"><div class="row"><b>群黑名单</b><input id="dailyGroupBlackSearch" placeholder="搜索群" oninput="renderDailyGroupPickers()"></div><div class="groupList" id="dailyGroupBlackPicker"></div></div>
+<div class="groupBox" id="dailyPrivateWhiteBox"><div class="row"><b>个人白名单</b><span class="muted">每行一个 QQ</span></div><textarea id="dailyPrivateWhitelist" placeholder="123456&#10;234567" oninput="markDailyPrivateChanged()"></textarea></div>
+<div class="groupBox" id="dailyPrivateBlackBox"><div class="row"><b>个人黑名单</b><span class="muted">每行一个 QQ</span></div><textarea id="dailyPrivateBlacklist" placeholder="123456&#10;234567" oninput="markDailyPrivateChanged()"></textarea></div>
+</div>
 </div>
 <div class="settingsCard">
 <div class="sectionTitle"><b>技能列表</b><span class="muted">选择后编辑命令和定时。</span></div>
@@ -2183,11 +2201,15 @@ function renderDailyNewsSettings(){
  $('dailyEnabledSwitch').innerHTML=actionSwitchHTML('setDailyEnabled',!!dailyNewsCfg.access.enabled);
  $('dailyPrivateSwitch').innerHTML=actionSwitchHTML('setDailyPrivateEnabled',!!dailyNewsCfg.access.private_enabled);
  $('dailyGroupMode').value=dailyNewsCfg.access.group_mode||'none';
+ $('dailyPrivateMode').value=dailyNewsCfg.access.private_mode||'none';
+ $('dailyPrivateWhitelist').value=dailyIDListText(dailyNewsCfg.access.private_whitelist);
+ $('dailyPrivateBlacklist').value=dailyIDListText(dailyNewsCfg.access.private_blacklist);
  renderDailyCategoryFilter();
  renderDailySources();
  renderDailySelectedSource();
  renderDailyTasks();
  renderDailyGroupPickers();
+ renderDailyPrivatePickers();
  renderDailyTaskGroupOptions();
  updateDailyTaskTargetMode();
  updateDailyTaskFormat();
@@ -2199,6 +2221,9 @@ function collectDailyNews(){
  dailyNewsCfg.default_format=$('dailyDefaultFormat').value||'image';
  dailyNewsCfg.commands=String($('dailyCommands').value||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
  dailyNewsCfg.access.group_mode=$('dailyGroupMode').value||'none';
+ dailyNewsCfg.access.private_mode=$('dailyPrivateMode').value||'none';
+ dailyNewsCfg.access.private_whitelist=dailyParseIDList($('dailyPrivateWhitelist').value);
+ dailyNewsCfg.access.private_blacklist=dailyParseIDList($('dailyPrivateBlacklist').value);
  if(dailyNewsCfg.access.group_mode==='whitelist'){
   dailyNewsCfg.access.group_blacklist=[];
  }else if(dailyNewsCfg.access.group_mode==='blacklist'){
@@ -2206,6 +2231,14 @@ function collectDailyNews(){
  }else{
   dailyNewsCfg.access.group_whitelist=[];
   dailyNewsCfg.access.group_blacklist=[];
+ }
+ if(dailyNewsCfg.access.private_mode==='whitelist'){
+  dailyNewsCfg.access.private_blacklist=[];
+ }else if(dailyNewsCfg.access.private_mode==='blacklist'){
+  dailyNewsCfg.access.private_whitelist=[];
+ }else{
+  dailyNewsCfg.access.private_whitelist=[];
+  dailyNewsCfg.access.private_blacklist=[];
  }
 }
 function setDailyEnabled(v){dailyNewsCfg.access=dailyNewsCfg.access||{};dailyNewsCfg.access.enabled=!!v;renderDailyNewsSettings();$('dailyNewsMsg').textContent='总开关已修改，记得保存'}
@@ -2284,6 +2317,22 @@ function renderDailyGroupPickers(){
  const black=new Set((dailyNewsCfg.access.group_blacklist||[]).map(String));
  renderDailyGroupPicker('dailyGroupWhitePicker','dailyGroupWhiteSearch',white,'white');
  renderDailyGroupPicker('dailyGroupBlackPicker','dailyGroupBlackSearch',black,'black');
+}
+function renderDailyPrivatePickers(){
+ if(!dailyNewsCfg||!dailyNewsCfg.access) return;
+ const mode=dailyNewsCfg.access.private_mode||'none';
+ if($('dailyPrivateWhiteBox')) $('dailyPrivateWhiteBox').classList.toggle('hidden', mode!=='whitelist');
+ if($('dailyPrivateBlackBox')) $('dailyPrivateBlackBox').classList.toggle('hidden', mode!=='blacklist');
+}
+function dailyParseIDList(text){
+ const seen={};
+ String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^\d+$/.test(x)) seen[x]=true});
+ return Object.keys(seen).map(Number).filter(Boolean).sort((a,b)=>a-b);
+}
+function dailyIDListText(list){return (list||[]).map(String).join('\n')}
+function markDailyPrivateChanged(){
+ if(!dailyNewsCfg) return;
+ $('dailyNewsMsg').textContent='个人名单已修改，记得保存';
 }
 function renderDailyGroupPicker(target,searchID,set,kind){
  const q=String(($(searchID)&&$(searchID).value)||'').trim();
