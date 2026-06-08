@@ -810,7 +810,25 @@ func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func webDailyNewsConfigPath() string {
+	return filepath.Join(webDataRoot(), "dailynews", "config.json")
+}
+
+func webLegacyDailyNewsConfigPath() string {
 	return filepath.Join(filepath.Dir(engine.DataFolder()), "dailynews", "config.json")
+}
+
+func webDataRoot() string {
+	dir := filepath.Clean(engine.DataFolder())
+	for {
+		if filepath.Base(dir) == "data" {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return filepath.Dir(engine.DataFolder())
+		}
+		dir = parent
+	}
 }
 
 func defaultWebDailyNewsConfig() webDailyNewsConfig {
@@ -873,17 +891,57 @@ func defaultWebDailyNewsConfig() webDailyNewsConfig {
 
 func loadWebDailyNewsConfig() (webDailyNewsConfig, error) {
 	cfg := defaultWebDailyNewsConfig()
-	data, err := os.ReadFile(webDailyNewsConfigPath())
+	path := webDailyNewsConfigPath()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if legacy, ok := readLegacyWebDailyNewsConfig(nil); ok {
+				return saveWebDailyNewsConfig(legacy)
+			}
 			return saveWebDailyNewsConfig(cfg)
 		}
 		return cfg, err
+	}
+	if legacy, ok := readLegacyWebDailyNewsConfig(data); ok {
+		return saveWebDailyNewsConfig(legacy)
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return defaultWebDailyNewsConfig(), err
 	}
 	return normalizeWebDailyNewsConfig(cfg), nil
+}
+
+func readLegacyWebDailyNewsConfig(current []byte) (webDailyNewsConfig, bool) {
+	var cfg webDailyNewsConfig
+	path := webDailyNewsConfigPath()
+	legacyPath := webLegacyDailyNewsConfigPath()
+	if filepath.Clean(path) == filepath.Clean(legacyPath) {
+		return cfg, false
+	}
+	data, err := os.ReadFile(legacyPath)
+	if err != nil {
+		return cfg, false
+	}
+	if webDailyNewsScheduleCount(data) <= webDailyNewsScheduleCount(current) {
+		return cfg, false
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, false
+	}
+	return normalizeWebDailyNewsConfig(cfg), true
+}
+
+func webDailyNewsScheduleCount(data []byte) int {
+	if len(data) == 0 {
+		return 0
+	}
+	var cfg struct {
+		Schedules []webDailyNewsSchedule `json:"schedules"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return 0
+	}
+	return len(cfg.Schedules)
 }
 
 func saveWebDailyNewsConfig(next webDailyNewsConfig) (webDailyNewsConfig, error) {
