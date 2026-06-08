@@ -94,6 +94,7 @@ type webDailyNewsSchedule struct {
 	SourceID string `json:"source_id"`
 	Target   string `json:"target"`
 	Time     string `json:"time"`
+	Cron     string `json:"cron,omitempty"`
 	Format   string `json:"format"`
 	Enabled  bool   `json:"enabled"`
 	LastRun  string `json:"last_run,omitempty"`
@@ -1120,7 +1121,18 @@ func normalizeWebDailyNewsSchedule(task webDailyNewsSchedule, sources map[string
 	task.SourceID = webDailyNewsSanitizeID(task.SourceID)
 	task.Target = strings.TrimSpace(task.Target)
 	task.Time = strings.TrimSpace(task.Time)
-	if !webDailyNewsClockOK(task.Time) {
+	task.Cron = webDailyNewsNormalizeCronExpr(task.Cron)
+	if task.Cron == "" && webDailyNewsClockOK(task.Time) {
+		task.Cron = webDailyNewsClockToCron(task.Time)
+	}
+	if task.Cron == "" || !webDailyNewsCronOK(task.Cron) {
+		task.Cron = ""
+	}
+	if webDailyNewsClockOK(task.Time) {
+		task.Time = webDailyNewsCronToClock(task.Cron, task.Time)
+	} else if task.Cron != "" {
+		task.Time = webDailyNewsCronToClock(task.Cron, "")
+	} else {
 		task.Time = ""
 	}
 	if !webDailyNewsTargetOK(task.Target) {
@@ -1214,6 +1226,129 @@ func webDailyNewsFormatFromEncoding(encoding string) string {
 func webDailyNewsClockOK(s string) bool {
 	_, err := time.Parse("15:04", s)
 	return err == nil
+}
+
+func webDailyNewsClockToCron(clock string) string {
+	t, err := time.Parse("15:04", strings.TrimSpace(clock))
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d %d * * *", t.Minute(), t.Hour())
+}
+
+func webDailyNewsCronToClock(expr, fallback string) string {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		if webDailyNewsClockOK(fallback) {
+			return fallback
+		}
+		return ""
+	}
+	minute, err1 := strconv.Atoi(fields[0])
+	hour, err2 := strconv.Atoi(fields[1])
+	if err1 != nil || err2 != nil || minute < 0 || minute > 59 || hour < 0 || hour > 23 {
+		if webDailyNewsClockOK(fallback) {
+			return fallback
+		}
+		return ""
+	}
+	return fmt.Sprintf("%02d:%02d", hour, minute)
+}
+
+func webDailyNewsNormalizeCronExpr(expr string) string {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return ""
+	}
+	if webDailyNewsClockOK(expr) {
+		return webDailyNewsClockToCron(expr)
+	}
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return ""
+	}
+	for i, field := range fields {
+		if field == "?" {
+			field = "*"
+		}
+		fields[i] = field
+	}
+	return strings.Join(fields, " ")
+}
+
+func webDailyNewsCronOK(expr string) bool {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return false
+	}
+	ranges := [][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
+	for i, field := range fields {
+		if !webDailyNewsCronFieldOK(field, ranges[i][0], ranges[i][1]) {
+			return false
+		}
+	}
+	return true
+}
+
+func webDailyNewsCronFieldOK(field string, min, max int) bool {
+	if field == "" {
+		return false
+	}
+	for _, part := range strings.Split(field, ",") {
+		if _, ok := webDailyNewsCronPartValues(part, min, max); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func webDailyNewsCronPartValues(part string, min, max int) (map[int]bool, bool) {
+	part = strings.TrimSpace(part)
+	if part == "" {
+		return nil, false
+	}
+	step := 1
+	if strings.Contains(part, "/") {
+		pieces := strings.Split(part, "/")
+		if len(pieces) != 2 {
+			return nil, false
+		}
+		part = pieces[0]
+		n, err := strconv.Atoi(pieces[1])
+		if err != nil || n <= 0 {
+			return nil, false
+		}
+		step = n
+	}
+	start, end := min, max
+	switch {
+	case part == "*" || part == "?":
+	case strings.Contains(part, "-"):
+		pieces := strings.Split(part, "-")
+		if len(pieces) != 2 {
+			return nil, false
+		}
+		a, errA := strconv.Atoi(pieces[0])
+		b, errB := strconv.Atoi(pieces[1])
+		if errA != nil || errB != nil || a > b {
+			return nil, false
+		}
+		start, end = a, b
+	default:
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, false
+		}
+		start, end = n, n
+	}
+	if start < min || end > max {
+		return nil, false
+	}
+	values := make(map[int]bool, end-start+1)
+	for i := start; i <= end; i += step {
+		values[i] = true
+	}
+	return values, true
 }
 
 func webDailyNewsTargetOK(target string) bool {
@@ -1884,7 +2019,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">任务ID <input id="dailyTaskID" placeholder="morning"></label>
 <label class="field">接口 <select id="dailyTaskSource" onchange="updateDailyTaskFormat()"></select></label>
 <label class="field span2">目标 <span class="dailyTaskTarget"><select id="dailyTaskTargetType" onchange="updateDailyTaskTargetMode()"><option value="group">群聊</option><option value="private">私聊</option></select><select id="dailyTaskGroup"></select><input id="dailyTaskPrivate" class="hidden" placeholder="输入 QQ 号"></span></label>
-<label class="field">时间 <input id="dailyTaskTime" type="time" value="08:30"></label>
+<label class="field span2">Cron <input id="dailyTaskCron" placeholder="30 8 * * *"></label>
 <label class="field">发送格式 <span id="dailyTaskFormatView" class="dailyFormatView">随接口</span><input id="dailyTaskFormat" type="hidden" value="image"></label>
 <label class="field">启用 <span class="row"><label class="switch"><input id="dailyTaskEnabled" type="checkbox" checked><span class="slider"></span></label></span></label>
 </div>
@@ -2455,31 +2590,44 @@ function setDailyTaskTarget(target){
  }
  updateDailyTaskTargetMode();
 }
+function dailyCronFromTime(v){
+ const s=String(v||'').trim();
+ const m=s.match(/^(\d{1,2}):(\d{2})$/);
+ if(!m) return s;
+ return String(Number(m[2]))+' '+String(Number(m[1]))+' * * *';
+}
+function dailyTaskCron(t){return String((t&&t.cron)||dailyCronFromTime(t&&t.time)||'30 8 * * *').trim()}
+function dailyCronLooksOK(expr){
+ const parts=String(expr||'').trim().split(/\s+/);
+ return parts.length===5 && parts.every(x=>/^[\d*,/?-]+$/.test(x));
+}
+function deleteDailyTask(id){dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==id); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已删除，记得保存'}
+function toggleDailyTask(id){const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(t){t.enabled=!t.enabled; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已切换，记得保存'}}
 function renderDailyTasks(){
- const list=(dailyNewsCfg.schedules||[]).slice().sort((a,b)=>String(a.time||'').localeCompare(String(b.time||''))||String(a.id).localeCompare(String(b.id)));
+ const list=(dailyNewsCfg.schedules||[]).slice().sort((a,b)=>dailyTaskCron(a).localeCompare(dailyTaskCron(b))||String(a.id).localeCompare(String(b.id)));
  $('dailyTasks').innerHTML=list.map(t=>{
   const state=t.enabled?'<span class="dailyBadge">启用</span>':'<span class="dailyBadge readonly">关闭</span>';
   const src=dailySourceByID(t.source_id);
   const format=dailyFormatFromEncoding(src&&src.encoding);
-  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(t.id||'-')+'</b><div class="dailyItemMeta">'+escapeHTML(t.time||'--:--')+' · '+escapeHTML(t.source_id||'-')+' · '+escapeHTML(dailyFormatLabel(format))+'</div></div>'+state+'</div><div class="dailyItemMeta">'+escapeHTML(t.target||'')+(t.last_run?' · 上次 '+escapeHTML(t.last_run):'')+'</div><div class="dailyActions"><button data-id="'+escapeHTML(t.id)+'" onclick="editDailyTask(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(t.id)+'" onclick="toggleDailyTask(this.dataset.id)">开关</button><button data-id="'+escapeHTML(t.id)+'" onclick="deleteDailyTask(this.dataset.id)">删除</button></div></div>';
+  return '<div class="dailyItem"><div class="dailyItemHead"><div><b>'+escapeHTML(t.id||'-')+'</b><div class="dailyItemMeta">'+escapeHTML(dailyTaskCron(t))+' · '+escapeHTML(t.source_id||'-')+' · '+escapeHTML(dailyFormatLabel(format))+'</div></div>'+state+'</div><div class="dailyItemMeta">'+escapeHTML(t.target||'')+(t.last_run?' · 上次 '+escapeHTML(t.last_run):'')+'</div><div class="dailyActions"><button data-id="'+escapeHTML(t.id)+'" onclick="editDailyTask(this.dataset.id)">编辑</button><button data-id="'+escapeHTML(t.id)+'" onclick="toggleDailyTask(this.dataset.id)">开关</button><button data-id="'+escapeHTML(t.id)+'" onclick="deleteDailyTask(this.dataset.id)">删除</button></div></div>';
  }).join('')||'<div class="muted">暂无定时任务</div>';
 }
-function clearDailyTaskForm(){$('dailyTaskID').value=''; $('dailyTaskPrivate').value=''; $('dailyTaskTime').value='08:30'; $('dailyTaskEnabled').checked=true; if(dailyNewsCfg) $('dailyTaskSource').value=dailyNewsCfg.default_source||'60s'; $('dailyTaskTargetType').value='group'; renderDailyTaskGroupOptions(); updateDailyTaskTargetMode(); updateDailyTaskFormat()}
+function clearDailyTaskForm(){$('dailyTaskID').value=''; $('dailyTaskPrivate').value=''; $('dailyTaskCron').value='30 8 * * *'; $('dailyTaskEnabled').checked=true; if(dailyNewsCfg) $('dailyTaskSource').value=dailyNewsCfg.default_source||'60s'; $('dailyTaskTargetType').value='group'; renderDailyTaskGroupOptions(); updateDailyTaskTargetMode(); updateDailyTaskFormat()}
 function editDailyTask(id){
  const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(!t) return;
- $('dailyTaskID').value=t.id||''; $('dailyTaskSource').value=t.source_id||dailyNewsCfg.default_source||'60s'; setDailyTaskTarget(t.target||''); $('dailyTaskTime').value=t.time||'08:30'; $('dailyTaskEnabled').checked=!!t.enabled; updateDailyTaskFormat();
+ $('dailyTaskID').value=t.id||''; $('dailyTaskSource').value=t.source_id||dailyNewsCfg.default_source||'60s'; setDailyTaskTarget(t.target||''); $('dailyTaskCron').value=dailyTaskCron(t); $('dailyTaskEnabled').checked=!!t.enabled; updateDailyTaskFormat();
 }
 function addDailyTask(){
  collectDailyNews();
  updateDailyTaskFormat();
- const task={id:String($('dailyTaskID').value||'').trim(),source_id:$('dailyTaskSource').value||dailyNewsCfg.default_source||'60s',target:buildDailyTaskTarget(),time:$('dailyTaskTime').value||'08:30',format:$('dailyTaskFormat').value||'image',enabled:!!$('dailyTaskEnabled').checked};
- if(!task.id||!task.target||!task.time){$('dailyNewsMsg').textContent='任务 ID、目标和时间必填';return}
+ const cron=String($('dailyTaskCron').value||'').trim();
+ const task={id:String($('dailyTaskID').value||'').trim(),source_id:$('dailyTaskSource').value||dailyNewsCfg.default_source||'60s',target:buildDailyTaskTarget(),time:'',cron:cron,format:$('dailyTaskFormat').value||'image',enabled:!!$('dailyTaskEnabled').checked};
+ if(!task.id||!task.target||!task.cron){$('dailyNewsMsg').textContent='任务 ID、目标和 Cron 必填';return}
+ if(!dailyCronLooksOK(task.cron)){$('dailyNewsMsg').textContent='Cron 需要 5 段，例如 30 8 * * *';return}
  dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==task.id);
  dailyNewsCfg.schedules.push(task);
  clearDailyTaskForm(); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已加入，记得保存';
 }
-function deleteDailyTask(id){dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==id); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已删除，记得保存'}
-function toggleDailyTask(id){const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(t){t.enabled=!t.enabled; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已切换，记得保存'}}
 async function saveDailyNews(){
  collectDailyNews();
  $('dailyNewsMsg').textContent='保存中...';

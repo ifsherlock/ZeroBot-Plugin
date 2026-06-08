@@ -60,6 +60,7 @@ type newsSchedule struct {
 	SourceID string `json:"source_id"`
 	Target   string `json:"target"`
 	Time     string `json:"time"`
+	Cron     string `json:"cron,omitempty"`
 	Format   string `json:"format"`
 	Enabled  bool   `json:"enabled"`
 	LastRun  string `json:"last_run,omitempty"`
@@ -161,7 +162,7 @@ func dailyNewsHelp() string {
 		"- 60秒接口删除 ID",
 		"- 60秒默认接口 ID",
 		"- 60秒默认格式 image|text|markdown|json",
-		"- 60秒定时添加 ID 接口ID 群:123456 08:30 [格式]",
+		"- 60秒定时添加 ID 接口ID 群:123456 30 8 * * * [格式]",
 		"- 60秒定时删除 ID",
 		"- 60秒定时列表",
 	}, "\n")
@@ -403,7 +404,18 @@ func normalizeSchedule(task newsSchedule, sources map[string]newsSource) newsSch
 	task.SourceID = sanitizeID(task.SourceID)
 	task.Target = strings.TrimSpace(task.Target)
 	task.Time = strings.TrimSpace(task.Time)
-	if !isClock(task.Time) {
+	task.Cron = normalizeCronExpr(task.Cron)
+	if task.Cron == "" && isClock(task.Time) {
+		task.Cron = clockToCron(task.Time)
+	}
+	if task.Cron == "" || !cronExprOK(task.Cron) {
+		task.Cron = ""
+	}
+	if isClock(task.Time) {
+		task.Time = cronToClock(task.Cron, task.Time)
+	} else if task.Cron != "" {
+		task.Time = cronToClock(task.Cron, "")
+	} else {
 		task.Time = ""
 	}
 	if _, _, ok := parseTarget(task.Target); !ok {
@@ -995,18 +1007,18 @@ func startScheduler() {
 
 func runDueSchedules() {
 	now := time.Now()
-	hm := now.Format("15:04")
+	stamp := now.Format("2006-01-02 15:04")
 	today := now.Format("2006-01-02")
 	cfgMu.Lock()
 	tasks := make([]newsSchedule, 0, len(cfg.Schedules))
 	changed := false
 	for i := range cfg.Schedules {
 		task := cfg.Schedules[i]
-		if !task.Enabled || task.Time != hm || task.LastRun == today {
+		if !task.Enabled || !scheduleMatches(task, now) || scheduleAlreadyRan(task, stamp, today) {
 			continue
 		}
-		cfg.Schedules[i].LastRun = today
-		task.LastRun = today
+		cfg.Schedules[i].LastRun = stamp
+		task.LastRun = stamp
 		tasks = append(tasks, task)
 		changed = true
 	}
@@ -1130,12 +1142,18 @@ func handleListSources(ctx *zero.Ctx) {
 func handleAddSchedule(ctx *zero.Ctx) {
 	fields := strings.Fields(ctx.State["args"].(string))
 	if len(fields) < 4 {
-		ctx.SendChain(message.Text("格式: 60秒定时添加 ID 接口ID 群:123456 08:30 [格式]"))
+		ctx.SendChain(message.Text("格式: 60秒定时添加 ID 接口ID 群:123456 30 8 * * * [格式]"))
 		return
 	}
-	task := newsSchedule{ID: fields[0], SourceID: fields[1], Target: fields[2], Time: fields[3], Format: "image", Enabled: true}
-	if len(fields) >= 5 {
-		task.Format = fields[4]
+	scheduleExpr := fields[3]
+	formatIndex := 4
+	if len(fields) >= 8 && !isSupportedFormat(fields[4]) {
+		scheduleExpr = strings.Join(fields[3:8], " ")
+		formatIndex = 8
+	}
+	task := newsSchedule{ID: fields[0], SourceID: fields[1], Target: fields[2], Time: scheduleExpr, Cron: scheduleExpr, Format: "image", Enabled: true}
+	if len(fields) > formatIndex {
+		task.Format = fields[formatIndex]
 	}
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
@@ -1145,7 +1163,7 @@ func handleAddSchedule(ctx *zero.Ctx) {
 		return
 	}
 	task = normalizeSchedule(task, sources)
-	if task.ID == "" || !isClock(task.Time) {
+	if task.ID == "" || task.Cron == "" {
 		ctx.SendChain(message.Text("定时ID或时间不合法"))
 		return
 	}
@@ -1204,7 +1222,11 @@ func handleListSchedules(ctx *zero.Ctx) {
 		if task.Enabled {
 			state = "开启"
 		}
-		b.WriteString(fmt.Sprintf("- %s %s %s %s %s\n", task.ID, task.SourceID, task.Target, task.Time, state))
+		expr := task.Cron
+		if expr == "" {
+			expr = task.Time
+		}
+		b.WriteString(fmt.Sprintf("- %s %s %s %s %s\n", task.ID, task.SourceID, task.Target, expr, state))
 	}
 	ctx.SendChain(message.Text(strings.TrimSpace(b.String())))
 }
@@ -1314,4 +1336,171 @@ func isDate(s string) bool {
 func isClock(s string) bool {
 	_, err := time.Parse("15:04", s)
 	return err == nil
+}
+
+func clockToCron(clock string) string {
+	t, err := time.Parse("15:04", strings.TrimSpace(clock))
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d %d * * *", t.Minute(), t.Hour())
+}
+
+func cronToClock(expr, fallback string) string {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		if isClock(fallback) {
+			return fallback
+		}
+		return ""
+	}
+	minute, err1 := strconv.Atoi(fields[0])
+	hour, err2 := strconv.Atoi(fields[1])
+	if err1 != nil || err2 != nil || minute < 0 || minute > 59 || hour < 0 || hour > 23 {
+		if isClock(fallback) {
+			return fallback
+		}
+		return ""
+	}
+	return fmt.Sprintf("%02d:%02d", hour, minute)
+}
+
+func normalizeCronExpr(expr string) string {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return ""
+	}
+	if isClock(expr) {
+		return clockToCron(expr)
+	}
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return ""
+	}
+	for i, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "?" {
+			field = "*"
+		}
+		fields[i] = field
+	}
+	return strings.Join(fields, " ")
+}
+
+func cronExprOK(expr string) bool {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return false
+	}
+	ranges := [][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
+	for i, field := range fields {
+		if !cronFieldOK(field, ranges[i][0], ranges[i][1]) {
+			return false
+		}
+	}
+	return true
+}
+
+func cronFieldOK(field string, min, max int) bool {
+	if field == "" {
+		return false
+	}
+	for _, part := range strings.Split(field, ",") {
+		if _, ok := cronPartValues(part, min, max); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func scheduleMatches(task newsSchedule, now time.Time) bool {
+	expr := task.Cron
+	if expr == "" {
+		expr = clockToCron(task.Time)
+	}
+	expr = normalizeCronExpr(expr)
+	if !cronExprOK(expr) {
+		return false
+	}
+	fields := strings.Fields(expr)
+	values := []int{now.Minute(), now.Hour(), now.Day(), int(now.Month()), int(now.Weekday())}
+	ranges := [][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
+	for i, field := range fields {
+		if !cronFieldMatches(field, ranges[i][0], ranges[i][1], values[i]) {
+			if i == 4 && values[i] == 0 && cronFieldMatches(field, ranges[i][0], ranges[i][1], 7) {
+				continue
+			}
+			return false
+		}
+	}
+	return true
+}
+
+func scheduleAlreadyRan(task newsSchedule, stamp, today string) bool {
+	if task.LastRun == stamp {
+		return true
+	}
+	return task.LastRun == today && task.Cron == clockToCron(task.Time)
+}
+
+func cronFieldMatches(field string, min, max, value int) bool {
+	for _, part := range strings.Split(field, ",") {
+		values, ok := cronPartValues(part, min, max)
+		if !ok {
+			return false
+		}
+		if values[value] {
+			return true
+		}
+	}
+	return false
+}
+
+func cronPartValues(part string, min, max int) (map[int]bool, bool) {
+	part = strings.TrimSpace(part)
+	if part == "" {
+		return nil, false
+	}
+	step := 1
+	if strings.Contains(part, "/") {
+		pieces := strings.Split(part, "/")
+		if len(pieces) != 2 {
+			return nil, false
+		}
+		part = pieces[0]
+		n, err := strconv.Atoi(pieces[1])
+		if err != nil || n <= 0 {
+			return nil, false
+		}
+		step = n
+	}
+	start, end := min, max
+	switch {
+	case part == "*" || part == "?":
+	case strings.Contains(part, "-"):
+		pieces := strings.Split(part, "-")
+		if len(pieces) != 2 {
+			return nil, false
+		}
+		a, errA := strconv.Atoi(pieces[0])
+		b, errB := strconv.Atoi(pieces[1])
+		if errA != nil || errB != nil || a > b {
+			return nil, false
+		}
+		start, end = a, b
+	default:
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, false
+		}
+		start, end = n, n
+	}
+	if start < min || end > max {
+		return nil, false
+	}
+	values := make(map[int]bool, end-start+1)
+	for i := start; i <= end; i += step {
+		values[i] = true
+	}
+	return values, true
 }
