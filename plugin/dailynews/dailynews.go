@@ -109,6 +109,7 @@ type newsItem struct {
 var (
 	engine = control.AutoRegister(&ctrl.Options[*zero.Ctx]{
 		DisableOnDefault:  false,
+		Extra:             60,
 		Brief:             "每天60秒读懂世界",
 		Help:              dailyNewsHelp(),
 		PrivateDataFolder: "dailynews",
