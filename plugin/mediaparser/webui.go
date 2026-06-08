@@ -1895,13 +1895,13 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 .safetyGrid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(460px,1.14fr) minmax(300px,.82fr);gap:14px;align-items:start}.safetyColumn{display:grid;gap:14px;align-content:start}.safetyEditorHead{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}.safetyEditorHead .field{gap:5px}.safetyEditorHead select{width:100%}.safetyEditorCard textarea{min-height:96px}.safetyEditorCard #safetyBuiltinPreview{min-height:170px}.safetyWordGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.safetyWordGrid .wide{grid-column:1/-1}.safetyWordGrid textarea{min-height:148px}.safetyEnableCard{padding:12px}.safetyEnableCard .sectionTitle{align-items:flex-start}.safetyEnableCard .groupList{max-height:210px}.safetyEnableCard select{width:100%}
 .groupTools{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.groupBox{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfdff}.groupList{max-height:260px;overflow:auto;margin-top:8px}.groupItem{display:flex;gap:8px;align-items:flex-start;padding:7px 3px;border-bottom:1px solid #eef2f7}.groupItem:last-child{border-bottom:0}.groupItem span{font-size:13px}.groupItem small{display:block;color:var(--muted)}
 .overviewList,.logList{display:grid;gap:8px}.infoLine,.logLine,.commandItem{border:1px solid #eef2f7;background:#fbfdff;border-radius:8px;padding:9px 10px}.infoLine b,.logLine b{display:block;margin-bottom:3px}.logLine{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}.commandGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.commandItem code{display:block;margin-top:5px;color:#0f172a}
-.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:12px;align-items:stretch}.dailyGrid.three{grid-template-columns:minmax(340px,.92fr) minmax(420px,1.18fr) minmax(320px,.9fr)}.dailyList{display:grid;gap:7px;max-height:330px;overflow:auto;padding-right:2px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:9px;display:grid;gap:7px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}.dailyFilters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.dailyFilters select,.dailyFilters input{min-width:150px}.dailyCommandBox textarea{min-height:86px}.dailyParamList{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.dailyParamList span{border:1px solid #e5e7eb;border-radius:999px;padding:2px 7px;background:#f8fafc}.dailyAccessCard{gap:10px}.dailyAccessCard .settingsFields{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dailyAccessLists{display:grid;grid-template-columns:1fr;gap:8px}.dailyAccessLists .groupBox{padding:9px}.dailyAccessLists .groupList{max-height:150px}.dailyAccessLists textarea{min-height:72px}
-.dailyTaskTarget{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px}.dailyFormatView{height:34px;display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#f8fafc;padding:0 10px;color:#475569;font-weight:650}
+.dailyGrid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:12px;align-items:stretch}.dailyGrid.three{grid-template-columns:minmax(280px,.85fr) minmax(320px,1.05fr) minmax(300px,1fr);align-items:start}.dailyGrid.dailyBottom{grid-template-columns:minmax(620px,1.35fr) minmax(320px,.65fr);align-items:start}.dailyList{display:grid;gap:7px;max-height:330px;overflow:auto;padding-right:2px}.dailyList.compact{max-height:255px}.dailyItem{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:9px;display:grid;gap:7px}.dailyItemHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.dailyItemHead b{display:block}.dailyItemMeta{font-size:12px;color:var(--muted);word-break:break-all}.dailyActions{display:flex;gap:8px;flex-wrap:wrap}.dailyActions button{height:30px;padding:0 10px}.dailyActions .primary{padding:0 12px}.dailyBadge{display:inline-flex;align-items:center;height:22px;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:0 8px;font-size:12px}.dailyBadge.readonly{border-color:#e5e7eb;background:#f8fafc;color:#64748b}.dailyFilters{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px;align-items:center;margin-bottom:8px}.dailyFilters select,.dailyFilters input{min-width:0;width:100%}.dailyCommandBox textarea{min-height:82px}.dailyParamList{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.dailyParamList span{border:1px solid #e5e7eb;border-radius:999px;padding:2px 7px;background:#f8fafc}.dailyAccessCard{gap:10px}.dailyAccessCard .settingsFields{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dailyAccessLists{display:grid;grid-template-columns:1fr;gap:8px}.dailyAccessLists .groupBox{padding:9px}.dailyAccessLists .groupList{max-height:132px}.dailyAccessLists textarea{min-height:64px}.dailyTaskCard .settingsFields{grid-template-columns:1fr 1fr 1.35fr 1.35fr;align-items:end}.dailyTaskCard .field{min-width:0}.dailyTaskCard .field.span2{grid-column:span 2}.dailyTaskActions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:2px}.dailyTaskActions .row{gap:8px}.dailySaveCard{position:sticky;top:76px}.dailySaveCard textarea{min-height:92px}.dailySaveActions{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.dailySaveActions button{height:38px}.dailyHint{border:1px solid #e8eef6;background:#fff;border-radius:8px;padding:9px 10px;color:#64748b;font-size:12px}
+.dailyTaskTarget{display:grid;grid-template-columns:88px minmax(0,1fr);gap:8px}.dailyFormatView{height:34px;display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#f8fafc;padding:0 10px;color:#475569;font-weight:650;white-space:nowrap}
 .logoWrap{display:grid;grid-template-columns:92px minmax(240px,1fr);gap:10px;align-items:center}.logoPreview{width:92px;height:42px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}.logoEmpty{width:92px;height:42px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px;color:var(--muted);background:#fafbfc;font-size:12px}.logoTools{display:grid;grid-template-columns:auto minmax(160px,1fr) auto;gap:8px;align-items:center}.logoTools input[type=text]{width:100%}
 .lastMsg{max-height:76px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;margin-bottom:0;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px}.lastMsg.expanded{max-height:220px;overflow:auto;display:block;-webkit-line-clamp:unset}
 .switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.15s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.15s;box-shadow:0 1px 3px #0002}.switch input:checked+.slider{background:var(--blue)}.switch input:checked+.slider:before{transform:translateX(18px)}
 .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.msg{min-height:20px;color:var(--muted)}.statusDot{display:inline-flex;align-items:center;gap:6px}.statusDot:before{content:"";width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px #dcfce7}
-@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.reviewGrid,.safetyGrid,.safetyEditorHead,.proxySummary,.cacheCard,.dailyGrid{grid-template-columns:1fr}.reviewCard,.reviewCard.tall{min-height:auto}.span2,.span4{grid-column:span 1}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
+@media(max-width:980px){header{height:auto;min-height:58px;padding:10px 14px;gap:10px;align-items:flex-start}header .toolbar{justify-content:flex-end}h1{font-size:18px}.app{display:block;min-height:calc(100vh - 58px)}.sidebar{position:sticky;top:58px;z-index:15;padding:8px 10px;border-right:0;border-bottom:1px solid rgba(148,163,184,.28);background:rgba(255,255,255,.86);backdrop-filter:blur(14px)}.brand{display:none}.nav{display:flex;flex-direction:row;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 2px 6px;scrollbar-width:thin}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,.68);border:1px solid rgba(203,213,225,.75)}.nav a.active{background:var(--blue);color:#fff;border-color:var(--blue)}.subnav{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}.subnav button{flex:0 0 auto}.pluginHead{display:block}.grid,.accessGrid,.groupTools,.logoWrap,.logoTools,.settingsGrid,.settingsFields,.dailyTaskCard .settingsFields,.reviewGrid,.safetyGrid,.safetyEditorHead,.proxySummary,.cacheCard,.dailyGrid{grid-template-columns:1fr}.reviewCard,.reviewCard.tall{min-height:auto}.span2,.span4,.dailyTaskCard .field.span2{grid-column:span 1}.dailyTaskActions,.dailySaveActions{display:flex;align-items:stretch;flex-direction:column}.dailySaveCard{position:static}.wrap{padding:14px}.hero{align-items:flex-start;flex-direction:column}.hero h2{font-size:24px}.toolbar .primary{height:34px;padding:0 12px}table{font-size:12px;display:block;overflow-x:auto}th,td{padding:8px}.panel{border-radius:9px;padding:14px}.metric b{font-size:24px}}
 </style>
 </head>
 <body>
@@ -1967,7 +1967,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <p class="muted" style="margin-bottom:0">沿用聊天内权限判断。</p>
 </div>
 <div class="panel span4 page" data-page="dailynews" id="dailynews">
-<div class="pluginHead"><div><div class="crumb">插件中心 / 60s 技能中心</div><div class="sectionTitle"><b>60s 技能中心</b><span class="muted">新闻、热榜、天气、查询和工具接口。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / 60s 技能中心</div><div class="sectionTitle"><b>60s 技能中心</b><span class="muted">新闻、热榜、天气、查询和工具接口。</span></div></div><div class="row"><button onclick="loadDailyNewsConfig(true)">刷新本页</button><button onclick="showPage('plugins')">返回插件中心</button></div></div>
 <div class="dailyGrid three">
 <div class="settingsCard dailyAccessCard">
 <div class="sectionTitle"><b>访问控制</b><span class="muted" id="dailyNewsMsg"></span></div>
@@ -1989,7 +1989,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsCard">
 <div class="sectionTitle"><b>技能列表</b><span class="muted">选择后编辑命令和定时。</span></div>
 <div class="dailyFilters"><select id="dailyCategoryFilter" onchange="renderDailySources()"></select><input id="dailySourceSearch" placeholder="搜索技能/命令" oninput="renderDailySources()"></div>
-<div id="dailySources" class="dailyList"></div>
+<div id="dailySources" class="dailyList compact"></div>
 </div>
 <div class="settingsCard">
 <div class="sectionTitle"><b>当前技能</b><span class="muted" id="dailySelectedMeta">选择一个技能。</span></div>
@@ -2008,9 +2008,9 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="row"><button onclick="addDailySource()">添加/更新接口</button><button onclick="clearDailySourceForm()">清空</button></div>
 </div>
 </div>
-<div class="dailyGrid" style="margin-top:14px">
-<div class="settingsCard">
-<div class="sectionTitle"><b>定时任务</b><span class="muted">任意技能都能定时推送。</span></div>
+<div class="dailyGrid dailyBottom" style="margin-top:14px">
+<div class="settingsCard dailyTaskCard">
+<div class="sectionTitle"><b>定时任务</b><span class="muted">编辑后保存，立即写入配置并生效。</span></div>
 <div class="settingsFields">
 <label class="field">任务ID <input id="dailyTaskID" placeholder="morning"></label>
 <label class="field">接口 <select id="dailyTaskSource" onchange="updateDailyTaskFormat()"></select></label>
@@ -2019,13 +2019,14 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">发送格式 <span id="dailyTaskFormatView" class="dailyFormatView">随接口</span><input id="dailyTaskFormat" type="hidden" value="image"></label>
 <label class="field">启用 <span class="row"><label class="switch"><input id="dailyTaskEnabled" type="checkbox" checked><span class="slider"></span></label></span></label>
 </div>
-<div class="row"><button onclick="addDailyTask()">添加/更新任务</button><button onclick="clearDailyTaskForm()">清空</button></div>
-<div id="dailyTasks" class="dailyList" style="margin-top:12px"></div>
+<div class="dailyTaskActions"><span class="dailyHint">编辑已有任务会填入上方表单；保存后按任务 ID 覆盖。</span><span class="row"><button class="primary" onclick="saveDailyTask()">保存任务并生效</button><button onclick="clearDailyTaskForm()">清空</button></span></div>
+<div id="dailyTasks" class="dailyList" style="margin-top:10px"></div>
 </div>
-<div class="settingsCard">
-<div class="sectionTitle"><b>旧命令</b><span class="muted">不带技能名时使用兜底接口。</span></div>
+<div class="settingsCard dailySaveCard">
+<div class="sectionTitle"><b>全局保存</b><span class="muted">保存访问控制、技能命令和自定义接口。</span></div>
 <label class="field">兼容命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
-<div class="row"><button class="primary" onclick="saveDailyNews()">保存 60s 配置</button><button onclick="testDailyNews()">测试提示</button></div>
+<div class="dailySaveActions"><button class="primary" onclick="saveDailyNews()">保存全部配置</button><button onclick="testDailyNews()">怎么测试</button></div>
+<div class="dailyHint">任务卡片可单独保存；其它开关、名单和命令在这里统一保存。</div>
 </div>
 </div>
 </div>
@@ -2597,8 +2598,8 @@ function dailyCronLooksOK(expr){
  const parts=String(expr||'').trim().split(/\s+/);
  return parts.length===5 && parts.every(x=>/^[\d*,/?-]+$/.test(x));
 }
-function deleteDailyTask(id){dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==id); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已删除，记得保存'}
-function toggleDailyTask(id){const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(t){t.enabled=!t.enabled; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已切换，记得保存'}}
+function deleteDailyTask(id){dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==id); renderDailyNewsSettings(); saveDailyNews('定时任务已删除并生效')}
+function toggleDailyTask(id){const t=(dailyNewsCfg.schedules||[]).find(x=>x.id===id); if(t){t.enabled=!t.enabled; renderDailyNewsSettings(); saveDailyNews('定时任务开关已保存')}}
 function renderDailyTasks(){
  const list=(dailyNewsCfg.schedules||[]).slice().sort((a,b)=>dailyTaskCron(a).localeCompare(dailyTaskCron(b))||String(a.id).localeCompare(String(b.id)));
  $('dailyTasks').innerHTML=list.map(t=>{
@@ -2618,21 +2619,34 @@ function addDailyTask(){
  updateDailyTaskFormat();
  const cron=String($('dailyTaskCron').value||'').trim();
  const task={id:String($('dailyTaskID').value||'').trim(),source_id:$('dailyTaskSource').value||dailyNewsCfg.default_source||'60s',target:buildDailyTaskTarget(),time:'',cron:cron,format:$('dailyTaskFormat').value||'image',enabled:!!$('dailyTaskEnabled').checked};
- if(!task.id||!task.target||!task.cron){$('dailyNewsMsg').textContent='任务 ID、目标和 Cron 必填';return}
- if(!dailyCronLooksOK(task.cron)){$('dailyNewsMsg').textContent='Cron 需要 5 段，例如 30 8 * * *';return}
+ if(!task.id||!task.target||!task.cron){$('dailyNewsMsg').textContent='任务 ID、目标和 Cron 必填';return false}
+ if(!dailyCronLooksOK(task.cron)){$('dailyNewsMsg').textContent='Cron 需要 5 段，例如 30 8 * * *';return false}
  dailyNewsCfg.schedules=(dailyNewsCfg.schedules||[]).filter(x=>x.id!==task.id);
  dailyNewsCfg.schedules.push(task);
  clearDailyTaskForm(); renderDailyNewsSettings(); $('dailyNewsMsg').textContent='定时任务已加入，记得保存';
+ return true;
 }
-async function saveDailyNews(){
+async function saveDailyTask(){
+ if(addDailyTask()) await saveDailyNews('定时任务已保存并生效', true);
+}
+async function saveDailyNews(doneText, reloadAfter){
  collectDailyNews();
  $('dailyNewsMsg').textContent='保存中...';
  const r=await apiFetch('/api/dailynews/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dailyNewsCfg)});
  if(!r.ok){$('dailyNewsMsg').textContent='保存失败：'+await r.text(); return}
- const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='已保存，已立即生效';
+ const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent=doneText||'已保存，已立即生效';
+ if(reloadAfter) await loadDailyNewsConfig(false, doneText||'已保存，已立即生效');
+}
+async function loadDailyNewsConfig(showMsg, doneText){
+ if(showMsg) $('dailyNewsMsg').textContent='刷新中...';
+ const dailyData=await (await apiFetch('/api/dailynews/config')).json();
+ dailyNewsCfg=(dailyData&&dailyData.config)||dailyNewsCfg||{};
+ renderDailyNewsSettings();
+ showPage('dailynews');
+ $('dailyNewsMsg').textContent=doneText||'已刷新';
 }
 async function testDailyNews(){
- $('dailyNewsMsg').textContent='测试请在聊天里发送监听命令，或保存后等待定时任务';
+ $('dailyNewsMsg').textContent='测试：聊天里发监听命令；定时任务按 Cron 自动发送。';
 }
 function collectCookieCloudSettings(){
  if(!$('cookieCloudServer')) return;

@@ -1,6 +1,7 @@
 package dailynews
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -97,5 +98,23 @@ func TestFormatJSONNewsUnwrapsAPIDataNews(t *testing.T) {
 	want := "2026-06-08 星期一 四月廿三\n1. 第一条\n2. 第二条\n\n每日一句"
 	if got != want {
 		t.Fatalf("formatJSONNews = %q, want %q", got, want)
+	}
+}
+
+func TestRenderMessageUsesBase64Image(t *testing.T) {
+	data := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+	msg, err := renderMessage(data, "image/png", newsSource{ID: "60s-image-proxy"}, "image")
+	if err != nil {
+		t.Fatalf("renderMessage returned error: %v", err)
+	}
+	if len(msg) != 1 || msg[0].Type != "image" {
+		t.Fatalf("message = %#v, want one image segment", msg)
+	}
+	file := msg[0].Data["file"]
+	if !strings.HasPrefix(file, "base64://") {
+		t.Fatalf("image file = %q, want base64 data", file)
+	}
+	if strings.HasPrefix(file, "file:///") {
+		t.Fatalf("image file should not use local path: %q", file)
 	}
 }

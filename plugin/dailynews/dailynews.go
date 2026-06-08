@@ -116,7 +116,6 @@ var (
 	})
 
 	cfgPath       string
-	cacheDir      string
 	cfgMu         sync.RWMutex
 	cfg           newsConfig
 	schedulerOnce sync.Once
@@ -125,8 +124,6 @@ var (
 
 func init() {
 	cfgPath = filepath.Join(engine.DataFolder(), "config.json")
-	cacheDir = filepath.Join(engine.DataFolder(), "cache")
-	_ = os.MkdirAll(cacheDir, 0755)
 	loadConfig()
 	startScheduler()
 	logrus.Info("[dailynews] ready")
@@ -764,11 +761,7 @@ func formatFromEncoding(encoding string) string {
 
 func renderMessage(data []byte, contentType string, src newsSource, format string) (message.Message, error) {
 	if format == "image" || strings.Contains(contentType, "image/") || looksLikeImage(data) {
-		path, err := saveImage(data, src.ID)
-		if err != nil {
-			return nil, err
-		}
-		return message.Message{message.Image("file:///" + filepath.ToSlash(path))}, nil
+		return message.Message{message.ImageBytes(data)}, nil
 	}
 	if format == "json" || strings.Contains(contentType, "application/json") || json.Valid(data) {
 		text := formatJSONNews(data)
@@ -996,19 +989,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func saveImage(data []byte, sourceID string) (string, error) {
-	ext := ".png"
-	if len(data) > 2 && data[0] == 0xff && data[1] == 0xd8 {
-		ext = ".jpg"
-	}
-	name := fmt.Sprintf("%s_%d%s", sanitizeID(sourceID), time.Now().UnixNano(), ext)
-	path := filepath.Join(cacheDir, name)
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 func looksLikeImage(data []byte) bool {
