@@ -82,3 +82,20 @@ func TestNormalizeConfigDeduplicatesSchedulesByID(t *testing.T) {
 		t.Fatalf("schedule = %+v, want last task to win", task)
 	}
 }
+
+func TestFormatJSONNewsUnwrapsAPIDataText(t *testing.T) {
+	data := []byte(`{"code":200,"message":"获取成功。平台公告不应展示。","data":{"index":148,"duanzi":"真正的段子正文"}}`)
+	got := formatJSONNews(data)
+	if got != "真正的段子正文" {
+		t.Fatalf("formatJSONNews = %q, want duanzi text", got)
+	}
+}
+
+func TestFormatJSONNewsUnwrapsAPIDataNews(t *testing.T) {
+	data := []byte(`{"code":200,"message":"获取成功。平台公告不应展示。","data":{"date":"2026-06-08","day_of_week":"星期一","lunar_date":"四月廿三","news":["第一条","第二条"],"tip":"每日一句"}}`)
+	got := formatJSONNews(data)
+	want := "2026-06-08 星期一 四月廿三\n1. 第一条\n2. 第二条\n\n每日一句"
+	if got != want {
+		t.Fatalf("formatJSONNews = %q, want %q", got, want)
+	}
+}

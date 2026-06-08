@@ -782,37 +782,87 @@ func renderMessage(data []byte, contentType string, src newsSource, format strin
 }
 
 func formatJSONNews(data []byte) string {
-	var resp newsAPIResponse
-	if err := json.Unmarshal(data, &resp); err != nil || len(resp.News) == 0 {
-		return formatGenericJSON(data)
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return strings.TrimSpace(string(data))
+	}
+	if text, ok := formatKnownJSONPayload(v); ok {
+		return text
+	}
+	return formatGenericJSONValue(unwrapAPIData(v))
+}
+
+func formatKnownJSONPayload(v any) (string, bool) {
+	if m, ok := v.(map[string]any); ok {
+		if data, ok := m["data"]; ok {
+			if text, ok := formatKnownJSONPayload(data); ok {
+				return text, true
+			}
+		}
+		if text, ok := formatDailyNewsMap(m); ok {
+			return text, true
+		}
+		if text := firstJSONText(m, "duanzi", "joke", "hitokoto", "content", "text", "saying", "sentence", "answer", "result"); text != "" {
+			return text, true
+		}
+	}
+	return "", false
+}
+
+func formatDailyNewsMap(m map[string]any) (string, bool) {
+	items := jsonNewsItems(m["news"])
+	if len(items) == 0 {
+		return "", false
 	}
 	var b strings.Builder
-	if resp.Date != "" {
-		b.WriteString(resp.Date)
-		if resp.Day != "" {
+	if date := valueToText(m["date"]); date != "" {
+		b.WriteString(date)
+		if day := firstNonEmpty(valueToText(m["day_of_week"]), valueToText(m["day"])); day != "" {
 			b.WriteString(" ")
-			b.WriteString(resp.Day)
+			b.WriteString(day)
 		}
-		if resp.LunarDate != "" {
+		if lunar := valueToText(m["lunar_date"]); lunar != "" {
 			b.WriteString(" ")
-			b.WriteString(resp.LunarDate)
+			b.WriteString(lunar)
 		}
 		b.WriteString("\n")
 	}
-	for i, item := range resp.News {
-		if strings.TrimSpace(item.Title) == "" {
-			continue
-		}
+	for i, item := range items {
 		b.WriteString(strconv.Itoa(i + 1))
 		b.WriteString(". ")
-		b.WriteString(strings.TrimSpace(item.Title))
+		b.WriteString(item)
 		b.WriteString("\n")
 	}
-	if resp.Tip != "" {
+	if tip := valueToText(m["tip"]); tip != "" {
 		b.WriteString("\n")
-		b.WriteString(resp.Tip)
+		b.WriteString(tip)
 	}
-	return strings.TrimSpace(b.String())
+	return strings.TrimSpace(b.String()), true
+}
+
+func jsonNewsItems(v any) []string {
+	items, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		switch x := item.(type) {
+		case string:
+			if text := strings.TrimSpace(x); text != "" {
+				out = append(out, text)
+			}
+		case map[string]any:
+			if text := firstJSONText(x, "title", "name", "content", "text"); text != "" {
+				out = append(out, text)
+			}
+		default:
+			if text := valueToText(item); text != "" {
+				out = append(out, text)
+			}
+		}
+	}
+	return out
 }
 
 func formatGenericJSON(data []byte) string {
@@ -820,10 +870,15 @@ func formatGenericJSON(data []byte) string {
 	if err := json.Unmarshal(data, &v); err != nil {
 		return strings.TrimSpace(string(data))
 	}
+	return formatGenericJSONValue(unwrapAPIData(v))
+}
+
+func formatGenericJSONValue(v any) string {
 	lines := make([]string, 0, 24)
 	collectJSONLines("", v, &lines, 0)
 	if len(lines) == 0 {
-		return strings.TrimSpace(string(data))
+		raw, _ := json.Marshal(v)
+		return strings.TrimSpace(string(raw))
 	}
 	if len(lines) > 24 {
 		lines = lines[:24]
@@ -832,17 +887,26 @@ func formatGenericJSON(data []byte) string {
 	return strings.Join(lines, "\n")
 }
 
+func unwrapAPIData(v any) any {
+	if m, ok := v.(map[string]any); ok {
+		if data, ok := m["data"]; ok {
+			return data
+		}
+	}
+	return v
+}
+
 func collectJSONLines(prefix string, v any, lines *[]string, depth int) {
 	if len(*lines) >= 24 || depth > 3 {
 		return
 	}
 	switch x := v.(type) {
 	case map[string]any:
-		if title := firstJSONText(x, "title", "name", "hitokoto", "content", "text", "location", "date"); title != "" && prefix == "" {
+		if title := firstJSONText(x, "title", "name", "duanzi", "joke", "hitokoto", "content", "text", "location", "date"); title != "" && prefix == "" {
 			*lines = append(*lines, title)
 		}
-		if arr, ok := x["data"].([]any); ok {
-			collectJSONLines(prefix, arr, lines, depth+1)
+		if data, ok := x["data"]; ok {
+			collectJSONLines(prefix, data, lines, depth+1)
 			return
 		}
 		for _, key := range []string{"result", "summary", "weather", "temperature", "humidity", "wind", "air_quality", "tip", "url", "update_time", "updated"} {
