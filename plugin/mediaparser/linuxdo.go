@@ -879,6 +879,7 @@ func linuxdoCleanCooked(cooked string) string {
 	s = regexp.MustCompile(`(?is)<blockquote\b[^>]*>`).ReplaceAllString(s, "\n引用：")
 	s = regexp.MustCompile(`(?is)</(?:p|div|li|blockquote|h[1-6])>`).ReplaceAllString(s, "\n")
 	s = regexp.MustCompile(`(?is)<br\s*/?>`).ReplaceAllString(s, "\n")
+	s = linuxdoReplaceEmojiImages(s)
 	s = regexp.MustCompile(`(?is)<img\b[^>]*>`).ReplaceAllString(s, "\n[图片]\n")
 	s = regexp.MustCompile(`(?is)<[^>]+>`).ReplaceAllString(s, "")
 	s = html.UnescapeString(htmlUnescape(s))
@@ -886,6 +887,70 @@ func linuxdoCleanCooked(cooked string) string {
 	s = regexp.MustCompile(`\n{3,}`).ReplaceAllString(s, "\n\n")
 	s = linuxdoStripPromotionDeclarations(s)
 	return strings.TrimSpace(s)
+}
+
+func linuxdoReplaceEmojiImages(s string) string {
+	return regexp.MustCompile(`(?is)<img\b[^>]*>`).ReplaceAllStringFunc(s, func(tag string) string {
+		if !linuxdoImageTagLooksEmoji(tag) {
+			return tag
+		}
+		text := linuxdoEmojiTextFromTag(tag)
+		if text == "" {
+			return ""
+		}
+		return " " + text + " "
+	})
+}
+
+func linuxdoImageTagLooksEmoji(tag string) bool {
+	lower := strings.ToLower(tag)
+	if strings.Contains(lower, "twemoji") || strings.Contains(lower, "/emoji/") || strings.Contains(lower, "/images/emoji/") {
+		return true
+	}
+	class := strings.ToLower(linuxdoTagAttr(tag, "class"))
+	if regexp.MustCompile(`(^|\s)emoji(\s|$)`).MatchString(class) {
+		return true
+	}
+	return linuxdoTagAttr(tag, "data-emoji-name") != ""
+}
+
+func linuxdoEmojiTextFromTag(tag string) string {
+	for _, name := range []string{"alt", "title", "data-emoji-name"} {
+		text := strings.TrimSpace(html.UnescapeString(htmlUnescape(linuxdoTagAttr(tag, name))))
+		if text == "" {
+			continue
+		}
+		return linuxdoNormalizeEmojiText(text)
+	}
+	return ""
+}
+
+func linuxdoNormalizeEmojiText(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	if strings.HasPrefix(text, ":") && strings.HasSuffix(text, ":") {
+		return text
+	}
+	if regexp.MustCompile(`^[A-Za-z0-9_+\-]+$`).MatchString(text) {
+		return ":" + text + ":"
+	}
+	return text
+}
+
+func linuxdoTagAttr(tag, name string) string {
+	re := regexp.MustCompile(`(?is)\b` + regexp.QuoteMeta(name) + `\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+	m := re.FindStringSubmatch(tag)
+	if len(m) == 0 {
+		return ""
+	}
+	for i := 1; i < len(m); i++ {
+		if m[i] != "" {
+			return m[i]
+		}
+	}
+	return ""
 }
 
 func linuxdoStripPromotionDeclarations(s string) string {

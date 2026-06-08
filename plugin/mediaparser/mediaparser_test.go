@@ -578,6 +578,22 @@ func TestLinuxdoCleanCookedStripsPromotionDeclaration(t *testing.T) {
 	}
 }
 
+func TestLinuxdoCleanCookedKeepsEmojiImagesAsText(t *testing.T) {
+	cooked := `<p>hello <img class="emoji" title="smile" alt="🙂" src="/images/emoji/twitter/smile.png?v=12"> world</p>
+<p>custom <img class="emoji custom" title="linuxdo" src="/uploads/default/original/1X/custom.png"></p>
+<p><img src="/uploads/default/original/1X/post.png"></p>`
+	got := linuxdoCleanCooked(cooked)
+	if !strings.Contains(got, "hello 🙂 world") {
+		t.Fatalf("unicode emoji was not kept: %q", got)
+	}
+	if !strings.Contains(got, "custom :linuxdo:") {
+		t.Fatalf("custom emoji shortcode was not kept: %q", got)
+	}
+	if strings.Count(got, "[图片]") != 1 {
+		t.Fatalf("expected only the real content image placeholder, got %q", got)
+	}
+}
+
 func TestLinuxdoBodyLinesKeepsLongBody(t *testing.T) {
 	body := strings.Repeat("Linux.do full body line with enough words to wrap.\n", 40)
 	lines := linuxdoBodyLines(nil, body, 620)
