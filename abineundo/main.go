@@ -159,6 +159,14 @@ func init() {
 		logrus.Debugln("[ab] set low plugin", name, "prio to", m[name])
 		i++
 	}
+	if _, ok := m["dailynews"]; !ok {
+		i++
+		m["dailynews"] = uint64(i) * 10
+	}
+	if _, ok := m["mediaparser"]; !ok {
+		i++
+		m["mediaparser"] = uint64(i) * 10
+	}
 
 	control.LoadCustomPriority(m)
 }
