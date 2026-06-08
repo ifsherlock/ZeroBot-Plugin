@@ -116,6 +116,7 @@ var (
 	})
 
 	cfgPath       string
+	cacheDir      string
 	cfgMu         sync.RWMutex
 	cfg           newsConfig
 	schedulerOnce sync.Once
@@ -124,6 +125,10 @@ var (
 
 func init() {
 	cfgPath = filepath.Join(engine.DataFolder(), "config.json")
+	cacheDir = dailyNewsCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		logrus.Warnf("[dailynews] create cache dir failed: %v", err)
+	}
 	loadConfig()
 	startScheduler()
 	logrus.Info("[dailynews] ready")
@@ -761,7 +766,11 @@ func formatFromEncoding(encoding string) string {
 
 func renderMessage(data []byte, contentType string, src newsSource, format string) (message.Message, error) {
 	if format == "image" || strings.Contains(contentType, "image/") || looksLikeImage(data) {
-		return message.Message{message.ImageBytes(data)}, nil
+		path, err := saveImage(data, src.ID, contentType)
+		if err != nil {
+			return nil, err
+		}
+		return message.Message{message.Image(dailyNewsLocalMediaTarget(path))}, nil
 	}
 	if format == "json" || strings.Contains(contentType, "application/json") || json.Valid(data) {
 		text := formatJSONNews(data)
@@ -772,6 +781,117 @@ func renderMessage(data []byte, contentType string, src newsSource, format strin
 		return nil, errors.New("接口返回为空")
 	}
 	return message.Message{message.Text(text)}, nil
+}
+
+func saveImage(data []byte, sourceID, contentType string) (string, error) {
+	if cacheDir == "" {
+		cacheDir = dailyNewsCacheDir()
+	}
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return "", err
+	}
+	id := sanitizeID(firstNonEmpty(sourceID, "image"))
+	name := fmt.Sprintf("%s_%d%s", id, time.Now().UnixNano(), imageExt(contentType, data))
+	path := filepath.Join(cacheDir, name)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func imageExt(contentType string, data []byte) string {
+	ct := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	switch ct {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	}
+	if len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+		return ".webp"
+	}
+	if len(data) >= 6 && (string(data[:6]) == "GIF87a" || string(data[:6]) == "GIF89a") {
+		return ".gif"
+	}
+	if len(data) >= 2 && data[0] == 0xff && data[1] == 0xd8 {
+		return ".jpg"
+	}
+	return ".png"
+}
+
+func dailyNewsCacheDir() string {
+	return filepath.Join(filepath.Dir(engine.DataFolder()), "mediaparser", "cache", "dailynews")
+}
+
+func dailyNewsLocalMediaTarget(path string) string {
+	if target := dailyNewsMappedFileURI(path); target != "" {
+		return target
+	}
+	return dailyNewsFileURI(path)
+}
+
+func dailyNewsMappedFileURI(path string) string {
+	target := dailyNewsMappedLocalPath(path)
+	if target == "" {
+		return ""
+	}
+	return dailyNewsFileURI(target)
+}
+
+func dailyNewsMappedLocalPath(path string) string {
+	dataDir := dailyNewsOneBotDataDir()
+	if dataDir == "" {
+		return ""
+	}
+	localAbs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	appDataAbs, err := filepath.Abs(dailyNewsAppDataRoot())
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(appDataAbs, localAbs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return ""
+	}
+	return filepath.Join(dataDir, rel)
+}
+
+func dailyNewsAppDataRoot() string {
+	if cacheDir != "" {
+		return filepath.Clean(filepath.Join(cacheDir, "..", "..", ".."))
+	}
+	return filepath.Dir(engine.DataFolder())
+}
+
+func dailyNewsOneBotDataDir() string {
+	b, err := os.ReadFile(filepath.Join(dailyNewsAppDataRoot(), "mediaparser", "system.json"))
+	if err != nil {
+		return ""
+	}
+	var sys struct {
+		OneBotDataDir string `json:"onebot_data_dir,omitempty"`
+	}
+	if err := json.Unmarshal(b, &sys); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(sys.OneBotDataDir)
+}
+
+func dailyNewsFileURI(path string) string {
+	if slashPath := filepath.ToSlash(path); strings.HasPrefix(slashPath, "/") && !strings.HasPrefix(slashPath, "//") {
+		return "file://" + slashPath
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	return "file:///" + strings.TrimPrefix(filepath.ToSlash(abs), "/")
 }
 
 func formatJSONNews(data []byte) string {

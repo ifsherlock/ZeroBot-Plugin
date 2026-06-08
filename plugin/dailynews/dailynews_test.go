@@ -1,6 +1,8 @@
 package dailynews
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -101,7 +103,18 @@ func TestFormatJSONNewsUnwrapsAPIDataNews(t *testing.T) {
 	}
 }
 
-func TestRenderMessageUsesBase64Image(t *testing.T) {
+func TestRenderMessageUsesMappedFileURI(t *testing.T) {
+	oldCacheDir := cacheDir
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	cacheDir = filepath.Join(dataRoot, "mediaparser", "cache", "dailynews")
+	t.Cleanup(func() { cacheDir = oldCacheDir })
+	if err := os.MkdirAll(filepath.Join(dataRoot, "mediaparser"), 0755); err != nil {
+		t.Fatalf("mkdir mediaparser data: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataRoot, "mediaparser", "system.json"), []byte(`{"onebot_data_dir":"/host/data"}`), 0644); err != nil {
+		t.Fatalf("write system json: %v", err)
+	}
+
 	data := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 	msg, err := renderMessage(data, "image/png", newsSource{ID: "60s-image-proxy"}, "image")
 	if err != nil {
@@ -111,10 +124,18 @@ func TestRenderMessageUsesBase64Image(t *testing.T) {
 		t.Fatalf("message = %#v, want one image segment", msg)
 	}
 	file := msg[0].Data["file"]
-	if !strings.HasPrefix(file, "base64://") {
-		t.Fatalf("image file = %q, want base64 data", file)
+	wantPrefix := "file:///host/data/mediaparser/cache/dailynews/60s-image-proxy_"
+	if !strings.HasPrefix(filepath.ToSlash(file), wantPrefix) {
+		t.Fatalf("image file = %q, want prefix %q", file, wantPrefix)
 	}
-	if strings.HasPrefix(file, "file:///") {
-		t.Fatalf("image file should not use local path: %q", file)
+	if strings.HasPrefix(file, "base64://") {
+		t.Fatalf("image file should use mapped local path, got %q", file)
+	}
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("read cache dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("saved files = %d, want 1", len(entries))
 	}
 }
