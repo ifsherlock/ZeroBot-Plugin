@@ -598,6 +598,34 @@ func TestLinuxdoCleanCookedKeepsEmojiImagesAsText(t *testing.T) {
 	}
 }
 
+func TestLinuxdoCleanCookedKeepsPollResultsWithoutVoters(t *testing.T) {
+	cooked := `<p>星光组：特别特别有希望拿满分的模型</p>
+<div data-poll-name="starlight" data-poll-type="multiple" class="poll-outer"><div class="poll">
+  <div class="poll-container">
+    <ul class="results">
+      <li><div class="option"><p><span class="percentage">83%</span><span class="option-text">OpenAI - GPT 5.5</span></p><div class="poll-voters"><ul><li><img class="avatar" src="https://cdn.ldstatic.com/user_avatar/linux.do/a/48/1.png"></li></ul></div></div></li>
+      <li><div class="option"><p><span class="percentage">32%</span><span class="option-text">Anthropic - Claude 4.8 Opus</span></p><div class="poll-voters"><ul><li><img class="avatar" src="https://cdn.ldstatic.com/user_avatar/linux.do/b/48/2.png"></li></ul></div></div></li>
+    </ul>
+    <div class="poll-info"><span class="info-number">703</span><span class="info-label">投票人</span><span class="info-number">1394</span><span class="info-label">总票数</span></div>
+  </div>
+</div></div>`
+	got := linuxdoCleanCooked(cooked)
+	for _, want := range []string{
+		"星光组",
+		"投票结果：",
+		"83% OpenAI - GPT 5.5",
+		"32% Anthropic - Claude 4.8 Opus",
+		"703 投票人 / 1394 总票数",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("poll result missing %q in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "[图片]") || strings.Contains(got, "user_avatar") {
+		t.Fatalf("poll voters leaked into cleaned text: %q", got)
+	}
+}
+
 func TestLinuxdoBodyLinesKeepsLongBody(t *testing.T) {
 	body := strings.Repeat("Linux.do full body line with enough words to wrap.\n", 40)
 	lines := linuxdoBodyLines(nil, body, 620)

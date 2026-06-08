@@ -875,6 +875,7 @@ func linuxdoCleanCooked(cooked string) string {
 	s := cooked
 	s = regexp.MustCompile(`(?is)<script\b.*?</script>`).ReplaceAllString(s, "")
 	s = regexp.MustCompile(`(?is)<style\b.*?</style>`).ReplaceAllString(s, "")
+	s = linuxdoReplacePolls(s)
 	s = regexp.MustCompile(`(?is)<pre\b[^>]*>.*?</pre>`).ReplaceAllString(s, "\n[代码块]\n")
 	s = regexp.MustCompile(`(?is)<blockquote\b[^>]*>`).ReplaceAllString(s, "\n引用：")
 	s = regexp.MustCompile(`(?is)</(?:p|div|li|blockquote|h[1-6])>`).ReplaceAllString(s, "\n")
@@ -886,6 +887,93 @@ func linuxdoCleanCooked(cooked string) string {
 	s = regexp.MustCompile(`[ \t\r\f\v]+`).ReplaceAllString(s, " ")
 	s = regexp.MustCompile(`\n{3,}`).ReplaceAllString(s, "\n\n")
 	s = linuxdoStripPromotionDeclarations(s)
+	return strings.TrimSpace(s)
+}
+
+func linuxdoReplacePolls(s string) string {
+	startRe := regexp.MustCompile(`(?is)<div\b[^>]*\bdata-poll-name\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>`)
+	var b strings.Builder
+	pos := 0
+	for {
+		loc := startRe.FindStringIndex(s[pos:])
+		if loc == nil {
+			b.WriteString(s[pos:])
+			break
+		}
+		start := pos + loc[0]
+		end, ok := linuxdoBalancedDivEnd(s, start)
+		if !ok {
+			b.WriteString(s[pos:])
+			break
+		}
+		b.WriteString(s[pos:start])
+		if summary := linuxdoPollSummary(s[start:end]); summary != "" {
+			b.WriteString("\n")
+			b.WriteString(summary)
+			b.WriteString("\n")
+		}
+		pos = end
+	}
+	return b.String()
+}
+
+func linuxdoBalancedDivEnd(s string, start int) (int, bool) {
+	if start < 0 || start >= len(s) {
+		return 0, false
+	}
+	tagRe := regexp.MustCompile(`(?is)</?div\b[^>]*>`)
+	depth := 0
+	for _, loc := range tagRe.FindAllStringIndex(s[start:], -1) {
+		tag := s[start+loc[0] : start+loc[1]]
+		if strings.HasPrefix(strings.ToLower(tag), "</div") {
+			depth--
+		} else {
+			depth++
+		}
+		if depth == 0 {
+			return start + loc[1], true
+		}
+	}
+	return 0, false
+}
+
+func linuxdoPollSummary(block string) string {
+	optionRe := regexp.MustCompile(`(?is)<span\b[^>]*class\s*=\s*(?:"[^"]*\bpercentage\b[^"]*"|'[^']*\bpercentage\b[^']*')[^>]*>(.*?)</span>\s*<span\b[^>]*class\s*=\s*(?:"[^"]*\boption-text\b[^"]*"|'[^']*\boption-text\b[^']*')[^>]*>(.*?)</span>`)
+	var lines []string
+	for _, m := range optionRe.FindAllStringSubmatch(block, -1) {
+		percent := linuxdoCleanInlineText(m[1])
+		option := linuxdoCleanInlineText(m[2])
+		if percent == "" || option == "" {
+			continue
+		}
+		lines = append(lines, percent+" "+option)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	countRe := regexp.MustCompile(`(?is)<span\b[^>]*class\s*=\s*(?:"[^"]*\binfo-number\b[^"]*"|'[^']*\binfo-number\b[^']*')[^>]*>(.*?)</span>\s*<span\b[^>]*class\s*=\s*(?:"[^"]*\binfo-label\b[^"]*"|'[^']*\binfo-label\b[^']*')[^>]*>(.*?)</span>`)
+	var counts []string
+	for _, m := range countRe.FindAllStringSubmatch(block, -1) {
+		number := linuxdoCleanInlineText(m[1])
+		label := linuxdoCleanInlineText(m[2])
+		if number != "" && label != "" {
+			counts = append(counts, number+" "+label)
+		}
+	}
+	out := []string{"投票结果："}
+	out = append(out, lines...)
+	if len(counts) > 0 {
+		out = append(out, strings.Join(counts, " / "))
+	}
+	return strings.Join(out, "\n")
+}
+
+func linuxdoCleanInlineText(s string) string {
+	s = linuxdoReplaceEmojiImages(s)
+	s = regexp.MustCompile(`(?is)<[^>]+>`).ReplaceAllString(s, "")
+	s = html.UnescapeString(htmlUnescape(s))
+	s = strings.ReplaceAll(s, "\u200b", "")
+	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
 	return strings.TrimSpace(s)
 }
 
