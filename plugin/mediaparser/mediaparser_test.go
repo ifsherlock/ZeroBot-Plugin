@@ -126,6 +126,104 @@ func TestQQBotCQImagePartsUsesOfficialMediaAttachment(t *testing.T) {
 	}
 }
 
+func TestQQBotRichMediaEnabledRespectsMediaSwitches(t *testing.T) {
+	oldSystem := runtimeSystem
+	defer SetRuntimeSystemSettings(oldSystem)
+
+	base := defaultConfig()
+	platform := "weibo"
+	base.SendMedia = true
+	base.DownloadVideo = true
+	base.PlatformSendMedia[platform] = true
+	base.PlatformDownload[platform] = true
+	base.OutputMode[platform] = outputAll
+
+	cases := []struct {
+		name     string
+		system   SystemSettings
+		mutate   func(*config)
+		expected bool
+	}{
+		{
+			name:     "all switches on",
+			system:   SystemSettings{QQBotMediaEnabled: true},
+			expected: true,
+		},
+		{
+			name:   "qqbot media off",
+			system: SystemSettings{QQBotMediaEnabled: false},
+			mutate: func(cfg *config) {},
+		},
+		{
+			name:   "send media off",
+			system: SystemSettings{QQBotMediaEnabled: true},
+			mutate: func(cfg *config) {
+				cfg.SendMedia = false
+			},
+		},
+		{
+			name:   "download off",
+			system: SystemSettings{QQBotMediaEnabled: true},
+			mutate: func(cfg *config) {
+				cfg.DownloadVideo = false
+			},
+		},
+		{
+			name:   "platform send media off",
+			system: SystemSettings{QQBotMediaEnabled: true},
+			mutate: func(cfg *config) {
+				cfg.PlatformSendMedia[platform] = false
+			},
+		},
+		{
+			name:   "platform download off",
+			system: SystemSettings{QQBotMediaEnabled: true},
+			mutate: func(cfg *config) {
+				cfg.PlatformDownload[platform] = false
+			},
+		},
+		{
+			name:   "text only output",
+			system: SystemSettings{QQBotMediaEnabled: true},
+			mutate: func(cfg *config) {
+				cfg.OutputMode[platform] = outputTextOnly
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			cfg.PlatformSendMedia = cloneBoolMapForTest(base.PlatformSendMedia)
+			cfg.PlatformDownload = cloneBoolMapForTest(base.PlatformDownload)
+			cfg.OutputMode = cloneStringMapForTest(base.OutputMode)
+			if tc.mutate != nil {
+				tc.mutate(&cfg)
+			}
+			SetRuntimeSystemSettings(tc.system)
+			if got := qqBotRichMediaEnabled(cfg, platform); got != tc.expected {
+				t.Fatalf("qqBotRichMediaEnabled() = %v, want %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func cloneBoolMapForTest(src map[string]bool) map[string]bool {
+	dst := make(map[string]bool, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func cloneStringMapForTest(src map[string]string) map[string]string {
+	dst := make(map[string]string, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
 func TestLiveUserLinks(t *testing.T) {
 	if os.Getenv("MEDIAPARSER_LIVE") == "" {
 		t.Skip("set MEDIAPARSER_LIVE=1 to hit live platforms")
@@ -600,6 +698,49 @@ func TestRenderLinuxdoShareCard(t *testing.T) {
 		Timestamp: "2026-06-03 12:34:56",
 		Desc:      "这是主帖内容。\n第二行摘要。",
 		ImageURLs: [][]string{{imgSrv.URL + "/post.png"}},
+	}
+	out, err := renderInfoCard(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("card not saved: %v", err)
+	}
+}
+
+func TestRenderTwitterArticleCard(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
+	img := image.NewRGBA(image.Rect(0, 0, 640, 320))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 12, G: 18, B: 28, A: 255}}, image.Point{}, draw.Src)
+	imgSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		if err := png.Encode(w, img); err != nil {
+			t.Errorf("encode image: %v", err)
+		}
+	}))
+	defer imgSrv.Close()
+
+	meta := mediaMeta{
+		URL:            "https://x.com/user/status/2063842283502686599",
+		SourceURL:      "https://x.com/user/status/2063842283502686599",
+		Platform:       "twitter",
+		Title:          "X Article Card",
+		Author:         "Author(@author)",
+		Timestamp:      "2026-06-08",
+		Desc:           "First paragraph.\nSecond paragraph.",
+		ImageURLs:      [][]string{{imgSrv.URL + "/cover.png"}},
+		ImageHeads:     buildHeaders(false, "", defaultUA),
+		KeylolCategory: "X Article",
+		KeylolBlocks: []keylolBlock{
+			{Kind: "image", URL: imgSrv.URL + "/cover.png"},
+			{Kind: "text", Text: "First paragraph."},
+			{Kind: "heading2", Text: "Section"},
+			{Kind: "text", Text: "Second paragraph."},
+		},
+		ArticleCard: true,
 	}
 	out, err := renderInfoCard(meta)
 	if err != nil {
@@ -2370,6 +2511,76 @@ func TestParseFxTwitterResponseMarksPossiblySensitive(t *testing.T) {
 	}
 	if info.SafetyText != safetyMarkerTwitterSensitive {
 		t.Fatalf("safety marker=%q", info.SafetyText)
+	}
+}
+
+func TestParseFxTwitterResponseArticleCard(t *testing.T) {
+	info, err := parseFxTwitterResponse(map[string]any{
+		"tweet": map[string]any{
+			"text": "https://t.co/article",
+			"raw_text": map[string]any{
+				"text":               "https://t.co/article",
+				"display_text_range": []any{float64(0), float64(20)},
+			},
+			"author": map[string]any{
+				"name":        "Author",
+				"screen_name": "author",
+			},
+			"article": map[string]any{
+				"id":           "2063827681960235009",
+				"title":        "Article Title",
+				"created_at":   "2026-06-08T04:35:19.000Z",
+				"preview_text": "Preview should not replace full blocks.",
+				"cover_media": map[string]any{
+					"media_info": map[string]any{
+						"original_img_url": "https://pbs.twimg.com/media/cover.jpg",
+					},
+				},
+				"content": map[string]any{
+					"blocks": []any{
+						map[string]any{"type": "unstyled", "text": "First paragraph."},
+						map[string]any{"type": "header-two", "text": "Section title"},
+						map[string]any{"type": "unstyled", "text": "Second paragraph."},
+					},
+				},
+				"media_entities": []any{
+					map[string]any{
+						"media_info": map[string]any{
+							"original_img_url": "https://pbs.twimg.com/media/inline.jpg",
+						},
+					},
+				},
+			},
+			"media": map[string]any{
+				"photos": []any{map[string]any{"url": "https://pbs.twimg.com/media/tweet-photo.jpg"}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ArticleCard {
+		t.Fatal("expected article card")
+	}
+	if info.Title != "Article Title" {
+		t.Fatalf("title=%q", info.Title)
+	}
+	if !strings.Contains(info.Text, "First paragraph.") || !strings.Contains(info.Text, "Second paragraph.") {
+		t.Fatalf("article text missing full blocks: %q", info.Text)
+	}
+	if len(info.KeylolBlocks) < 4 {
+		t.Fatalf("expected article render blocks, got %#v", info.KeylolBlocks)
+	}
+	if len(info.Images) != 2 {
+		t.Fatalf("images=%#v", info.Images)
+	}
+	if info.Cover != "https://pbs.twimg.com/media/cover.jpg" {
+		t.Fatalf("cover=%q", info.Cover)
+	}
+	for _, img := range info.Images {
+		if strings.Contains(img, "tweet-photo") {
+			t.Fatalf("regular tweet photo should not be mixed into article images: %#v", info.Images)
+		}
 	}
 }
 

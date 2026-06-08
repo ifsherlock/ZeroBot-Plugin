@@ -193,6 +193,7 @@ type mediaMeta struct {
 	Error          string
 	KeylolBlocks   []keylolBlock
 	KeylolCategory string
+	ArticleCard    bool
 
 	FilePaths        []string
 	VideoSizes       []float64
@@ -1271,7 +1272,12 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 	if cfg.KeylolASFForward && meta.Platform == "keylol" && !qqbotEvent {
 		sendKeylolASFForward(ctx, meta)
 	}
-	if qqbotEvent && qqBotMediaEnabled() {
+	qqbotMediaEnabled := qqbotEvent && qqBotRichMediaEnabled(cfg, meta.Platform)
+	if qqbotEvent {
+		logDebug(cfg, "qqbot_media_gate platform=%s qqbot_media=%v send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
+			meta.Platform, qqBotMediaEnabled(), cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), qqbotMediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
+	}
+	if qqbotMediaEnabled {
 		if err := sendQQBotRichMedia(ctx, cfg, &meta); err != nil {
 			return err
 		}
@@ -1313,6 +1319,15 @@ func qqBotMediaEnabled() bool {
 	systemMu.RLock()
 	defer systemMu.RUnlock()
 	return runtimeSystem.QQBotMediaEnabled
+}
+
+func qqBotRichMediaEnabled(cfg config, platform string) bool {
+	return qqBotMediaEnabled() &&
+		cfg.SendMedia &&
+		cfg.DownloadVideo &&
+		cfg.PlatformSendMedia[platform] &&
+		cfg.PlatformDownload[platform] &&
+		wantsRich(cfg, platform)
 }
 
 func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
@@ -1520,7 +1535,7 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 }
 
 func sendQQBotRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
-	if meta == nil || !wantsRich(cfg, meta.Platform) || (len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 0) {
+	if meta == nil || !qqBotRichMediaEnabled(cfg, meta.Platform) || (len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 0) {
 		return nil
 	}
 	if err := processDownloads(cfg, meta); err != nil {

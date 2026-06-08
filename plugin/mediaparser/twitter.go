@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -48,35 +49,41 @@ func parseTwitter(cfg config, raw string) (mediaMeta, error) {
 		}
 	}
 	return mediaMeta{
-		URL:        raw,
-		SourceURL:  raw,
-		Platform:   "twitter",
-		Title:      firstNonEmpty(info.Title, "Twitter 推文"),
-		Author:     info.Author,
-		Avatar:     info.Avatar,
-		Desc:       info.Text,
-		Timestamp:  info.Timestamp,
-		Cover:      info.Cover,
-		VideoURLs:  videos,
-		ImageURLs:  images,
-		MediaItems: items,
-		VideoHeads: buildHeaders(true, "", defaultUA),
-		ImageHeads: buildHeaders(false, "", defaultUA),
-		ForceLocal: len(videos) > 0,
-		AccessText: info.SafetyText,
+		URL:            raw,
+		SourceURL:      raw,
+		Platform:       "twitter",
+		Title:          firstNonEmpty(info.Title, "Twitter 推文"),
+		Author:         info.Author,
+		Avatar:         info.Avatar,
+		Desc:           info.Text,
+		Timestamp:      info.Timestamp,
+		Cover:          info.Cover,
+		VideoURLs:      videos,
+		ImageURLs:      images,
+		MediaItems:     items,
+		VideoHeads:     buildHeaders(true, "", defaultUA),
+		ImageHeads:     buildHeaders(false, "", defaultUA),
+		ForceLocal:     len(videos) > 0,
+		AccessText:     info.SafetyText,
+		KeylolBlocks:   info.KeylolBlocks,
+		KeylolCategory: info.KeylolCategory,
+		ArticleCard:    info.ArticleCard,
 	}, nil
 }
 
 type twitterInfo struct {
-	Title      string
-	Text       string
-	Author     string
-	Avatar     string
-	Timestamp  string
-	Cover      string
-	Images     []string
-	Videos     []twitterVideo
-	SafetyText string
+	Title          string
+	Text           string
+	Author         string
+	Avatar         string
+	Timestamp      string
+	Cover          string
+	Images         []string
+	Videos         []twitterVideo
+	SafetyText     string
+	KeylolBlocks   []keylolBlock
+	KeylolCategory string
+	ArticleCard    bool
 }
 
 type twitterVideo struct {
@@ -198,24 +205,38 @@ func parseFxTwitterResponse(data map[string]any) (twitterInfo, error) {
 		Avatar:    firstNestedHTTPURLByKeys(authorMap, 5, "avatar", "profile_image"),
 		Timestamp: combineParenthetical(timestamp, quote["timestamp"]),
 	}
+	if article := parseTwitterArticle(tweet, author, timestamp); article.Text != "" || len(article.Images) > 0 {
+		info.Title = article.Title
+		info.Text = article.Text
+		info.Cover = article.Cover
+		info.Images = article.Images
+		info.KeylolBlocks = article.KeylolBlocks
+		info.KeylolCategory = article.KeylolCategory
+		info.ArticleCard = true
+		if article.Timestamp != "" {
+			info.Timestamp = article.Timestamp
+		}
+	}
 	if anyBool(tweet["possibly_sensitive"]) {
 		info.SafetyText = safetyMarkerTwitterSensitive
 	}
-	media := getMap(tweet, "media")
-	for _, photo := range getSlice(media, "photos") {
-		if m, ok := photo.(map[string]any); ok && getString(m, "url") != "" {
-			info.Images = append(info.Images, getString(m, "url"))
+	if !info.ArticleCard {
+		media := getMap(tweet, "media")
+		for _, photo := range getSlice(media, "photos") {
+			if m, ok := photo.(map[string]any); ok && getString(m, "url") != "" {
+				info.Images = append(info.Images, getString(m, "url"))
+			}
 		}
-	}
-	for _, video := range getSlice(media, "videos") {
-		if m, ok := video.(map[string]any); ok && getString(m, "url") != "" {
-			info.Videos = append(info.Videos, twitterVideo{
-				URL:      getString(m, "url"),
-				Thumb:    getString(m, "thumbnail_url"),
-				Duration: m["duration"],
-			})
-			if info.Cover == "" {
-				info.Cover = getString(m, "thumbnail_url")
+		for _, video := range getSlice(media, "videos") {
+			if m, ok := video.(map[string]any); ok && getString(m, "url") != "" {
+				info.Videos = append(info.Videos, twitterVideo{
+					URL:      getString(m, "url"),
+					Thumb:    getString(m, "thumbnail_url"),
+					Duration: m["duration"],
+				})
+				if info.Cover == "" {
+					info.Cover = getString(m, "thumbnail_url")
+				}
 			}
 		}
 	}
@@ -285,6 +306,197 @@ func parseVxTwitterResponse(data map[string]any) (twitterInfo, error) {
 		return twitterInfo{}, fmt.Errorf("VxTwitter response has no text or media")
 	}
 	return info, nil
+}
+
+func parseTwitterArticle(tweet map[string]any, author, fallbackTime string) twitterInfo {
+	article := getMap(tweet, "article")
+	if article == nil {
+		return twitterInfo{}
+	}
+	title := strings.TrimSpace(getString(article, "title"))
+	blocks := twitterArticleBlocks(article)
+	desc := twitterArticleDesc(blocks)
+	if desc == "" {
+		desc = strings.TrimSpace(getString(article, "preview_text"))
+		if desc != "" {
+			blocks = append([]keylolBlock{{Kind: "text", Text: desc}}, blocks...)
+		}
+	}
+	images := twitterArticleImages(article)
+	cover := twitterArticleImageURL(getMap(article, "cover_media"))
+	if cover == "" && len(images) > 0 {
+		cover = images[0]
+	}
+	if title == "" && desc == "" && len(images) == 0 {
+		return twitterInfo{}
+	}
+	if cover != "" && !twitterArticleHasImage(blocks, cover) {
+		blocks = append([]keylolBlock{{Kind: "image", URL: cover}}, blocks...)
+	}
+	for _, raw := range images {
+		if raw == "" || twitterArticleHasImage(blocks, raw) {
+			continue
+		}
+		blocks = append(blocks, keylolBlock{Kind: "image", URL: raw})
+	}
+	return twitterInfo{
+		Title:          firstNonEmpty(title, "X Article"),
+		Text:           desc,
+		Author:         author,
+		Timestamp:      firstNonEmpty(parseTwitterArticleTime(getString(article, "created_at")), fallbackTime),
+		Cover:          cover,
+		Images:         images,
+		KeylolBlocks:   blocks,
+		KeylolCategory: "X Article",
+		ArticleCard:    true,
+	}
+}
+
+func twitterArticleBlocks(article map[string]any) []keylolBlock {
+	content := getMap(article, "content")
+	entityMap := twitterArticleEntityMap(content["entityMap"])
+	out := []keylolBlock{}
+	for _, item := range getSlice(content, "blocks") {
+		block, _ := item.(map[string]any)
+		text := strings.TrimSpace(getString(block, "text"))
+		kind := strings.ToLower(strings.TrimSpace(getString(block, "type")))
+		if media := twitterArticleBlockMedia(block, entityMap); media != "" {
+			out = append(out, keylolBlock{Kind: "image", URL: media})
+			continue
+		}
+		if text == "" {
+			continue
+		}
+		switch kind {
+		case "header-one":
+			out = append(out, keylolBlock{Kind: "heading1", Text: text})
+		case "header-two", "header-three":
+			out = append(out, keylolBlock{Kind: "heading2", Text: text})
+		case "blockquote":
+			out = append(out, keylolBlock{Kind: "spoiler", Text: text})
+		case "code-block":
+			out = append(out, keylolBlock{Kind: "code", Text: text})
+		default:
+			out = append(out, keylolBlock{Kind: "text", Text: text})
+		}
+	}
+	return out
+}
+
+func twitterArticleEntityMap(v any) map[string]map[string]any {
+	out := map[string]map[string]any{}
+	switch x := v.(type) {
+	case map[string]any:
+		for k, raw := range x {
+			if m, ok := raw.(map[string]any); ok {
+				out[k] = m
+			}
+		}
+	case []any:
+		for i, raw := range x {
+			if m, ok := raw.(map[string]any); ok {
+				out[strconv.Itoa(i)] = m
+			}
+		}
+	}
+	return out
+}
+
+func twitterArticleBlockMedia(block map[string]any, entityMap map[string]map[string]any) string {
+	data := getMap(block, "data")
+	for _, candidate := range []map[string]any{data, getMap(data, "media"), getMap(data, "mediaEntity")} {
+		if raw := twitterArticleImageURL(candidate); raw != "" {
+			return raw
+		}
+	}
+	for _, rng := range getSlice(block, "entityRanges") {
+		m, _ := rng.(map[string]any)
+		key := getString(m, "key")
+		entity := entityMap[key]
+		for _, candidate := range []map[string]any{entity, getMap(entity, "data"), getMap(entity, "data", "media"), getMap(entity, "data", "mediaEntity")} {
+			if raw := twitterArticleImageURL(candidate); raw != "" {
+				return raw
+			}
+		}
+	}
+	return ""
+}
+
+func twitterArticleImages(article map[string]any) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(raw string) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" || seen[raw] {
+			return
+		}
+		seen[raw] = true
+		out = append(out, raw)
+	}
+	if cover := twitterArticleImageURL(getMap(article, "cover_media")); cover != "" {
+		add(cover)
+	}
+	for _, item := range getSlice(article, "media_entities") {
+		if raw := twitterArticleImageURL(getMap(item)); raw != "" {
+			add(raw)
+		}
+	}
+	return out
+}
+
+func twitterArticleImageURL(m map[string]any) string {
+	if m == nil {
+		return ""
+	}
+	for _, keys := range [][]string{
+		{"media_info", "original_img_url"},
+		{"media_info", "original_img_url_https"},
+		{"media_info", "url"},
+		{"original_img_url"},
+		{"original_img_url_https"},
+		{"url"},
+		{"media_url_https"},
+		{"media_url"},
+		{"src"},
+	} {
+		if raw := getString(m, keys...); strings.HasPrefix(raw, "http") {
+			return ensureHTTPS(raw)
+		}
+	}
+	return ""
+}
+
+func twitterArticleDesc(blocks []keylolBlock) string {
+	parts := []string{}
+	for _, block := range blocks {
+		if (block.Kind == "text" || block.Kind == "heading1" || block.Kind == "heading2") && strings.TrimSpace(block.Text) != "" {
+			parts = append(parts, strings.TrimSpace(block.Text))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func twitterArticleHasImage(blocks []keylolBlock, raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false
+	}
+	for _, block := range blocks {
+		if block.Kind == "image" && strings.TrimSpace(block.URL) == raw {
+			return true
+		}
+	}
+	return false
+}
+
+func parseTwitterArticleTime(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.Format("2006-01-02")
+	}
+	return parseTwitterDate(raw)
 }
 
 func twitterText(tweet map[string]any) string {
