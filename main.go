@@ -17,6 +17,7 @@ import (
 	_ "github.com/FloatTech/ZeroBot-Plugin/abineundo"
 	"github.com/FloatTech/ZeroBot-Plugin/kanban"
 	"github.com/FloatTech/ZeroBot-Plugin/kanban/banner"
+	_ "github.com/FloatTech/ZeroBot-Plugin/plugin/dailynews"
 	"github.com/FloatTech/ZeroBot-Plugin/plugin/mediaparser"
 	"github.com/FloatTech/floatbox/file"
 	"github.com/FloatTech/floatbox/process"
