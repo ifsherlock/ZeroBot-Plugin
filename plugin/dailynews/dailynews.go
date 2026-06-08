@@ -129,29 +129,32 @@ func init() {
 	_ = os.MkdirAll(cacheDir, 0755)
 	loadConfig()
 	startScheduler()
+	logrus.Info("[dailynews] ready")
 
-	engine.OnMessage().SetBlock(false).Handle(func(ctx *zero.Ctx) {
+	zero.OnMessage().SetBlock(false).Handle(func(ctx *zero.Ctx) {
 		text := strings.TrimSpace(ctx.Event.Message.ExtractPlainText())
 		if text == "" {
 			return
 		}
 		if !allowAccess(ctx) {
+			logrus.Debugf("[dailynews] skip access user=%d group=%d", ctx.Event.UserID, ctx.Event.GroupID)
 			return
 		}
 		sourceID, format, args, ok := matchConfiguredCommand(text)
 		if !ok {
 			return
 		}
+		logrus.Infof("[dailynews] command matched user=%d group=%d source=%s format=%s", ctx.Event.UserID, ctx.Event.GroupID, firstNonEmpty(sourceID, "default"), firstNonEmpty(format, "auto"))
 		sendNews(ctx, sourceID, format, args, "")
 	})
-	engine.OnPrefix("60秒接口添加", zero.AdminPermission).SetBlock(true).Handle(handleAddSource)
-	engine.OnPrefix("60秒接口删除", zero.AdminPermission).SetBlock(true).Handle(handleDeleteSource)
-	engine.OnFullMatch("60秒接口列表", zero.AdminPermission).SetBlock(true).Handle(handleListSources)
-	engine.OnPrefix("60秒定时添加", zero.AdminPermission).SetBlock(true).Handle(handleAddSchedule)
-	engine.OnPrefix("60秒定时删除", zero.AdminPermission).SetBlock(true).Handle(handleDeleteSchedule)
-	engine.OnFullMatch("60秒定时列表", zero.AdminPermission).SetBlock(true).Handle(handleListSchedules)
-	engine.OnPrefix("60秒默认接口", zero.AdminPermission).SetBlock(true).Handle(handleDefaultSource)
-	engine.OnPrefix("60秒默认格式", zero.AdminPermission).SetBlock(true).Handle(handleDefaultFormat)
+	zero.OnPrefix("60秒接口添加", zero.AdminPermission).SetBlock(true).Handle(handleAddSource)
+	zero.OnPrefix("60秒接口删除", zero.AdminPermission).SetBlock(true).Handle(handleDeleteSource)
+	zero.OnFullMatch("60秒接口列表", zero.AdminPermission).SetBlock(true).Handle(handleListSources)
+	zero.OnPrefix("60秒定时添加", zero.AdminPermission).SetBlock(true).Handle(handleAddSchedule)
+	zero.OnPrefix("60秒定时删除", zero.AdminPermission).SetBlock(true).Handle(handleDeleteSchedule)
+	zero.OnFullMatch("60秒定时列表", zero.AdminPermission).SetBlock(true).Handle(handleListSchedules)
+	zero.OnPrefix("60秒默认接口", zero.AdminPermission).SetBlock(true).Handle(handleDefaultSource)
+	zero.OnPrefix("60秒默认格式", zero.AdminPermission).SetBlock(true).Handle(handleDefaultFormat)
 }
 
 func dailyNewsHelp() string {
@@ -278,6 +281,8 @@ func normalizeConfig(in newsConfig) newsConfig {
 	if _, ok := merged[base.DefaultSource]; !ok {
 		base.DefaultSource = defaultSourceID
 	}
+	schedules := make(map[string]newsSchedule, len(in.Schedules))
+	order := make([]string, 0, len(in.Schedules))
 	for _, task := range in.Schedules {
 		task = normalizeSchedule(task, merged)
 		if task.ID == "" || task.SourceID == "" || task.Target == "" || task.Time == "" {
@@ -286,7 +291,13 @@ func normalizeConfig(in newsConfig) newsConfig {
 		if _, ok := merged[task.SourceID]; !ok {
 			continue
 		}
-		base.Schedules = append(base.Schedules, task)
+		if _, ok := schedules[task.ID]; !ok {
+			order = append(order, task.ID)
+		}
+		schedules[task.ID] = task
+	}
+	for _, id := range order {
+		base.Schedules = append(base.Schedules, schedules[id])
 	}
 	return base
 }
@@ -1040,10 +1051,14 @@ func runDueSchedules() {
 		return
 	}
 	for _, task := range tasks {
+		cfgMu.RLock()
 		src, ok := findSource(cfg.Sources, task.SourceID)
+		cfgMu.RUnlock()
 		if !ok || !src.Enabled || src.Disabled {
+			logrus.Warnf("[dailynews] schedule skip source_unavailable id=%s source=%s target=%s", task.ID, task.SourceID, task.Target)
 			continue
 		}
+		logrus.Infof("[dailynews] schedule due id=%s source=%s format=%s target=%s cron=%s", task.ID, task.SourceID, firstNonEmpty(task.Format, "auto"), task.Target, task.Cron)
 		sendNews(bot, task.SourceID, task.Format, nil, task.Target)
 	}
 }

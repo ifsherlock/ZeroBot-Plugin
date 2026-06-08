@@ -65,3 +65,20 @@ func TestScheduleAlreadyRan(t *testing.T) {
 		t.Fatal("different minute stamp should not block")
 	}
 }
+
+func TestNormalizeConfigDeduplicatesSchedulesByID(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.Schedules = []newsSchedule{
+		{ID: "morning", SourceID: "60s", Target: "私聊:1", Cron: "30 8 * * *", Format: "image", Enabled: true},
+		{ID: "morning", SourceID: "duanzi", Target: "私聊:1", Cron: "13 14 * * *", Format: "text", Enabled: true},
+	}
+
+	got := normalizeConfig(cfg)
+	if len(got.Schedules) != 1 {
+		t.Fatalf("schedule count = %d, want 1", len(got.Schedules))
+	}
+	task := got.Schedules[0]
+	if task.SourceID != "duanzi" || task.Cron != "13 14 * * *" {
+		t.Fatalf("schedule = %+v, want last task to win", task)
+	}
+}

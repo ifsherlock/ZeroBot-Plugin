@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/FloatTech/ZeroBot-Plugin/plugin/dailynews"
 	"github.com/disintegration/imaging"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
@@ -787,24 +788,19 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		cfg, err := loadWebDailyNewsConfig()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, map[string]any{"ok": true, "config": cfg})
+		writeJSON(w, map[string]any{"ok": true, "config": dailynews.WebConfig()})
 	case http.MethodPost:
-		var next webDailyNewsConfig
+		var next dailynews.WebNewsConfig
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&next); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		saved, err := saveWebDailyNewsConfig(next)
+		saved, err := dailynews.SaveWebConfig(next)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, map[string]any{"ok": true, "config": saved, "restart_required": true})
+		writeJSON(w, map[string]any{"ok": true, "config": saved, "restart_required": false})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -2633,7 +2629,7 @@ async function saveDailyNews(){
  $('dailyNewsMsg').textContent='保存中...';
  const r=await apiFetch('/api/dailynews/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dailyNewsCfg)});
  if(!r.ok){$('dailyNewsMsg').textContent='保存失败：'+await r.text(); return}
- const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='已保存，重启后完全生效';
+ const data=await r.json(); dailyNewsCfg=data.config||dailyNewsCfg; renderDailyNewsSettings(); $('dailyNewsMsg').textContent='已保存，已立即生效';
 }
 async function testDailyNews(){
  $('dailyNewsMsg').textContent='测试请在聊天里发送监听命令，或保存后等待定时任务';
