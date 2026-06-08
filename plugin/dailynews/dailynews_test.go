@@ -139,3 +139,15 @@ func TestRenderMessageUsesMappedFileURI(t *testing.T) {
 		t.Fatalf("saved files = %d, want 1", len(entries))
 	}
 }
+
+func TestDailyNewsAppDataRootFromCacheDir(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join(t.TempDir(), "data", "mediaparser", "cache", "dailynews")
+	t.Cleanup(func() { cacheDir = oldCacheDir })
+
+	got := dailyNewsAppDataRoot()
+	want := filepath.Clean(filepath.Join(cacheDir, "..", "..", ".."))
+	if got != want {
+		t.Fatalf("dailyNewsAppDataRoot = %q, want %q", got, want)
+	}
+}

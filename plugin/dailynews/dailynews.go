@@ -824,7 +824,7 @@ func imageExt(contentType string, data []byte) string {
 }
 
 func dailyNewsCacheDir() string {
-	return filepath.Join(filepath.Dir(engine.DataFolder()), "mediaparser", "cache", "dailynews")
+	return filepath.Join(dailyNewsPluginDataRoot(), "mediaparser", "cache", "dailynews")
 }
 
 func dailyNewsLocalMediaTarget(path string) string {
@@ -866,7 +866,21 @@ func dailyNewsAppDataRoot() string {
 	if cacheDir != "" {
 		return filepath.Clean(filepath.Join(cacheDir, "..", "..", ".."))
 	}
-	return filepath.Dir(engine.DataFolder())
+	return dailyNewsPluginDataRoot()
+}
+
+func dailyNewsPluginDataRoot() string {
+	dir := filepath.Clean(engine.DataFolder())
+	for {
+		if filepath.Base(dir) == "data" {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return filepath.Dir(engine.DataFolder())
+		}
+		dir = parent
+	}
 }
 
 func dailyNewsOneBotDataDir() string {
