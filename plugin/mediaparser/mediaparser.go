@@ -1237,6 +1237,18 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		groupID = ctx.Event.GroupID
 		userID = ctx.Event.UserID
 	}
+	if normalizePlatformName(meta.Platform) == "twitter" {
+		shieldSignal := blocked ||
+			mediaShieldHasTwitterSensitiveMarker(meta, rawMessage) ||
+			mediaShieldPassiveTriggered(cfg, meta, rawMessage) ||
+			mediaShieldActiveTriggered(cfg, rawMessage)
+		if cfg.MediaShieldEnabled || shieldSignal {
+			gateOK, gateReason := mediaShieldTargetGate(cfg, meta, groupID, userID)
+			logrus.Infof("[mediaparser] media_shield_gate platform=%s target=%s reason=%s enabled=%v user_set=%v group_set=%v passive_signal=%v active_signal=%v sensitive_marker=%v title=%q",
+				meta.Platform, mediaShieldTargetKind(ctx), gateReason, gateOK, cfg.MediaShieldUserEnabled[userID], cfg.MediaShieldGroupEnabled[groupID],
+				mediaShieldPassiveTriggered(cfg, meta, rawMessage), mediaShieldActiveTriggered(cfg, rawMessage), mediaShieldHasTwitterSensitiveMarker(meta, rawMessage), truncate(meta.Title, 80))
+		}
+	}
 	if mediaShieldShouldHandle(cfg, meta, rawMessage, hit, blocked, groupID, userID) {
 		if err := sendMediaShieldPackage(ctx, cfg, &meta, mediaShieldReason(cfg, meta, rawMessage, hit, blocked, groupID, userID)); err != nil {
 			logrus.Warnf("[mediaparser] media_shield_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
@@ -1248,11 +1260,11 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 			}
 			return err
 		}
-		logrus.Infof("[mediaparser] media_shield_sent platform=%s title=%q elapsed=%s", meta.Platform, truncate(meta.Title, 80), time.Since(started).Round(time.Millisecond))
+		logrus.Infof("[mediaparser] media_shield_queued platform=%s title=%q elapsed=%s", meta.Platform, truncate(meta.Title, 80), time.Since(started).Round(time.Millisecond))
 		return nil
 	}
 	if blocked {
-		logrus.Warnf("[mediaparser] safety_blocked platform=%s category=%s source=%s keyword_sha1=%s title=%q", meta.Platform, hit.Category, hit.Source, safetyKeywordDigest(hit.Keyword), truncate(meta.Title, 80))
+		logrus.Warnf("[mediaparser] safety_blocked platform=%s category=%s source=%s sensitive_marker=%v keyword_sha1=%s title=%q", meta.Platform, hit.Category, hit.Source, hit.Source == "platform_sensitive", safetyKeywordDigest(hit.Keyword), truncate(meta.Title, 80))
 		if cfg.SafetyFilterNotice {
 			ctx.SendChain(message.Text(safetyNoticeText(cfg, meta, hit)))
 		}

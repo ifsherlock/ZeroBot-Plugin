@@ -1632,6 +1632,36 @@ func TestOneBotLocalMediaTargetUsesMappedPathWhenNotLoopback(t *testing.T) {
 	}
 }
 
+func TestMediaShieldForwardCardTargetPrefersMappedPath(t *testing.T) {
+	oldCacheDir := cacheDir
+	oldSystem := runtimeSystem
+	cacheDir = filepath.Join(t.TempDir(), "data", "mediaparser", "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	card := filepath.Join(cacheDir, "nested", "shield_card_0.png")
+	if err := os.MkdirAll(filepath.Dir(card), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(card, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	SetRuntimeSystemSettings(SystemSettings{
+		WSURL:         "ws://127.0.0.1:3001",
+		OneBotDataDir: "/host/data",
+	})
+	defer func() {
+		cacheDir = oldCacheDir
+		SetRuntimeSystemSettings(oldSystem)
+	}()
+
+	got := filepath.ToSlash(mediaShieldForwardCardTarget(&zero.Ctx{Event: &zero.Event{GroupID: 123}}, card))
+	want := "file:///host/data/mediaparser/cache/nested/shield_card_0.png"
+	if got != want {
+		t.Fatalf("shield forward card target=%q, want %q", got, want)
+	}
+}
+
 func TestOneBotLocalMediaTargetFallsBackToPublicURL(t *testing.T) {
 	oldCacheDir := cacheDir
 	oldSystem := runtimeSystem
@@ -2575,6 +2605,16 @@ func TestSafetyBlockedSkipsTwitterSensitiveMarkerWhenDisabled(t *testing.T) {
 	meta := mediaMeta{Platform: "twitter", AccessText: safetyMarkerTwitterSensitive}
 	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
 		t.Fatalf("did not expect twitter sensitive marker to block when disabled, hit=%+v", hit)
+	}
+}
+
+func TestSafetyBlockedDoesNotTreatTwitterSensitiveMarkerAsAdultKeyword(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyTwitterSensitive = false
+	cfg.SafetyGlobalCategories = map[string]bool{safetyCategoryAdult: true}
+	meta := mediaMeta{Platform: "twitter", AccessText: safetyMarkerTwitterSensitive}
+	if hit, blocked := safetyBlocked(cfg, meta, ""); blocked {
+		t.Fatalf("twitter sensitive marker should only be controlled by the dedicated switch, hit=%+v", hit)
 	}
 }
 

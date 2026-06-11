@@ -132,7 +132,7 @@ func normalizeMediaShieldConfig(cfg *config) bool {
 }
 
 func mediaShieldShouldHandle(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID, userID int64) bool {
-	if !mediaShieldAvailableForTarget(cfg, meta, groupID, userID) {
+	if ok, _ := mediaShieldTargetGate(cfg, meta, groupID, userID); !ok {
 		return false
 	}
 	if mediaShieldRiskBlocked(cfg, meta, raw) {
@@ -150,7 +150,7 @@ func mediaShieldShouldHandle(cfg config, meta mediaMeta, raw string, hit safetyH
 func mediaShieldReason(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID, userID int64) mediaShieldReasonInfo {
 	active := false
 	passive := false
-	if mediaShieldAvailableForTarget(cfg, meta, groupID, userID) && !mediaShieldRiskBlocked(cfg, meta, raw) {
+	if ok, _ := mediaShieldTargetGate(cfg, meta, groupID, userID); ok && !mediaShieldRiskBlocked(cfg, meta, raw) {
 		passive = cfg.MediaShieldPassive && (mediaShieldHasTwitterSensitiveMarker(meta, raw) || (mediaShieldPassiveTriggered(cfg, meta, raw) && mediaShieldCanTakeoverBlocked(hit, blocked)))
 		active = cfg.MediaShieldActive && mediaShieldActiveTriggered(cfg, raw)
 	}
@@ -162,13 +162,57 @@ func mediaShieldReason(cfg config, meta mediaMeta, raw string, hit safetyHit, bl
 }
 
 func mediaShieldAvailableForTarget(cfg config, meta mediaMeta, groupID, userID int64) bool {
+	ok, _ := mediaShieldTargetGate(cfg, meta, groupID, userID)
+	return ok
+}
+
+func eventGroupID(ctx *zero.Ctx) int64 {
+	if ctx == nil || ctx.Event == nil {
+		return 0
+	}
+	return ctx.Event.GroupID
+}
+
+func eventUserID(ctx *zero.Ctx) int64 {
+	if ctx == nil || ctx.Event == nil {
+		return 0
+	}
+	return ctx.Event.UserID
+}
+
+func mediaShieldTargetKind(ctx *zero.Ctx) string {
+	if eventGroupID(ctx) != 0 {
+		return "group"
+	}
+	if eventUserID(ctx) != 0 {
+		return "private"
+	}
+	return "unknown"
+}
+
+func mediaShieldTargetGate(cfg config, meta mediaMeta, groupID, userID int64) (bool, string) {
 	if !cfg.MediaShieldEnabled || normalizePlatformName(meta.Platform) != "twitter" {
-		return false
+		if !cfg.MediaShieldEnabled {
+			return false, "disabled"
+		}
+		return false, "non_twitter"
 	}
 	if groupID == 0 {
-		return cfg.MediaShieldPrivateEnabled && userID != 0 && cfg.MediaShieldUserEnabled[userID]
+		if !cfg.MediaShieldPrivateEnabled {
+			return false, "private_disabled"
+		}
+		if userID == 0 {
+			return false, "private_user_missing"
+		}
+		if !cfg.MediaShieldUserEnabled[userID] {
+			return false, "private_user_not_enabled"
+		}
+		return true, "private_enabled"
 	}
-	return cfg.MediaShieldGroupEnabled[groupID]
+	if !cfg.MediaShieldGroupEnabled[groupID] {
+		return false, "group_not_enabled"
+	}
+	return true, "group_enabled"
 }
 
 func mediaShieldHasTwitterSensitiveMarker(meta mediaMeta, raw string) bool {
@@ -261,30 +305,19 @@ func sendMediaShieldPackage(ctx *zero.Ctx, cfg config, meta *mediaMeta, reason m
 	if ctx == nil || meta == nil {
 		return nil
 	}
+	started := time.Now()
+	cardStarted := time.Now()
 	shieldCard, err := createMediaShieldCard(cfg, *meta)
 	if err != nil {
 		logrus.Warnf("[mediaparser] media_shield_card_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
-	}
-	meta.ForceLocal = true
-	if err := processDownloads(cfg, meta); err != nil {
-		return fmt.Errorf("download shield media: %w", err)
-	}
-	files := mediaShieldLocalFiles(meta)
-	if len(files) == 0 {
-		return fmt.Errorf("no local media files")
+	} else {
+		logrus.Infof("[mediaparser] media_shield_card_created platform=%s title=%q file=%s elapsed=%s", meta.Platform, truncate(meta.Title, 80), filepath.Base(shieldCard), time.Since(cardStarted).Round(time.Millisecond))
 	}
 	password, err := mediaShieldPassword()
 	if err != nil {
 		return fmt.Errorf("generate password: %w", err)
 	}
-	archive := cacheFile(meta, "shield", 0, ".zip")
-	zipStarted := time.Now()
-	if err := createMediaShieldZip(files, archive, password); err != nil {
-		return fmt.Errorf("create zip: %w", err)
-	}
-	logrus.Infof("[mediaparser] media_shield_zip_created platform=%s title=%q file=%s size_mb=%.1f elapsed=%s", meta.Platform, truncate(meta.Title, 80), filepath.Base(archive), fileSizeMB(archive), time.Since(zipStarted).Round(time.Millisecond))
-	scheduleDelete(archive, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
-	if err := queueMediaShieldDelivery(ctx, cfg, archive, password, shieldCard, reason.Active, meta.Platform, meta.Title); err != nil {
+	if err := queueMediaShieldDelivery(ctx, cfg, *meta, password, shieldCard, reason.Active, started); err != nil {
 		return fmt.Errorf("queue delivery: %w", err)
 	}
 	return nil
@@ -327,6 +360,19 @@ func mediaShieldCardTarget(ctx *zero.Ctx, shieldCard string) string {
 		target = fileURI(shieldCard)
 	}
 	return target
+}
+
+func mediaShieldForwardCardTarget(ctx *zero.Ctx, shieldCard string) string {
+	if strings.TrimSpace(shieldCard) == "" {
+		return ""
+	}
+	if isOfficialQQBotEvent(ctx) {
+		return fileURI(shieldCard)
+	}
+	if target := oneBotMappedFileURI(shieldCard); target != "" {
+		return target
+	}
+	return mediaShieldCardTarget(ctx, shieldCard)
 }
 
 func mediaShieldLocalFiles(meta *mediaMeta) []string {
@@ -422,28 +468,51 @@ func uploadMediaShieldArchive(ctx *zero.Ctx, path string) error {
 	return nil
 }
 
-func queueMediaShieldDelivery(ctx *zero.Ctx, cfg config, path, password, cardPath string, active bool, platform, title string) error {
+func queueMediaShieldDelivery(ctx *zero.Ctx, cfg config, meta mediaMeta, password, cardPath string, active bool, queuedAt time.Time) error {
 	if ctx == nil || ctx.Event == nil {
 		return fmt.Errorf("missing event")
 	}
 	if ctx.Event.GroupID == 0 && ctx.Event.UserID == 0 {
 		return fmt.Errorf("missing target")
 	}
-	name := filepath.Base(path)
-	logrus.Infof("[mediaparser] media_shield_delivery_queued platform=%s title=%q file=%s", platform, truncate(title, 80), name)
+	platform, title := meta.Platform, meta.Title
+	logrus.Infof("[mediaparser] media_shield_delivery_queued platform=%s title=%q preview=%s", platform, truncate(title, 80), filepath.Base(cardPath))
 	go func() {
 		started := time.Now()
 		if err := sendMediaShieldPreviewForward(ctx, cfg, password, cardPath, active); err != nil {
-			logrus.Warnf("[mediaparser] media_shield_preview_forward_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond), err)
+			logrus.Warnf("[mediaparser] media_shield_preview_forward_async_failed platform=%s title=%q elapsed=%s since_queue=%s error=%v", platform, truncate(title, 80), time.Since(started).Round(time.Millisecond), time.Since(queuedAt).Round(time.Millisecond), err)
 			return
 		}
-		logrus.Infof("[mediaparser] media_shield_preview_forward_async_done platform=%s title=%q file=%s elapsed=%s", platform, truncate(title, 80), name, time.Since(started).Round(time.Millisecond))
+		logrus.Infof("[mediaparser] media_shield_preview_forward_async_done platform=%s title=%q elapsed=%s since_queue=%s", platform, truncate(title, 80), time.Since(started).Round(time.Millisecond), time.Since(queuedAt).Round(time.Millisecond))
+
+		downloadStarted := time.Now()
+		meta.ForceLocal = true
+		if err := processDownloads(cfg, &meta); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_download_async_failed platform=%s title=%q elapsed=%s error=%v", platform, truncate(title, 80), time.Since(downloadStarted).Round(time.Millisecond), err)
+			return
+		}
+		files := mediaShieldLocalFiles(&meta)
+		if len(files) == 0 {
+			logrus.Warnf("[mediaparser] media_shield_download_async_failed platform=%s title=%q elapsed=%s error=no local media files", platform, truncate(title, 80), time.Since(downloadStarted).Round(time.Millisecond))
+			return
+		}
+		logrus.Infof("[mediaparser] media_shield_download_async_done platform=%s title=%q files=%d elapsed=%s", platform, truncate(title, 80), len(files), time.Since(downloadStarted).Round(time.Millisecond))
+
+		archive := cacheFile(&meta, "shield", 0, ".zip")
+		zipStarted := time.Now()
+		if err := createMediaShieldZip(files, archive, password); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_zip_async_failed platform=%s title=%q elapsed=%s error=%v", platform, truncate(title, 80), time.Since(zipStarted).Round(time.Millisecond), err)
+			return
+		}
+		logrus.Infof("[mediaparser] media_shield_zip_created platform=%s title=%q file=%s size_mb=%.1f elapsed=%s", platform, truncate(title, 80), filepath.Base(archive), fileSizeMB(archive), time.Since(zipStarted).Round(time.Millisecond))
+		scheduleDelete(archive, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
+
 		uploadStarted := time.Now()
-		if err := uploadMediaShieldArchive(ctx, path); err != nil {
-			logrus.Warnf("[mediaparser] media_shield_archive_upload_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), name, time.Since(uploadStarted).Round(time.Millisecond), err)
+		if err := uploadMediaShieldArchive(ctx, archive); err != nil {
+			logrus.Warnf("[mediaparser] media_shield_archive_upload_async_failed platform=%s title=%q file=%s elapsed=%s error=%v", platform, truncate(title, 80), filepath.Base(archive), time.Since(uploadStarted).Round(time.Millisecond), err)
 			return
 		}
-		logrus.Infof("[mediaparser] media_shield_archive_upload_async_done platform=%s title=%q file=%s elapsed=%s total_elapsed=%s", platform, truncate(title, 80), name, time.Since(uploadStarted).Round(time.Millisecond), time.Since(started).Round(time.Millisecond))
+		logrus.Infof("[mediaparser] media_shield_archive_upload_async_done platform=%s title=%q file=%s elapsed=%s total_elapsed=%s since_queue=%s", platform, truncate(title, 80), filepath.Base(archive), time.Since(uploadStarted).Round(time.Millisecond), time.Since(started).Round(time.Millisecond), time.Since(queuedAt).Round(time.Millisecond))
 	}()
 	return nil
 }
@@ -455,7 +524,7 @@ func sendMediaShieldPreviewForward(ctx *zero.Ctx, cfg config, password, cardPath
 	nickname, userID := mediaShieldForwardSender(ctx)
 	cardTarget := ""
 	if strings.TrimSpace(cardPath) != "" {
-		cardTarget = mediaShieldCardTarget(ctx, cardPath)
+		cardTarget = mediaShieldForwardCardTarget(ctx, cardPath)
 	}
 	nodes := mediaShieldPreviewForwardNodes(nickname, userID, mediaShieldReplyText(cfg, password), cardTarget, active, strings.TrimSpace(cfg.MediaShieldEmoji))
 	var resp zero.APIResponse

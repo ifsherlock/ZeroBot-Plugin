@@ -63,7 +63,6 @@ var safetyCategoryDefs = []safetyCategoryDef{
 			"Y3Vt", "bWlsZg==", "Y3Vtc2x1dA==",
 			"c2x1dA==", "Y3Vjaw==", "d2Fua2NoYXQ=", "bGV3ZHJw", "YmlnZGljaw==", "cHVzc3k=",
 			"c2V4",
-			"X19tZWRpYXBhcnNlcl90d2l0dGVyX3Bvc3NpYmx5X3NlbnNpdGl2ZV9f",
 		},
 	},
 	{
