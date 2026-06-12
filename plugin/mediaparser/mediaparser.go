@@ -1124,7 +1124,7 @@ func handleAutoParse(ctx *zero.Ctx) {
 		logDebug(cfg, "skip original_link_echo")
 		return
 	}
-	if ok, reason := permissionOK(cfg, ctx.Event.UserID, ctx.Event.GroupID); !ok {
+	if ok, reason := mediaParserPermissionOK(cfg, ctx.Event.UserID, ctx.Event.GroupID, isTelegramBotEvent(ctx)); !ok {
 		logDebug(cfg, "skip permission reason=%s", reason)
 		return
 	}
@@ -2752,6 +2752,13 @@ func permissionOK(cfg config, userID, groupID int64) (bool, string) {
 	default:
 		return true, "group_access_ok"
 	}
+}
+
+func mediaParserPermissionOK(cfg config, userID, groupID int64, telegramEvent bool) (bool, string) {
+	if telegramEvent {
+		return true, "telegram_channel_access"
+	}
+	return permissionOK(cfg, userID, groupID)
 }
 
 func extractLinks(text string, cfg config) []parsedLink {

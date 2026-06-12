@@ -126,6 +126,24 @@ func TestQQBotCQImagePartsUsesOfficialMediaAttachment(t *testing.T) {
 	}
 }
 
+func TestMediaParserPermissionSkipsQQListsForTelegram(t *testing.T) {
+	cfg := config{
+		PrivateAccessMode: accessWhitelist,
+		GroupAccessMode:   accessWhitelist,
+		UserWhitelist:     map[int64]bool{},
+		GroupWhitelist:    map[int64]bool{},
+		UserBlacklist:     map[int64]bool{},
+		GroupBlacklist:    map[int64]bool{},
+	}
+
+	if ok, reason := permissionOK(cfg, 10000, 0); ok {
+		t.Fatalf("normal private event should still use MediaParser whitelist, reason=%s", reason)
+	}
+	if ok, reason := mediaParserPermissionOK(cfg, 10000, 0, true); !ok {
+		t.Fatalf("telegram event should rely on Telegram channel access, reason=%s", reason)
+	}
+}
+
 func TestQQBotRichMediaEnabledRespectsMediaSwitches(t *testing.T) {
 	oldSystem := runtimeSystem
 	defer SetRuntimeSystemSettings(oldSystem)
