@@ -629,18 +629,9 @@ func webBotAccounts() []map[string]any {
 	systemMu.RLock()
 	settings := runtimeSystem
 	systemMu.RUnlock()
-	qqbotID := int64(0)
-	if settings.QQBotEnabled && settings.QQBotAppID != "" {
-		qqbotID = webQQBotStableID("self:" + settings.QQBotAppID)
-	}
 	out := make([]map[string]any, 0, len(ids))
 	for _, id := range ids {
-		kind := "onebot"
-		label := "OneBot / llbot"
-		if qqbotID > 0 && id == qqbotID {
-			kind = "qqbot"
-			label = "官方 QQBot"
-		}
+		kind, label := webBotAccountKindLabel(id, settings)
 		out = append(out, map[string]any{
 			"id":    id,
 			"kind":  kind,
@@ -648,6 +639,17 @@ func webBotAccounts() []map[string]any {
 		})
 	}
 	return out
+}
+
+func webBotAccountKindLabel(id int64, settings SystemSettings) (string, string) {
+	settings = normalizeSystemSettings(settings)
+	if settings.QQBotEnabled && settings.QQBotAppID != "" && id == webQQBotStableID("self:"+settings.QQBotAppID) {
+		return "qqbot", "官方 QQBot"
+	}
+	if settings.TGBotEnabled && settings.TGBotToken != "" && id == tgBotStableID("self:"+settings.TGBotToken) {
+		return "tgbot", "Telegram Bot"
+	}
+	return "onebot", "OneBot / llbot"
 }
 
 func webQQBotStableID(s string) int64 {
@@ -1968,7 +1970,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </style>
 </head>
 <body>
-<header><h1>ZeroBot 控制台</h1><div class="toolbar"><button class="primary hidden" id="restartTop" onclick="restartSystem()">重启进程</button><span class="statusDot" id="topState">加载中</span><button class="primary" onclick="save()">保存配置</button></div></header>
+<header><h1>ZeroBot 控制台</h1><div class="toolbar"><button class="primary hidden" id="restartTop" onclick="restartSystem()">重启进程</button><span class="statusDot" id="topState">加载中</span><button class="primary hidden" id="topSaveButton" onclick="save()">保存配置</button></div></header>
 <div class="app">
 <aside class="sidebar">
 <div class="brand">ZBP Console</div>
@@ -2129,7 +2131,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="panel span4 page" data-page="tgbot" id="tgbot">
-<div class="pluginHead"><div><div class="crumb">插件中心 / Telegram Bot</div><div class="sectionTitle"><b>Telegram Bot</b><span class="muted">长轮询通道，保存后需重启。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="pluginHead"><div><div class="crumb">插件中心 / Telegram Bot</div><div class="sectionTitle"><b>Telegram Bot</b><span class="muted">长轮询通道，保存后需重启。</span></div></div><div class="row"><button class="primary" id="tgbotSaveButton" onclick="saveSystemSettings()">保存 Telegram 配置</button><button onclick="showPage('plugins')">返回插件中心</button></div></div>
 <div class="settingsGrid">
 <div class="settingsStack">
 <div class="settingsCard">
@@ -2143,15 +2145,15 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">代理 <input id="tgbotProxy" autocomplete="off" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"></label>
 <label class="field">媒体上传 <span class="row"><label class="switch"><input id="tgbotMediaEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">图片、视频、文件走 Telegram 上传。</span></span></label>
 </div>
-<div class="row"><button class="primary" id="tgbotSaveButton" onclick="saveSystemSettings()">保存 Telegram 配置</button><span class="muted" id="tgbotSaveHint">首次启用需重启。</span></div>
+<p class="muted" id="tgbotSaveHint" style="margin-bottom:0">首次启用需重启。</p>
 </div>
 <div class="settingsCard">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">只拦截 Telegram 通道。</span></div>
 <div class="settingsFields">
 <label class="field span2">TG 超级管理员 <textarea id="tgbotSuperUsers" placeholder="每行一个 Telegram 映射 user_id"></textarea><span class="muted">只管理 TG 通道；不写入全局 QQ 管理员。</span></label>
-<label class="field">私聊模式 <select id="tgbotPrivateMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
-<label class="field">群/频道模式 <select id="tgbotGroupMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
-<label class="field span2">群内发言人模式 <select id="tgbotGroupUserMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
+<label class="field">私聊模式 <select id="tgbotPrivateMode" onchange="onTGBotAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单</option><option value="blacklist">屏蔽黑名单</option></select></label>
+<label class="field">群/频道模式 <select id="tgbotGroupMode" onchange="onTGBotAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单</option><option value="blacklist">屏蔽黑名单</option></select></label>
+<label class="field span2">群内发言人模式 <select id="tgbotGroupUserMode" onchange="onTGBotAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单</option><option value="blacklist">屏蔽黑名单</option></select></label>
 </div>
 <div class="accessGrid">
 <label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="whitelist">私聊白名单<textarea id="tgbotUserWhitelist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
@@ -2196,9 +2198,9 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="panel span4 page plugin-section" data-page="mediaparser" data-plugin-section="access" id="access">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">私聊、群、发言人分开。</span></div>
 <div class="row" style="margin-top:12px">
-<label>私聊模式 <select id="pmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
-<label>群聊模式 <select id="gmode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
-<label>群成员模式 <select id="gumode" onchange="onAccessModeChange()"><option value="none">关闭名单</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
+<label>私聊模式 <select id="pmode" onchange="onAccessModeChange()"><option value="none">不限制</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
+<label>群聊模式 <select id="gmode" onchange="onAccessModeChange()"><option value="none">不限制</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
+<label>群成员模式 <select id="gumode" onchange="onAccessModeChange()"><option value="none">不限制</option><option value="blacklist">黑名单</option><option value="whitelist">白名单</option></select></label>
 </div>
 <div class="accessGrid">
 <label class="field accessField" data-mode="pmode" data-kind="whitelist">私聊白名单<textarea id="userWhitelist" placeholder="每行一个。OneBot 填 QQ；QQBot 填映射 user_id。"></textarea><span class="muted">QQBot user_id 看日志。</span></label>
@@ -2421,8 +2423,17 @@ function showPage(name){
  const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='tgbot'||page==='mediashield'||page==='dailynews')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
+ updateHeaderSave(page);
  const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
  if(location.hash!==nextHash) history.replaceState(null,'',nextHash);
+}
+function updateHeaderSave(page){
+ const btn=$('topSaveButton');
+ if(!btn) return;
+ const show=page==='mediaparser'||page==='mediashield';
+ btn.classList.toggle('hidden', !show);
+ btn.textContent='保存配置';
+ btn.onclick=save;
 }
 function showPluginSection(name,updateHash=true){
  currentPluginSection=name||'basic';

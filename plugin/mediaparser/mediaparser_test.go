@@ -336,6 +336,33 @@ func TestTelegramZeroEventMarksSuperUser(t *testing.T) {
 	}
 }
 
+func TestWebBotAccountKindLabelRecognizesTelegram(t *testing.T) {
+	settings := SystemSettings{
+		QQBotEnabled: true,
+		QQBotAppID:   "123456",
+		TGBotEnabled: true,
+		TGBotToken:   "123456:token",
+	}
+	cases := []struct {
+		name      string
+		id        int64
+		wantKind  string
+		wantLabel string
+	}{
+		{"qqbot", webQQBotStableID("self:" + settings.QQBotAppID), "qqbot", "官方 QQBot"},
+		{"telegram", tgBotStableID("self:" + settings.TGBotToken), "tgbot", "Telegram Bot"},
+		{"onebot", 10001, "onebot", "OneBot / llbot"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kind, label := webBotAccountKindLabel(tc.id, settings)
+			if kind != tc.wantKind || label != tc.wantLabel {
+				t.Fatalf("kind,label = %q,%q; want %q,%q", kind, label, tc.wantKind, tc.wantLabel)
+			}
+		})
+	}
+}
+
 func TestTelegramRichMediaEnabledRespectsSwitches(t *testing.T) {
 	oldSystem := runtimeSystem
 	defer SetRuntimeSystemSettings(oldSystem)
