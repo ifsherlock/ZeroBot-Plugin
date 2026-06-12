@@ -219,6 +219,14 @@ func (d *tgBotDriver) zeroEvent(update tgBotUpdate) []byte {
 	group := tgBotIsGroupChat(msg.Chat.Type)
 	targetID := tgBotStableID("chat:" + strconv.FormatInt(msg.Chat.ID, 10))
 	userID := tgBotStableID("user:" + strconv.FormatInt(firstNonZeroInt64(msg.From.ID, msg.Sender.ID, msg.Chat.ID), 10))
+	if ok, reason := tgBotAccessOK(tgBotRuntimeSettings(), group, userID, targetID); !ok {
+		if group {
+			logrus.Infof("[tgbot] access_blocked type=group reason=%s message_id=%d group_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, targetID, userID, msg.Chat.ID)
+		} else {
+			logrus.Infof("[tgbot] access_blocked type=private reason=%s message_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, userID, msg.Chat.ID)
+		}
+		return nil
+	}
 	d.rememberTarget(targetID, msg.Chat.ID, group)
 	if !group {
 		d.rememberTarget(userID, msg.Chat.ID, false)
@@ -254,6 +262,50 @@ func (d *tgBotDriver) zeroEvent(update tgBotUpdate) []byte {
 		return nil
 	}
 	return out
+}
+
+func tgBotRuntimeSettings() SystemSettings {
+	systemMu.RLock()
+	settings := runtimeSystem
+	systemMu.RUnlock()
+	return normalizeSystemSettings(settings)
+}
+
+func tgBotAccessOK(settings SystemSettings, group bool, userID, groupID int64) (bool, string) {
+	settings = normalizeSystemSettings(settings)
+	if !group {
+		return tgBotAccessListOK(settings.TGBotPrivateMode, userID, settings.TGBotUserWhitelist, settings.TGBotUserBlacklist, "private")
+	}
+	if ok, reason := tgBotAccessListOK(settings.TGBotGroupMode, groupID, settings.TGBotGroupWhitelist, settings.TGBotGroupBlacklist, "group"); !ok {
+		return false, reason
+	}
+	return tgBotAccessListOK(settings.TGBotGroupUserMode, userID, settings.TGBotGroupUserWhitelist, settings.TGBotGroupUserBlacklist, "group_user")
+}
+
+func tgBotAccessListOK(mode string, id int64, whitelist, blacklist []int64, scope string) (bool, string) {
+	switch normalizeSystemAccessMode(mode) {
+	case accessWhitelist:
+		if int64SliceContains(whitelist, id) {
+			return true, scope + "_whitelisted"
+		}
+		return false, scope + "_not_in_whitelist"
+	case accessBlacklist:
+		if int64SliceContains(blacklist, id) {
+			return false, scope + "_blacklisted"
+		}
+		return true, scope + "_not_blacklisted"
+	default:
+		return true, scope + "_access_none"
+	}
+}
+
+func int64SliceContains(list []int64, id int64) bool {
+	for _, item := range list {
+		if item == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *tgBotDriver) sendTelegramMessage(ctx context.Context, chatID int64, msg any) (zero.APIResponse, error) {

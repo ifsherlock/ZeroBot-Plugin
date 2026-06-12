@@ -259,6 +259,48 @@ func TestTelegramBotDriverCreationAndMediaAttachment(t *testing.T) {
 	}
 }
 
+func TestTelegramAccessUsesDedicatedLists(t *testing.T) {
+	groupID := tgBotStableID("chat:-100123456")
+	userID := tgBotStableID("user:456789")
+	settings := SystemSettings{
+		TGBotPrivateMode:    accessBlacklist,
+		TGBotGroupMode:      accessWhitelist,
+		TGBotGroupWhitelist: []int64{groupID},
+		TGBotUserBlacklist:  []int64{userID},
+	}
+	if ok, reason := tgBotAccessOK(settings, true, userID, groupID); !ok {
+		t.Fatalf("group whitelist should allow telegram group even when private blacklist contains user, reason=%s", reason)
+	}
+	if ok, reason := tgBotAccessOK(settings, false, userID, 0); ok {
+		t.Fatalf("private blacklist should still block private telegram message, reason=%s", reason)
+	}
+	if ok, reason := tgBotAccessOK(settings, true, userID, tgBotStableID("chat:-100999")); ok {
+		t.Fatalf("unlisted telegram group should be blocked, reason=%s", reason)
+	}
+}
+
+func TestTelegramZeroEventBlocksBeforeDispatch(t *testing.T) {
+	oldSystem := runtimeSystem
+	defer SetRuntimeSystemSettings(oldSystem)
+
+	chatID := int64(-100123456)
+	mappedGroupID := tgBotStableID("chat:" + strconv.FormatInt(chatID, 10))
+	SetRuntimeSystemSettings(SystemSettings{
+		TGBotGroupMode:      accessBlacklist,
+		TGBotGroupBlacklist: []int64{mappedGroupID},
+	})
+	driver := &tgBotDriver{selfID: 1, targets: map[int64]tgBotTarget{}}
+	event := driver.zeroEvent(tgBotUpdate{Message: tgBotMessage{
+		MessageID: 10,
+		Text:      "https://x.com/example/status/1",
+		Chat:      tgBotChat{ID: chatID, Type: "supergroup", Title: "test"},
+		From:      tgBotUser{ID: 42, FirstName: "tg"},
+	}})
+	if len(event) != 0 {
+		t.Fatalf("blocked telegram message should not be dispatched: %s", string(event))
+	}
+}
+
 func TestTelegramRichMediaEnabledRespectsSwitches(t *testing.T) {
 	oldSystem := runtimeSystem
 	defer SetRuntimeSystemSettings(oldSystem)

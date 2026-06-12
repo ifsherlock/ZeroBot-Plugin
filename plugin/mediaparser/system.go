@@ -10,59 +10,77 @@ import (
 )
 
 type SystemSettings struct {
-	WebUIAddr         string  `json:"webui_addr"`
-	WSURL             string  `json:"ws_url"`
-	WSToken           string  `json:"ws_token,omitempty"`
-	OneBotDataDir     string  `json:"onebot_data_dir,omitempty"`
-	Nickname          string  `json:"nickname"`
-	CommandPrefix     string  `json:"command_prefix"`
-	SuperUsers        []int64 `json:"super_users"`
-	QQBotEnabled      bool    `json:"qqbot_enabled"`
-	QQBotName         string  `json:"qqbot_name"`
-	QQBotAppID        string  `json:"qqbot_app_id,omitempty"`
-	QQBotSecret       string  `json:"qqbot_secret,omitempty"`
-	QQBotOpenID       string  `json:"qqbot_openid,omitempty"`
-	QQBotGroupOpenID  string  `json:"qqbot_group_openid,omitempty"`
-	QQBotPublicBase   string  `json:"qqbot_public_base,omitempty"`
-	QQBotCardDisabled bool    `json:"qqbot_card_disabled,omitempty"`
-	QQBotMediaEnabled bool    `json:"qqbot_media_enabled"`
-	QQBotMarkdown     bool    `json:"qqbot_markdown"`
-	TGBotEnabled      bool    `json:"tgbot_enabled"`
-	TGBotName         string  `json:"tgbot_name"`
-	TGBotToken        string  `json:"tgbot_token,omitempty"`
-	TGBotAPIBase      string  `json:"tgbot_api_base,omitempty"`
-	TGBotProxy        string  `json:"tgbot_proxy,omitempty"`
-	TGBotMediaEnabled bool    `json:"tgbot_media_enabled"`
+	WebUIAddr               string  `json:"webui_addr"`
+	WSURL                   string  `json:"ws_url"`
+	WSToken                 string  `json:"ws_token,omitempty"`
+	OneBotDataDir           string  `json:"onebot_data_dir,omitempty"`
+	Nickname                string  `json:"nickname"`
+	CommandPrefix           string  `json:"command_prefix"`
+	SuperUsers              []int64 `json:"super_users"`
+	QQBotEnabled            bool    `json:"qqbot_enabled"`
+	QQBotName               string  `json:"qqbot_name"`
+	QQBotAppID              string  `json:"qqbot_app_id,omitempty"`
+	QQBotSecret             string  `json:"qqbot_secret,omitempty"`
+	QQBotOpenID             string  `json:"qqbot_openid,omitempty"`
+	QQBotGroupOpenID        string  `json:"qqbot_group_openid,omitempty"`
+	QQBotPublicBase         string  `json:"qqbot_public_base,omitempty"`
+	QQBotCardDisabled       bool    `json:"qqbot_card_disabled,omitempty"`
+	QQBotMediaEnabled       bool    `json:"qqbot_media_enabled"`
+	QQBotMarkdown           bool    `json:"qqbot_markdown"`
+	TGBotEnabled            bool    `json:"tgbot_enabled"`
+	TGBotName               string  `json:"tgbot_name"`
+	TGBotToken              string  `json:"tgbot_token,omitempty"`
+	TGBotAPIBase            string  `json:"tgbot_api_base,omitempty"`
+	TGBotProxy              string  `json:"tgbot_proxy,omitempty"`
+	TGBotMediaEnabled       bool    `json:"tgbot_media_enabled"`
+	TGBotPrivateMode        string  `json:"tgbot_private_mode,omitempty"`
+	TGBotGroupMode          string  `json:"tgbot_group_mode,omitempty"`
+	TGBotGroupUserMode      string  `json:"tgbot_group_user_mode,omitempty"`
+	TGBotUserWhitelist      []int64 `json:"tgbot_user_whitelist,omitempty"`
+	TGBotUserBlacklist      []int64 `json:"tgbot_user_blacklist,omitempty"`
+	TGBotGroupWhitelist     []int64 `json:"tgbot_group_whitelist,omitempty"`
+	TGBotGroupBlacklist     []int64 `json:"tgbot_group_blacklist,omitempty"`
+	TGBotGroupUserWhitelist []int64 `json:"tgbot_group_user_whitelist,omitempty"`
+	TGBotGroupUserBlacklist []int64 `json:"tgbot_group_user_blacklist,omitempty"`
 }
 
 type systemSettingsResponse struct {
-	WebUIAddr         string   `json:"webui_addr"`
-	WSURL             string   `json:"ws_url"`
-	WSToken           string   `json:"ws_token,omitempty"`
-	WSTokenSet        bool     `json:"ws_token_set"`
-	OneBotDataDir     string   `json:"onebot_data_dir,omitempty"`
-	Nickname          string   `json:"nickname"`
-	CommandPrefix     string   `json:"command_prefix"`
-	SuperUsers        []int64  `json:"super_users"`
-	QQBotEnabled      bool     `json:"qqbot_enabled"`
-	QQBotName         string   `json:"qqbot_name"`
-	QQBotAppID        string   `json:"qqbot_app_id,omitempty"`
-	QQBotSecretSet    bool     `json:"qqbot_secret_set"`
-	QQBotOpenID       string   `json:"qqbot_openid,omitempty"`
-	QQBotGroupOpenID  string   `json:"qqbot_group_openid,omitempty"`
-	QQBotPublicBase   string   `json:"qqbot_public_base,omitempty"`
-	QQBotCardEnabled  bool     `json:"qqbot_card_enabled"`
-	QQBotMediaEnabled bool     `json:"qqbot_media_enabled"`
-	QQBotMarkdown     bool     `json:"qqbot_markdown"`
-	QQBotAvailable    bool     `json:"qqbot_available"`
-	TGBotEnabled      bool     `json:"tgbot_enabled"`
-	TGBotName         string   `json:"tgbot_name"`
-	TGBotTokenSet     bool     `json:"tgbot_token_set"`
-	TGBotAPIBase      string   `json:"tgbot_api_base,omitempty"`
-	TGBotProxy        string   `json:"tgbot_proxy,omitempty"`
-	TGBotMediaEnabled bool     `json:"tgbot_media_enabled"`
-	TGBotAvailable    bool     `json:"tgbot_available"`
-	PendingRestart    []string `json:"pending_restart"`
+	WebUIAddr               string   `json:"webui_addr"`
+	WSURL                   string   `json:"ws_url"`
+	WSToken                 string   `json:"ws_token,omitempty"`
+	WSTokenSet              bool     `json:"ws_token_set"`
+	OneBotDataDir           string   `json:"onebot_data_dir,omitempty"`
+	Nickname                string   `json:"nickname"`
+	CommandPrefix           string   `json:"command_prefix"`
+	SuperUsers              []int64  `json:"super_users"`
+	QQBotEnabled            bool     `json:"qqbot_enabled"`
+	QQBotName               string   `json:"qqbot_name"`
+	QQBotAppID              string   `json:"qqbot_app_id,omitempty"`
+	QQBotSecretSet          bool     `json:"qqbot_secret_set"`
+	QQBotOpenID             string   `json:"qqbot_openid,omitempty"`
+	QQBotGroupOpenID        string   `json:"qqbot_group_openid,omitempty"`
+	QQBotPublicBase         string   `json:"qqbot_public_base,omitempty"`
+	QQBotCardEnabled        bool     `json:"qqbot_card_enabled"`
+	QQBotMediaEnabled       bool     `json:"qqbot_media_enabled"`
+	QQBotMarkdown           bool     `json:"qqbot_markdown"`
+	QQBotAvailable          bool     `json:"qqbot_available"`
+	TGBotEnabled            bool     `json:"tgbot_enabled"`
+	TGBotName               string   `json:"tgbot_name"`
+	TGBotTokenSet           bool     `json:"tgbot_token_set"`
+	TGBotAPIBase            string   `json:"tgbot_api_base,omitempty"`
+	TGBotProxy              string   `json:"tgbot_proxy,omitempty"`
+	TGBotMediaEnabled       bool     `json:"tgbot_media_enabled"`
+	TGBotAvailable          bool     `json:"tgbot_available"`
+	TGBotPrivateMode        string   `json:"tgbot_private_mode"`
+	TGBotGroupMode          string   `json:"tgbot_group_mode"`
+	TGBotGroupUserMode      string   `json:"tgbot_group_user_mode"`
+	TGBotUserWhitelist      []int64  `json:"tgbot_user_whitelist,omitempty"`
+	TGBotUserBlacklist      []int64  `json:"tgbot_user_blacklist,omitempty"`
+	TGBotGroupWhitelist     []int64  `json:"tgbot_group_whitelist,omitempty"`
+	TGBotGroupBlacklist     []int64  `json:"tgbot_group_blacklist,omitempty"`
+	TGBotGroupUserWhitelist []int64  `json:"tgbot_group_user_whitelist,omitempty"`
+	TGBotGroupUserBlacklist []int64  `json:"tgbot_group_user_blacklist,omitempty"`
+	PendingRestart          []string `json:"pending_restart"`
 }
 
 var (
@@ -144,7 +162,24 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 		settings.TGBotAPIBase = "https://api.telegram.org"
 	}
 	settings.TGBotProxy = strings.TrimSpace(settings.TGBotProxy)
+	settings.TGBotPrivateMode = normalizeSystemAccessMode(settings.TGBotPrivateMode)
+	settings.TGBotGroupMode = normalizeSystemAccessMode(settings.TGBotGroupMode)
+	settings.TGBotGroupUserMode = normalizeSystemAccessMode(settings.TGBotGroupUserMode)
+	settings.TGBotUserWhitelist = uniqueInt64(settings.TGBotUserWhitelist)
+	settings.TGBotUserBlacklist = uniqueInt64(settings.TGBotUserBlacklist)
+	settings.TGBotGroupWhitelist = uniqueInt64(settings.TGBotGroupWhitelist)
+	settings.TGBotGroupBlacklist = uniqueInt64(settings.TGBotGroupBlacklist)
+	settings.TGBotGroupUserWhitelist = uniqueInt64(settings.TGBotGroupUserWhitelist)
+	settings.TGBotGroupUserBlacklist = uniqueInt64(settings.TGBotGroupUserBlacklist)
 	return settings
+}
+
+func normalizeSystemAccessMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode != accessBlacklist && mode != accessWhitelist {
+		return accessNone
+	}
+	return mode
 }
 
 func uniqueInt64(in []int64) []int64 {

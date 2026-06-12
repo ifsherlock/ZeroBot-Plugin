@@ -787,6 +787,15 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 			payload.TGBotAPIBase = current.TGBotAPIBase
 			payload.TGBotProxy = current.TGBotProxy
 			payload.TGBotMediaEnabled = current.TGBotMediaEnabled
+			payload.TGBotPrivateMode = current.TGBotPrivateMode
+			payload.TGBotGroupMode = current.TGBotGroupMode
+			payload.TGBotGroupUserMode = current.TGBotGroupUserMode
+			payload.TGBotUserWhitelist = append([]int64{}, current.TGBotUserWhitelist...)
+			payload.TGBotUserBlacklist = append([]int64{}, current.TGBotUserBlacklist...)
+			payload.TGBotGroupWhitelist = append([]int64{}, current.TGBotGroupWhitelist...)
+			payload.TGBotGroupBlacklist = append([]int64{}, current.TGBotGroupBlacklist...)
+			payload.TGBotGroupUserWhitelist = append([]int64{}, current.TGBotGroupUserWhitelist...)
+			payload.TGBotGroupUserBlacklist = append([]int64{}, current.TGBotGroupUserBlacklist...)
 		}
 		payload = normalizeSystemSettings(payload)
 		if err := saveSystemSettings(payload); err != nil {
@@ -1496,32 +1505,41 @@ func systemSettingsForWeb() systemSettingsResponse {
 		pending = append(pending, "Telegram Bot 通道")
 	}
 	return systemSettingsResponse{
-		WebUIAddr:         firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
-		WSURL:             firstNonEmpty(settings.WSURL, current.WSURL),
-		WSTokenSet:        settings.WSToken != "",
-		OneBotDataDir:     firstNonEmpty(settings.OneBotDataDir, current.OneBotDataDir),
-		Nickname:          firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
-		CommandPrefix:     firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
-		SuperUsers:        uniqueInt64(settings.SuperUsers),
-		QQBotEnabled:      settings.QQBotEnabled,
-		QQBotName:         firstNonEmpty(settings.QQBotName, "qqbot"),
-		QQBotAppID:        settings.QQBotAppID,
-		QQBotSecretSet:    settings.QQBotSecret != "",
-		QQBotOpenID:       settings.QQBotOpenID,
-		QQBotGroupOpenID:  settings.QQBotGroupOpenID,
-		QQBotPublicBase:   settings.QQBotPublicBase,
-		QQBotCardEnabled:  !settings.QQBotCardDisabled,
-		QQBotMediaEnabled: settings.QQBotMediaEnabled,
-		QQBotMarkdown:     settings.QQBotMarkdown,
-		QQBotAvailable:    qqBotDriverAvailable(),
-		TGBotEnabled:      settings.TGBotEnabled,
-		TGBotName:         firstNonEmpty(settings.TGBotName, "telegram"),
-		TGBotTokenSet:     settings.TGBotToken != "",
-		TGBotAPIBase:      firstNonEmpty(settings.TGBotAPIBase, tgBotDefaultAPIBase),
-		TGBotProxy:        settings.TGBotProxy,
-		TGBotMediaEnabled: settings.TGBotMediaEnabled,
-		TGBotAvailable:    tgBotDriverAvailable(),
-		PendingRestart:    pending,
+		WebUIAddr:               firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
+		WSURL:                   firstNonEmpty(settings.WSURL, current.WSURL),
+		WSTokenSet:              settings.WSToken != "",
+		OneBotDataDir:           firstNonEmpty(settings.OneBotDataDir, current.OneBotDataDir),
+		Nickname:                firstNonEmpty(settings.Nickname, firstString(zero.BotConfig.NickName)),
+		CommandPrefix:           firstNonEmpty(settings.CommandPrefix, zero.BotConfig.CommandPrefix),
+		SuperUsers:              uniqueInt64(settings.SuperUsers),
+		QQBotEnabled:            settings.QQBotEnabled,
+		QQBotName:               firstNonEmpty(settings.QQBotName, "qqbot"),
+		QQBotAppID:              settings.QQBotAppID,
+		QQBotSecretSet:          settings.QQBotSecret != "",
+		QQBotOpenID:             settings.QQBotOpenID,
+		QQBotGroupOpenID:        settings.QQBotGroupOpenID,
+		QQBotPublicBase:         settings.QQBotPublicBase,
+		QQBotCardEnabled:        !settings.QQBotCardDisabled,
+		QQBotMediaEnabled:       settings.QQBotMediaEnabled,
+		QQBotMarkdown:           settings.QQBotMarkdown,
+		QQBotAvailable:          qqBotDriverAvailable(),
+		TGBotEnabled:            settings.TGBotEnabled,
+		TGBotName:               firstNonEmpty(settings.TGBotName, "telegram"),
+		TGBotTokenSet:           settings.TGBotToken != "",
+		TGBotAPIBase:            firstNonEmpty(settings.TGBotAPIBase, tgBotDefaultAPIBase),
+		TGBotProxy:              settings.TGBotProxy,
+		TGBotMediaEnabled:       settings.TGBotMediaEnabled,
+		TGBotAvailable:          tgBotDriverAvailable(),
+		TGBotPrivateMode:        settings.TGBotPrivateMode,
+		TGBotGroupMode:          settings.TGBotGroupMode,
+		TGBotGroupUserMode:      settings.TGBotGroupUserMode,
+		TGBotUserWhitelist:      append([]int64{}, settings.TGBotUserWhitelist...),
+		TGBotUserBlacklist:      append([]int64{}, settings.TGBotUserBlacklist...),
+		TGBotGroupWhitelist:     append([]int64{}, settings.TGBotGroupWhitelist...),
+		TGBotGroupBlacklist:     append([]int64{}, settings.TGBotGroupBlacklist...),
+		TGBotGroupUserWhitelist: append([]int64{}, settings.TGBotGroupUserWhitelist...),
+		TGBotGroupUserBlacklist: append([]int64{}, settings.TGBotGroupUserBlacklist...),
+		PendingRestart:          pending,
 	}
 }
 
@@ -1541,6 +1559,15 @@ func applyRuntimeSystemSettings(settings SystemSettings) {
 	runtimeSystem.Nickname = firstNonEmpty(settings.Nickname, runtimeSystem.Nickname)
 	runtimeSystem.CommandPrefix = firstNonEmpty(settings.CommandPrefix, runtimeSystem.CommandPrefix)
 	runtimeSystem.SuperUsers = uniqueInt64(settings.SuperUsers)
+	runtimeSystem.TGBotPrivateMode = settings.TGBotPrivateMode
+	runtimeSystem.TGBotGroupMode = settings.TGBotGroupMode
+	runtimeSystem.TGBotGroupUserMode = settings.TGBotGroupUserMode
+	runtimeSystem.TGBotUserWhitelist = append([]int64{}, settings.TGBotUserWhitelist...)
+	runtimeSystem.TGBotUserBlacklist = append([]int64{}, settings.TGBotUserBlacklist...)
+	runtimeSystem.TGBotGroupWhitelist = append([]int64{}, settings.TGBotGroupWhitelist...)
+	runtimeSystem.TGBotGroupBlacklist = append([]int64{}, settings.TGBotGroupBlacklist...)
+	runtimeSystem.TGBotGroupUserWhitelist = append([]int64{}, settings.TGBotGroupUserWhitelist...)
+	runtimeSystem.TGBotGroupUserBlacklist = append([]int64{}, settings.TGBotGroupUserBlacklist...)
 	systemMu.Unlock()
 }
 
@@ -2115,6 +2142,23 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="row"><button class="primary" id="tgbotSaveButton" onclick="saveSystemSettings()">保存 Telegram 配置</button><span class="muted" id="tgbotSaveHint">首次启用需重启。</span></div>
 </div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>访问控制</b><span class="muted">只拦截 Telegram 通道。</span></div>
+<div class="settingsFields">
+<label class="field">私聊模式 <select id="tgbotPrivateMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
+<label class="field">群/频道模式 <select id="tgbotGroupMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
+<label class="field span2">群内发言人模式 <select id="tgbotGroupUserMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
+</div>
+<div class="accessGrid">
+<label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="whitelist">私聊白名单<textarea id="tgbotUserWhitelist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="blacklist">私聊黑名单<textarea id="tgbotUserBlacklist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupMode" data-kind="whitelist">群/频道白名单<textarea id="tgbotGroupWhitelist" placeholder="每行一个 Telegram 映射 group_id"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupMode" data-kind="blacklist">群/频道黑名单<textarea id="tgbotGroupBlacklist" placeholder="每行一个 Telegram 映射 group_id"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupUserMode" data-kind="whitelist">群内发言人白名单<textarea id="tgbotGroupUserWhitelist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupUserMode" data-kind="blacklist">群内发言人黑名单<textarea id="tgbotGroupUserBlacklist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
+</div>
+<p class="muted" style="margin-bottom:0">名单使用 TG 日志里的映射 ID；不写入聚合解析或 QQ 名单。</p>
+</div>
 </div>
 <div class="settingsStack">
 <div class="settingsCard">
@@ -2122,7 +2166,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="commandGrid">
 <div class="commandItem"><b>收消息</b><code>默认 getUpdates 长轮询</code><code>不需要公网 Webhook</code></div>
 <div class="commandItem"><b>发媒体</b><code>sendPhoto / sendVideo / sendDocument</code><code>本地文件 multipart 上传</code></div>
-<div class="commandItem"><b>群解析</b><code>BotFather 关闭 privacy mode 后可接收普通群消息</code><code>白名单使用日志里的映射 ID</code></div>
+<div class="commandItem"><b>群解析</b><code>BotFather 关闭 privacy mode 后可接收普通群消息</code><code>TG 名单只影响 TG 通道</code></div>
 </div>
 </div>
 </div>
@@ -2739,6 +2783,8 @@ async function syncCookieCloudNow(){
 function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;const src=info.url||('/api/mediaparser/logos/image?platform='+encodeURIComponent(p.name));const preview='<img class="logoPreview" src="'+escapeHTML(src)+'" alt="'+escapeHTML(p.label)+' Logo">';return '<div class="logoWrap">'+preview+'<div><div class="logoTools"><input id="logo-'+p.name+'" data-platform="'+p.name+'" type="file" accept="image/*" style="display:none" onchange="uploadLogo(this.dataset.platform)"><button data-target="logo-'+p.name+'" onclick="$(this.dataset.target).click()">'+(custom?'替换':'上传')+'</button><input id="logoUrl-'+p.name+'" type="text" placeholder="粘贴图片链接自动缓存"><button data-platform="'+p.name+'" onclick="cacheLogoURL(this.dataset.platform)">缓存链接</button></div><div class="muted">'+(custom?'已缓存本地 Logo':'使用内置 Logo，可上传覆盖')+'</div></div></div>'}
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
+function idListText(list){return (list||[]).map(String).join('\n')}
+function parseIDArray(text){const seen={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^\d+$/.test(x)) seen[x]=true}); return Object.keys(seen).map(Number).filter(Boolean).sort((a,b)=>a-b)}
 function setTextareaMap(id,map){$(id).value=listText(map)}
 function addListID(textarea,id,on){const map=parseList($(textarea).value); if(on) map[String(id)]=true; else delete map[String(id)]; setTextareaMap(textarea,map); markDirty()}
 function toggleLastMsg(){const el=$('lastMsg'); el.classList.toggle('expanded')}
@@ -2750,6 +2796,13 @@ function updateAccessVisibility(){
  });
  const hasGroupMode=$('gmode').value!=='none';
  $('groupMsg').textContent=hasGroupMode?'群列表用于快速勾选当前群名单':'群聊名单已关闭，需要时选择白名单或黑名单';
+}
+function onTGBotAccessModeChange(){updateTGBotAccessVisibility()}
+function updateTGBotAccessVisibility(){
+ document.querySelectorAll('.tgbotAccessField').forEach(el=>{
+  const modeEl=$(el.dataset.mode); const mode=modeEl?modeEl.value:'none';
+  el.classList.toggle('hidden', mode!==el.dataset.kind);
+ });
 }
 async function refreshStatus(){
  const st=await (await apiFetch('/api/status')).json();
@@ -2806,7 +2859,12 @@ function tgbotStatusText(){
 }
 function tgbotPolicyText(){
  if(!tgbotAvailable()) return tgbotUnavailableText();
- return (sys&&sys.tgbot_enabled?'长轮询开启':'未启用')+' / 媒体上传 '+onText(sys&&sys.tgbot_media_enabled);
+ return (sys&&sys.tgbot_enabled?'长轮询开启':'未启用')+' / 媒体上传 '+onText(sys&&sys.tgbot_media_enabled)+' / '+tgbotAccessSummary();
+}
+function accessModeText(mode){return mode==='whitelist'?'白名单':(mode==='blacklist'?'黑名单':'未限制')}
+function tgbotAccessSummary(){
+ if(!sys) return '未限制';
+ return '私聊 '+accessModeText(sys.tgbot_private_mode)+'，群 '+accessModeText(sys.tgbot_group_mode)+'，发言人 '+accessModeText(sys.tgbot_group_user_mode);
 }
 function renderQQBotAvailability(){
  const available=qqbotAvailable();
@@ -2835,7 +2893,7 @@ function renderTGBotAvailability(){
  if($('tgbotUnavailable')) $('tgbotUnavailable').classList.toggle('hidden', available);
  if($('tgbotSaveHint')) $('tgbotSaveHint').textContent=available?'保存后需重启；群聊自动解析可能需要关闭 BotFather privacy mode。':tgbotUnavailableText();
  if($('tgbotSaveButton')) $('tgbotSaveButton').disabled=!available;
- ['tgbotEnabled','tgbotName','tgbotToken','tgbotAPIBase','tgbotProxy','tgbotMediaEnabled'].forEach(id=>{
+ ['tgbotEnabled','tgbotName','tgbotToken','tgbotAPIBase','tgbotProxy','tgbotMediaEnabled','tgbotPrivateMode','tgbotGroupMode','tgbotGroupUserMode','tgbotUserWhitelist','tgbotUserBlacklist','tgbotGroupWhitelist','tgbotGroupBlacklist','tgbotGroupUserWhitelist','tgbotGroupUserBlacklist'].forEach(id=>{
   const el=$(id);
   if(el) el.disabled=!available;
  });
@@ -2938,8 +2996,18 @@ function renderSystemSettings(){
   $('tgbotAPIBase').value=sys.tgbot_api_base||'https://api.telegram.org';
   $('tgbotProxy').value=sys.tgbot_proxy||'';
   $('tgbotMediaEnabled').checked=!!sys.tgbot_media_enabled;
+  $('tgbotPrivateMode').value=sys.tgbot_private_mode||'none';
+  $('tgbotGroupMode').value=sys.tgbot_group_mode||'none';
+  $('tgbotGroupUserMode').value=sys.tgbot_group_user_mode||'none';
+  $('tgbotUserWhitelist').value=idListText(sys.tgbot_user_whitelist);
+  $('tgbotUserBlacklist').value=idListText(sys.tgbot_user_blacklist);
+  $('tgbotGroupWhitelist').value=idListText(sys.tgbot_group_whitelist);
+  $('tgbotGroupBlacklist').value=idListText(sys.tgbot_group_blacklist);
+  $('tgbotGroupUserWhitelist').value=idListText(sys.tgbot_group_user_whitelist);
+  $('tgbotGroupUserBlacklist').value=idListText(sys.tgbot_group_user_blacklist);
  }
  renderTGBotAvailability();
+ updateTGBotAccessVisibility();
  const pending=sys.pending_restart||[];
  $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
  if($('restartTop')){
@@ -2978,7 +3046,16 @@ async function saveSystemSettings(){
    tgbot_token:$('tgbotToken')?String($('tgbotToken').value||'').trim():'',
    tgbot_api_base:$('tgbotAPIBase')?String($('tgbotAPIBase').value||'https://api.telegram.org').trim():'https://api.telegram.org',
    tgbot_proxy:$('tgbotProxy')?String($('tgbotProxy').value||'').trim():'',
-   tgbot_media_enabled:$('tgbotMediaEnabled')?!!$('tgbotMediaEnabled').checked:false
+   tgbot_media_enabled:$('tgbotMediaEnabled')?!!$('tgbotMediaEnabled').checked:false,
+   tgbot_private_mode:$('tgbotPrivateMode')?String($('tgbotPrivateMode').value||'none'):'none',
+   tgbot_group_mode:$('tgbotGroupMode')?String($('tgbotGroupMode').value||'none'):'none',
+   tgbot_group_user_mode:$('tgbotGroupUserMode')?String($('tgbotGroupUserMode').value||'none'):'none',
+   tgbot_user_whitelist:$('tgbotUserWhitelist')?parseIDArray($('tgbotUserWhitelist').value):[],
+   tgbot_user_blacklist:$('tgbotUserBlacklist')?parseIDArray($('tgbotUserBlacklist').value):[],
+   tgbot_group_whitelist:$('tgbotGroupWhitelist')?parseIDArray($('tgbotGroupWhitelist').value):[],
+   tgbot_group_blacklist:$('tgbotGroupBlacklist')?parseIDArray($('tgbotGroupBlacklist').value):[],
+   tgbot_group_user_whitelist:$('tgbotGroupUserWhitelist')?parseIDArray($('tgbotGroupUserWhitelist').value):[],
+   tgbot_group_user_blacklist:$('tgbotGroupUserBlacklist')?parseIDArray($('tgbotGroupUserBlacklist').value):[]
   });
  }
  const r=await apiFetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
