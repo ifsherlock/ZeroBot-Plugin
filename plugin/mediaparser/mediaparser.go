@@ -101,6 +101,9 @@ type config struct {
 	OutputMode                 map[string]string               `json:"output_mode"`
 	SendInfoCard               bool                            `json:"send_info_card"`
 	SendMedia                  bool                            `json:"send_media"`
+	LongArticleCards           bool                            `json:"long_article_cards"`
+	LongArticleThreshold       int                             `json:"long_article_threshold"`
+	LongArticleLines           int                             `json:"long_article_lines"`
 	DownloadVideo              bool                            `json:"download_video"`
 	MaxVideoMB                 int64                           `json:"max_video_mb"`
 	VideoMaxResolution         int                             `json:"video_max_resolution"`
@@ -175,25 +178,28 @@ type config struct {
 }
 
 type mediaMeta struct {
-	URL            string
-	SourceURL      string
-	Platform       string
-	Title          string
-	Author         string
-	Avatar         string
-	Timestamp      string
-	Desc           string
-	Cover          string
-	VideoURLs      [][]string
-	ImageURLs      [][]string
-	VideoHeads     map[string]string
-	ImageHeads     map[string]string
-	ForceLocal     bool
-	AccessText     string
-	Error          string
-	KeylolBlocks   []keylolBlock
-	KeylolCategory string
-	ArticleCard    bool
+	URL              string
+	SourceURL        string
+	Platform         string
+	Title            string
+	Author           string
+	Avatar           string
+	Timestamp        string
+	Desc             string
+	Cover            string
+	VideoURLs        [][]string
+	ImageURLs        [][]string
+	VideoHeads       map[string]string
+	ImageHeads       map[string]string
+	ForceLocal       bool
+	AccessText       string
+	Error            string
+	KeylolBlocks     []keylolBlock
+	KeylolCategory   string
+	ArticleCard      bool
+	LongArticleCard  bool
+	LongArticlePart  int
+	LongArticleTotal int
 
 	FilePaths        []string
 	VideoSizes       []float64
@@ -314,6 +320,9 @@ func defaultConfig() config {
 		OutputMode:                 output,
 		SendInfoCard:               true,
 		SendMedia:                  true,
+		LongArticleCards:           false,
+		LongArticleThreshold:       300,
+		LongArticleLines:           32,
 		DownloadVideo:              true,
 		MaxVideoMB:                 defaultMaxVideoMB,
 		VideoMaxResolution:         0,
@@ -466,6 +475,14 @@ func normalizeConfig(cfg *config) bool {
 	}
 	if cfg.SendMedia != cfg.DownloadVideo {
 		cfg.SendMedia = cfg.DownloadVideo
+		changed = true
+	}
+	if cfg.LongArticleThreshold <= 0 {
+		cfg.LongArticleThreshold = 300
+		changed = true
+	}
+	if cfg.LongArticleLines <= 0 {
+		cfg.LongArticleLines = 32
 		changed = true
 	}
 	if cfg.AccessMode == "" {
@@ -1059,6 +1076,12 @@ func mergeSystemSettingsForStartup(current, saved SystemSettings) SystemSettings
 	merged.QQBotMediaEnabled = current.QQBotMediaEnabled || saved.QQBotMediaEnabled
 	merged.QQBotCardDisabled = current.QQBotCardDisabled || saved.QQBotCardDisabled
 	merged.QQBotEnabled = current.QQBotEnabled || saved.QQBotEnabled
+	merged.TGBotName = firstNonEmpty(current.TGBotName, saved.TGBotName)
+	merged.TGBotToken = firstNonEmpty(current.TGBotToken, saved.TGBotToken)
+	merged.TGBotAPIBase = firstNonEmpty(current.TGBotAPIBase, saved.TGBotAPIBase)
+	merged.TGBotProxy = firstNonEmpty(current.TGBotProxy, saved.TGBotProxy)
+	merged.TGBotMediaEnabled = current.TGBotMediaEnabled || saved.TGBotMediaEnabled
+	merged.TGBotEnabled = current.TGBotEnabled || saved.TGBotEnabled
 	return normalizeSystemSettings(merged)
 }
 
@@ -1272,6 +1295,7 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 	}
 	applyOutputFlags(cfg, &meta)
 	qqbotEvent := isOfficialQQBotEvent(ctx)
+	tgbotEvent := isTelegramBotEvent(ctx)
 
 	infoCardSent := false
 	cardEnabled := cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform)
@@ -1279,7 +1303,11 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		cardEnabled = cardEnabled && qqBotCardEnabled()
 	}
 	if cardEnabled {
-		infoCardSent = sendInfoCard(ctx, cfg, meta)
+		if shouldSendLongArticleCards(cfg, meta) {
+			infoCardSent = sendLongArticleCards(ctx, cfg, meta)
+		} else {
+			infoCardSent = sendInfoCard(ctx, cfg, meta)
+		}
 	}
 	if cfg.KeylolASFForward && meta.Platform == "keylol" && !qqbotEvent {
 		sendKeylolASFForward(ctx, meta)
@@ -1296,7 +1324,19 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		logrus.Infof("[mediaparser] success platform=%s url=%s elapsed=%s", link.Platform, link.URL, time.Since(started).Round(time.Millisecond))
 		return nil
 	}
-	mediaEnabled := !qqbotEvent && cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform)
+	tgbotMediaEnabled := tgbotEvent && tgBotRichMediaEnabled(cfg, meta.Platform)
+	if tgbotEvent {
+		logDebug(cfg, "tgbot_media_gate platform=%s tgbot_media=%v send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
+			meta.Platform, tgBotMediaEnabled(), cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), tgbotMediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
+	}
+	if tgbotMediaEnabled {
+		if err := sendTelegramRichMedia(ctx, cfg, &meta); err != nil {
+			return err
+		}
+		logrus.Infof("[mediaparser] success platform=%s url=%s elapsed=%s", link.Platform, link.URL, time.Since(started).Round(time.Millisecond))
+		return nil
+	}
+	mediaEnabled := !qqbotEvent && !tgbotEvent && cfg.SendMedia && cfg.DownloadVideo && cfg.PlatformSendMedia[meta.Platform] && cfg.PlatformDownload[meta.Platform] && wantsRich(cfg, meta.Platform)
 	logDebug(cfg, "media_gate platform=%s channel_qqbot=%v send_media=%v download=%v platform_send=%v platform_download=%v wants_rich=%v enabled=%v videos=%d images=%d",
 		meta.Platform, qqbotEvent, cfg.SendMedia, cfg.DownloadVideo, cfg.PlatformSendMedia[meta.Platform], cfg.PlatformDownload[meta.Platform], wantsRich(cfg, meta.Platform), mediaEnabled, len(meta.VideoURLs), len(meta.ImageURLs))
 	if mediaEnabled {
@@ -1313,6 +1353,10 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 
 func isOfficialQQBotEvent(ctx *zero.Ctx) bool {
 	return ctx != nil && ctx.Event != nil && ctx.Event.RawEvent.Get("qqbot_source").Exists()
+}
+
+func isTelegramBotEvent(ctx *zero.Ctx) bool {
+	return ctx != nil && ctx.Event != nil && ctx.Event.RawEvent.Get("tgbot_source").Exists()
 }
 
 func qqBotPublicImageEnabled() bool {
@@ -1333,8 +1377,23 @@ func qqBotMediaEnabled() bool {
 	return runtimeSystem.QQBotMediaEnabled
 }
 
+func tgBotMediaEnabled() bool {
+	systemMu.RLock()
+	defer systemMu.RUnlock()
+	return runtimeSystem.TGBotMediaEnabled
+}
+
 func qqBotRichMediaEnabled(cfg config, platform string) bool {
 	return qqBotMediaEnabled() &&
+		cfg.SendMedia &&
+		cfg.DownloadVideo &&
+		cfg.PlatformSendMedia[platform] &&
+		cfg.PlatformDownload[platform] &&
+		wantsRich(cfg, platform)
+}
+
+func tgBotRichMediaEnabled(cfg config, platform string) bool {
+	return tgBotMediaEnabled() &&
 		cfg.SendMedia &&
 		cfg.DownloadVideo &&
 		cfg.PlatformSendMedia[platform] &&
@@ -1350,13 +1409,114 @@ func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
 		return false
 	}
 	target := fileURI(card)
-	if !isOfficialQQBotEvent(ctx) {
+	if !isOfficialQQBotEvent(ctx) && !isTelegramBotEvent(ctx) {
 		target = oneBotLocalMediaTarget(card)
 	}
 	ctx.SendChain(message.Image(target))
 	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s target=%s", meta.Platform, meta.Title, card, target)
 	scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 	return true
+}
+
+func shouldSendLongArticleCards(cfg config, meta mediaMeta) bool {
+	if !cfg.LongArticleCards || strings.TrimSpace(meta.Desc) == "" {
+		return false
+	}
+	if !longArticlePlatform(meta.Platform) {
+		return false
+	}
+	threshold := cfg.LongArticleThreshold
+	if threshold <= 0 {
+		threshold = 300
+	}
+	return len([]rune(meta.Desc)) > threshold
+}
+
+func longArticlePlatform(platform string) bool {
+	switch normalizePlatformName(platform) {
+	case "twitter", "weibo", "bilibili", "xiaoheihe":
+		return true
+	default:
+		return false
+	}
+}
+
+func sendLongArticleCards(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
+	pages, err := renderLongArticleCardPages(meta, cfg.LongArticleLines)
+	if err != nil {
+		logrus.Warnf("[mediaparser] render_long_article_failed platform=%s error=%v", meta.Platform, err)
+		ctx.SendChain(message.Text(buildText(meta)))
+		return false
+	}
+	if len(pages) == 0 {
+		return false
+	}
+	if isOfficialQQBotEvent(ctx) || isTelegramBotEvent(ctx) {
+		for _, path := range pages {
+			ctx.SendChain(message.Image(fileURI(path)))
+			scheduleDelete(path, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
+		}
+		logrus.Infof("[mediaparser] sent_long_article_cards platform=%s title=%q pages=%d mode=sequential", meta.Platform, meta.Title, len(pages))
+		return true
+	}
+	nodes := message.Message{}
+	botName := "媒体解析bot"
+	botID := ctx.Event.SelfID
+	for i, path := range pages {
+		title := fmt.Sprintf("%s (%d/%d)", firstNonEmpty(meta.Title, platformLabel(meta.Platform)+"长文"), i+1, len(pages))
+		nodes = append(nodes, message.CustomNode(botName, botID, message.Message{
+			message.Text(title),
+			message.Image(oneBotLocalMediaTarget(path)),
+		}))
+		scheduleDelete(path, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
+	}
+	if ctx.Event.GroupID != 0 {
+		ctx.SendGroupForwardMessage(ctx.Event.GroupID, nodes)
+	} else {
+		ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes)
+	}
+	logrus.Infof("[mediaparser] sent_long_article_cards platform=%s title=%q pages=%d mode=forward", meta.Platform, meta.Title, len(pages))
+	return true
+}
+
+func renderLongArticleCardPages(meta mediaMeta, linesPerPage int) ([]string, error) {
+	fontBytes, err := cardFontBytes()
+	if err != nil {
+		return nil, err
+	}
+	if linesPerPage <= 0 {
+		linesPerPage = 32
+	}
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	const boxW = 560
+	lines := linuxdoBodyLines(bodyFontBytes, strings.TrimSpace(meta.Desc), boxW)
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	total := (len(lines) + linesPerPage - 1) / linesPerPage
+	paths := make([]string, 0, total)
+	for i := 0; i < total; i++ {
+		start := i * linesPerPage
+		end := start + linesPerPage
+		if end > len(lines) {
+			end = len(lines)
+		}
+		part := meta
+		part.Desc = strings.Join(lines[start:end], "\n")
+		part.LongArticleCard = true
+		part.LongArticlePart = i + 1
+		part.LongArticleTotal = total
+		if i > 0 {
+			part.ImageURLs = nil
+			part.Cover = ""
+		}
+		path, err := renderLongArticleCard(part, fontBytes)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
 }
 
 type keylolASFForwardItem struct {
@@ -1577,6 +1737,37 @@ func sendQQBotRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 	return nil
 }
 
+func sendTelegramRichMedia(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
+	if meta == nil || !tgBotRichMediaEnabled(cfg, meta.Platform) || (len(meta.VideoURLs) == 0 && len(meta.ImageURLs) == 0) {
+		return nil
+	}
+	if err := processDownloads(cfg, meta); err != nil {
+		logrus.Warnf("[mediaparser] tgbot_media_download_failed platform=%s error=%v", meta.Platform, err)
+	}
+	videoCount := 0
+	imageCount := 0
+	for i := range meta.VideoURLs {
+		target := telegramMediaVideoTarget(meta, i)
+		if target == "" {
+			continue
+		}
+		ctx.SendChain(message.Video(target))
+		videoCount++
+		logrus.Infof("[mediaparser] sent_tgbot_video platform=%s title=%q index=%d target=%s", meta.Platform, meta.Title, i, target)
+	}
+	for i := range meta.ImageURLs {
+		target := telegramMediaImageTarget(meta, i)
+		if target == "" {
+			continue
+		}
+		ctx.SendChain(message.Image(target))
+		imageCount++
+		logrus.Infof("[mediaparser] sent_tgbot_image platform=%s title=%q index=%d target=%s", meta.Platform, meta.Title, i, target)
+	}
+	logrus.Infof("[mediaparser] sent_tgbot_media platform=%s title=%q videos=%d images=%d", meta.Platform, meta.Title, videoCount, imageCount)
+	return nil
+}
+
 func qqBotMediaVideoTarget(meta *mediaMeta, i int) string {
 	if i < 0 || i >= len(meta.VideoURLs) {
 		return ""
@@ -1586,6 +1777,22 @@ func qqBotMediaVideoTarget(meta *mediaMeta, i int) string {
 	}
 	if i < len(meta.FilePaths) && meta.FilePaths[i] != "" {
 		return localMediaPathForQQBot(meta.FilePaths[i])
+	}
+	if len(meta.VideoURLs[i]) > 0 {
+		return stripMediaPrefix(meta.VideoURLs[i][0])
+	}
+	return ""
+}
+
+func telegramMediaVideoTarget(meta *mediaMeta, i int) string {
+	if i < 0 || i >= len(meta.VideoURLs) {
+		return ""
+	}
+	if i < len(meta.VideoModes) && meta.VideoModes[i] == "skip" {
+		return ""
+	}
+	if i < len(meta.FilePaths) && meta.FilePaths[i] != "" {
+		return fileURI(meta.FilePaths[i])
 	}
 	if len(meta.VideoURLs[i]) > 0 {
 		return stripMediaPrefix(meta.VideoURLs[i][0])
@@ -1603,6 +1810,23 @@ func qqBotMediaImageTarget(meta *mediaMeta, i int) string {
 	offset := len(meta.VideoURLs)
 	if offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
 		return localMediaPathForQQBot(meta.FilePaths[offset+i])
+	}
+	if len(meta.ImageURLs[i]) > 0 {
+		return stripMediaPrefix(meta.ImageURLs[i][0])
+	}
+	return ""
+}
+
+func telegramMediaImageTarget(meta *mediaMeta, i int) string {
+	if i < 0 || i >= len(meta.ImageURLs) {
+		return ""
+	}
+	if i < len(meta.ImageModes) && meta.ImageModes[i] == "skip" {
+		return ""
+	}
+	offset := len(meta.VideoURLs)
+	if offset+i < len(meta.FilePaths) && meta.FilePaths[offset+i] != "" {
+		return fileURI(meta.FilePaths[offset+i])
 	}
 	if len(meta.ImageURLs[i]) > 0 {
 		return stripMediaPrefix(meta.ImageURLs[i][0])

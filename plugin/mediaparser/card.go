@@ -41,9 +41,12 @@ type cardPalette struct {
 }
 
 func renderInfoCard(meta mediaMeta) (string, error) {
-	fontBytes, err := file.GetLazyData(text.GlowSansFontFile, control.Md5File, true)
+	fontBytes, err := cardFontBytes()
 	if err != nil {
 		return "", err
+	}
+	if meta.LongArticleCard {
+		return renderLongArticleCard(meta, fontBytes)
 	}
 	if meta.Platform == "keylol" {
 		return renderKeylolThreadCard(meta, fontBytes)
@@ -64,6 +67,151 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 		return renderUnifiedGalleryCard(meta, fontBytes)
 	}
 	return renderUnifiedVideoCard(meta, fontBytes)
+}
+
+func cardFontBytes() ([]byte, error) {
+	return file.GetLazyData(text.GlowSansFontFile, control.Md5File, true)
+}
+
+func renderLongArticleCard(meta mediaMeta, fontBytes []byte) (string, error) {
+	bodyFontBytes := keylolBodyFontBytes(fontBytes)
+	theme := keylolCardThemeNow()
+	const (
+		w        = 760
+		pad      = 40
+		panelPad = 28
+	)
+	bg := theme.BG
+	panel := theme.Panel
+	contentBG := linuxdoContentBoxColor(theme)
+	titleColor := theme.Title
+	bodyColor := theme.Body
+	mutedColor := theme.Muted
+	lineColor := theme.Line
+
+	contentXPad := 8
+	contentW := w - pad*2 - panelPad*2 - contentXPad*2
+	boxInset := 12
+	boxX := pad + panelPad + contentXPad + boxInset
+	boxW := contentW - boxInset*2
+	imageGroups := linuxdoPreviewImageGroups(meta.ImageURLs, 2)
+	images := fetchCardImageGroups(imageGroups, meta.ImageHeads)
+	imageH := 0
+	if len(images) > 0 {
+		imageH = 240
+	}
+	title := firstNonEmpty(meta.Title, platformLabel(meta.Platform)+" 长文")
+	if meta.LongArticleTotal > 1 {
+		title = fmt.Sprintf("%s (%d/%d)", title, meta.LongArticlePart, meta.LongArticleTotal)
+	}
+	titleLines := wrapDisplayTextByPixels(fontBytes, 30, title, float64(contentW), 4)
+	body := strings.TrimSpace(meta.Desc)
+	if body == "" {
+		body = "暂无正文摘要"
+	}
+	bodyLines := linuxdoBodyLines(bodyFontBytes, body, boxW)
+	contentBoxH := 34 + len(bodyLines)*34 + 32
+	if contentBoxH < 118 {
+		contentBoxH = 118
+	}
+	imageGap := 0
+	if imageH > 0 {
+		imageGap = 20
+	}
+	panelH := 38 + 58 + len(titleLines)*42 + 16 + 76 + 24 + contentBoxH + imageGap + imageH + 30 + 36 + 44
+	h := pad*2 + panelH
+
+	dc := gg.NewContext(w, h)
+	setRGB(dc, bg)
+	dc.Clear()
+	for i := 12; i >= 1; i-- {
+		dc.SetRGBA255(130, 96, 46, 3+i)
+		dc.DrawRoundedRectangle(float64(pad), float64(pad+i), float64(w-pad*2), float64(panelH), 18)
+		dc.Fill()
+	}
+	setRGB(dc, panel)
+	dc.DrawRoundedRectangle(float64(pad), float64(pad), float64(w-pad*2), float64(panelH), 18)
+	dc.Fill()
+
+	x := pad + panelPad + contentXPad
+	y := pad + 38
+	drawArticlePlatformBadge(dc, fontBytes, meta.Platform, x, y, titleColor, theme)
+	y += 58
+	for _, line := range titleLines {
+		drawInlineEmoji(dc, fontBytes, 30, titleColor, line, float64(x), float64(y))
+		y += 42
+	}
+	y += 16
+
+	avatar := fetchCardImage(meta.Avatar, meta.ImageHeads)
+	drawAvatar(dc, fontBytes, avatar, x, y-4, 54, meta.Author)
+	drawInlineEmoji(dc, fontBytes, 23, titleColor, firstNonEmpty(meta.Author, platformLabel(meta.Platform)+" 用户"), float64(x+72), float64(y+18))
+	sub := strings.TrimSpace(meta.Timestamp)
+	if meta.LongArticleTotal > 1 {
+		page := fmt.Sprintf("第 %d/%d 页", meta.LongArticlePart, meta.LongArticleTotal)
+		if sub != "" {
+			sub = page + " · " + sub
+		} else {
+			sub = page
+		}
+	}
+	if sub == "" {
+		sub = platformLabel(meta.Platform) + " 长文"
+	}
+	drawInlineEmoji(dc, fontBytes, 18, mutedColor, sub, float64(x+72), float64(y+48))
+	y += 76
+	setRGB(dc, lineColor)
+	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 1)
+	dc.Fill()
+	y += 24
+
+	setRGB(dc, contentBG)
+	dc.DrawRoundedRectangle(float64(boxX), float64(y), float64(boxW), float64(contentBoxH), 12)
+	dc.Fill()
+	yy := y + 36
+	for _, line := range bodyLines {
+		drawInlineEmoji(dc, bodyFontBytes, 24, bodyColor, line, float64(boxX+18), float64(yy))
+		yy += 34
+	}
+	y += contentBoxH
+	if imageH > 0 {
+		y += imageGap
+		drawLinuxdoImagePreview(dc, fontBytes, images, boxX, y, boxW, imageH, len(meta.ImageURLs), lineColor)
+		y += imageH
+	}
+	y += 30
+	setRGB(dc, lineColor)
+	dc.DrawRectangle(float64(x), float64(y), float64(contentW), 1)
+	dc.Fill()
+	y += 36
+	footer := firstNonEmpty(meta.URL, meta.SourceURL)
+	if footer != "" {
+		footer = truncateTextByPixels(fontBytes, 18, "link "+footer, float64(contentW))
+		drawInlineEmoji(dc, fontBytes, 18, mutedColor, footer, float64(x), float64(y))
+	}
+	return saveCardPNG(dc, meta)
+}
+
+func drawArticlePlatformBadge(dc *gg.Context, fontBytes []byte, platform string, x, y int, c color.RGBA, theme keylolCardTheme) {
+	badge := color.RGBA{R: 16, G: 18, B: 24, A: 255}
+	if keylolThemeDark(theme) {
+		badge = color.RGBA{R: 245, G: 247, B: 250, A: 255}
+	}
+	setRGB(dc, badge)
+	dc.DrawRoundedRectangle(float64(x), float64(y-30), 34, 34, 9)
+	dc.Fill()
+	markColor := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	if keylolThemeDark(theme) {
+		markColor = color.RGBA{R: 15, G: 18, B: 24, A: 255}
+	}
+	label := strings.ToUpper(platformLabel(platform))
+	mark := "文"
+	if platform == "twitter" {
+		mark = "X"
+		label = "X ARTICLE"
+	}
+	drawInlineEmoji(dc, fontBytes, 20, markColor, mark, float64(x+9), float64(y-5))
+	drawInlineEmoji(dc, fontBytes, 22, c, label, float64(x+44), float64(y-2))
 }
 
 func renderTwitterArticleCard(meta mediaMeta, fontBytes []byte) (string, error) {
@@ -2460,7 +2608,11 @@ func keylolLooksLikeLink(line string) bool {
 }
 
 func saveCardPNG(dc *gg.Context, meta mediaMeta) (string, error) {
-	out := filepath.Join(cacheDir, fmt.Sprintf("card_%s.png", cacheName(meta.SourceURL, meta.Platform)))
+	name := fmt.Sprintf("card_%s", cacheName(meta.SourceURL, meta.Platform))
+	if meta.LongArticleCard && meta.LongArticlePart > 0 {
+		name = fmt.Sprintf("%s_long_%02d", name, meta.LongArticlePart)
+	}
+	out := filepath.Join(cacheDir, name+".png")
 	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
 		return "", err
 	}

@@ -677,6 +677,10 @@ func qqBotDriverAvailable() bool {
 	return false
 }
 
+func tgBotDriverAvailable() bool {
+	return true
+}
+
 func serveLogsAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -761,6 +765,9 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(payload.QQBotSecret) == "" {
 			payload.QQBotSecret = current.QQBotSecret
 		}
+		if strings.TrimSpace(payload.TGBotToken) == "" {
+			payload.TGBotToken = current.TGBotToken
+		}
 		if !qqBotDriverAvailable() {
 			payload.QQBotEnabled = current.QQBotEnabled
 			payload.QQBotName = current.QQBotName
@@ -772,6 +779,14 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 			payload.QQBotCardDisabled = current.QQBotCardDisabled
 			payload.QQBotMediaEnabled = current.QQBotMediaEnabled
 			payload.QQBotMarkdown = current.QQBotMarkdown
+		}
+		if !tgBotDriverAvailable() {
+			payload.TGBotEnabled = current.TGBotEnabled
+			payload.TGBotName = current.TGBotName
+			payload.TGBotToken = current.TGBotToken
+			payload.TGBotAPIBase = current.TGBotAPIBase
+			payload.TGBotProxy = current.TGBotProxy
+			payload.TGBotMediaEnabled = current.TGBotMediaEnabled
 		}
 		payload = normalizeSystemSettings(payload)
 		if err := saveSystemSettings(payload); err != nil {
@@ -1430,6 +1445,9 @@ func systemSettingsForSave() SystemSettings {
 	if saved.QQBotSecret == "" {
 		saved.QQBotSecret = current.QQBotSecret
 	}
+	if saved.TGBotToken == "" {
+		saved.TGBotToken = current.TGBotToken
+	}
 	if saved.Nickname == "" {
 		saved.Nickname = firstNonEmpty(firstString(zero.BotConfig.NickName), current.Nickname)
 	}
@@ -1469,6 +1487,14 @@ func systemSettingsForWeb() systemSettingsResponse {
 		settings.QQBotMarkdown != current.QQBotMarkdown {
 		pending = append(pending, "官方 QQBot 通道")
 	}
+	if settings.TGBotEnabled != current.TGBotEnabled ||
+		settings.TGBotName != current.TGBotName ||
+		settings.TGBotToken != current.TGBotToken ||
+		settings.TGBotAPIBase != current.TGBotAPIBase ||
+		settings.TGBotProxy != current.TGBotProxy ||
+		settings.TGBotMediaEnabled != current.TGBotMediaEnabled {
+		pending = append(pending, "Telegram Bot 通道")
+	}
 	return systemSettingsResponse{
 		WebUIAddr:         firstNonEmpty(settings.WebUIAddr, current.WebUIAddr),
 		WSURL:             firstNonEmpty(settings.WSURL, current.WSURL),
@@ -1488,6 +1514,13 @@ func systemSettingsForWeb() systemSettingsResponse {
 		QQBotMediaEnabled: settings.QQBotMediaEnabled,
 		QQBotMarkdown:     settings.QQBotMarkdown,
 		QQBotAvailable:    qqBotDriverAvailable(),
+		TGBotEnabled:      settings.TGBotEnabled,
+		TGBotName:         firstNonEmpty(settings.TGBotName, "telegram"),
+		TGBotTokenSet:     settings.TGBotToken != "",
+		TGBotAPIBase:      firstNonEmpty(settings.TGBotAPIBase, tgBotDefaultAPIBase),
+		TGBotProxy:        settings.TGBotProxy,
+		TGBotMediaEnabled: settings.TGBotMediaEnabled,
+		TGBotAvailable:    tgBotDriverAvailable(),
 		PendingRestart:    pending,
 	}
 }
@@ -1918,7 +1951,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </nav>
 </aside>
 <main class="wrap">
-<div class="hero"><div><h2>机器人控制台</h2><p>查看运行状态，管理 OneBot 与官方 QQBot 通道。</p></div><div class="toolbar"><button onclick="refreshStatus()">刷新状态</button><button class="danger" onclick="clearCache()">清理缓存</button></div></div>
+<div class="hero"><div><h2>机器人控制台</h2><p>查看运行状态，管理 OneBot、QQBot 与 Telegram 通道。</p></div><div class="toolbar"><button onclick="refreshStatus()">刷新状态</button><button class="danger" onclick="clearCache()">清理缓存</button></div></div>
 <section class="grid">
 <div class="span4" id="overview"></div>
 <div class="panel metric page active" data-page="overview"><span class="muted">服务状态</span><b id="svc">-</b></div>
@@ -1952,7 +1985,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">插件入口集中管理。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>60s 技能中心</b><div class="muted">60s Skills</div></td><td><span class="ok">已启用</span></td><td>新闻、热榜、天气、查询和工具接口</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>Telegram Bot</b><div class="muted">Telegram Channel</div></td><td><span id="tgbotPluginStatus" class="muted">检测中</span></td><td id="tgbotPluginDesc">Telegram 长轮询通道，可接入全部插件消息</td><td><button id="tgbotPluginButton" onclick="showPage('tgbot')">进入配置</button></td></tr><tr><td><b>60s 技能中心</b><div class="muted">60s Skills</div></td><td><span class="ok">已启用</span></td><td>新闻、热榜、天气、查询和工具接口</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">群管理和提醒。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -2061,6 +2094,36 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="commandItem"><b>控制功能</b><small class="muted">暂不接入</small><code>官方通道权限与事件模型差异较大</code></div>
 </div>
 <p class="muted" style="margin-bottom:0">白名单使用日志里的映射 user_id。</p>
+</div>
+</div>
+</div>
+</div>
+<div class="panel span4 page" data-page="tgbot" id="tgbot">
+<div class="pluginHead"><div><div class="crumb">插件中心 / Telegram Bot</div><div class="sectionTitle"><b>Telegram Bot</b><span class="muted">长轮询通道，保存后需重启。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
+<div class="settingsGrid">
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>通道配置</b><span class="muted">使用 Bot Token 接入。</span></div>
+<div class="runtimeNote hidden" id="tgbotUnavailable">Telegram 驱动未加载。</div>
+<div class="settingsFields">
+<label class="field">启用 Telegram Bot <span class="row"><label class="switch"><input id="tgbotEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">与 OneBot 并行。</span></span></label>
+<label class="field">通道名称 <input id="tgbotName" placeholder="telegram"></label>
+<label class="field">Bot Token <input id="tgbotToken" type="password" autocomplete="new-password" placeholder="留空表示不修改"></label>
+<label class="field">API Base <input id="tgbotAPIBase" autocomplete="off" placeholder="https://api.telegram.org"></label>
+<label class="field">代理 <input id="tgbotProxy" autocomplete="off" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"></label>
+<label class="field">媒体上传 <span class="row"><label class="switch"><input id="tgbotMediaEnabled" type="checkbox"><span class="slider"></span></label><span class="muted">图片、视频、文件走 Telegram 上传。</span></span></label>
+</div>
+<div class="row"><button class="primary" id="tgbotSaveButton" onclick="saveSystemSettings()">保存 Telegram 配置</button><span class="muted" id="tgbotSaveHint">首次启用需重启。</span></div>
+</div>
+</div>
+<div class="settingsStack">
+<div class="settingsCard">
+<div class="sectionTitle"><b>使用提醒</b><span class="muted">群聊需注意隐私模式。</span></div>
+<div class="commandGrid">
+<div class="commandItem"><b>收消息</b><code>默认 getUpdates 长轮询</code><code>不需要公网 Webhook</code></div>
+<div class="commandItem"><b>发媒体</b><code>sendPhoto / sendVideo / sendDocument</code><code>本地文件 multipart 上传</code></div>
+<div class="commandItem"><b>群解析</b><code>BotFather 关闭 privacy mode 后可接收普通群消息</code><code>白名单使用日志里的映射 ID</code></div>
+</div>
 </div>
 </div>
 </div>
@@ -2307,7 +2370,7 @@ const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
- const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='mediashield'||page==='dailynews')?'plugins':page;
+ const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='tgbot'||page==='mediashield'||page==='dailynews')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
  const nextHash=page==='mediaparser'?'#mediaparser:'+currentPluginSection:'#'+page;
@@ -2701,12 +2764,14 @@ async function refreshStatus(){
   infoLine('WebUI 地址', (sys&&sys.webui_addr)||'-'),
   infoLine('OneBot WS', (sys&&sys.ws_url)||'-'),
   infoLine('官方 QQBot', qqbotStatusText()),
+  infoLine('Telegram Bot', tgbotStatusText()),
   infoLine('命令前缀', (sys&&sys.command_prefix)||'/')
  ].join('');
  $('overviewDetails').innerHTML=[
   infoLine('聚合解析', (cfg&&cfg.auto_parse?'已开启':'已关闭')+'，启用平台 '+enabled+'/'+platforms.length),
   infoLine('OneBot 策略', '解析卡片 '+onText(cfg&&cfg.auto_parse)+' / 媒体下载 '+onText(cfg&&cfg.download_video)),
   infoLine('QQBot 策略', qqbotPolicyText()),
+  infoLine('Telegram 策略', tgbotPolicyText()),
   infoLine('视频限制', '画质 '+qualityText(cfg&&cfg.video_max_resolution)+'，最大 '+((cfg&&cfg.max_video_mb)||'-')+' MB，避开 AV1 '+onText(cfg&&cfg.avoid_av1)),
 		infoLine('缓存', cacheInfo?((cacheInfo.files||0)+' 个文件 / '+formatBytes(cacheInfo.bytes||0)):'-')
 	].join('');
@@ -2733,6 +2798,16 @@ function qqbotPolicyText(){
  if(!qqbotAvailable()) return qqbotUnavailableText();
  return (sys&&sys.qqbot_enabled?(sys.qqbot_card_enabled?'卡片开启':'卡片关闭'):'未启用')+' / 媒体图片/视频 '+onText(sys&&sys.qqbot_media_enabled);
 }
+function tgbotAvailable(){return !!(sys&&sys.tgbot_available)}
+function tgbotUnavailableText(){return 'Telegram 驱动未加载'}
+function tgbotStatusText(){
+ if(!tgbotAvailable()) return tgbotUnavailableText();
+ return (sys&&sys.tgbot_enabled?'已启用':'未启用')+' / Token '+((sys&&sys.tgbot_token_set)?'已设置':'未设置');
+}
+function tgbotPolicyText(){
+ if(!tgbotAvailable()) return tgbotUnavailableText();
+ return (sys&&sys.tgbot_enabled?'长轮询开启':'未启用')+' / 媒体上传 '+onText(sys&&sys.tgbot_media_enabled);
+}
 function renderQQBotAvailability(){
  const available=qqbotAvailable();
  const status=$('qqbotPluginStatus');
@@ -2745,6 +2820,22 @@ function renderQQBotAvailability(){
  if($('qqbotSaveHint')) $('qqbotSaveHint').textContent=available?'公网根地址用于把本地卡片 PNG 映射成 QQ 可访问的 Markdown 图片 URL。':qqbotUnavailableText();
  if($('qqbotSaveButton')) $('qqbotSaveButton').disabled=!available;
  ['qqbotEnabled','qqbotName','qqbotAppID','qqbotSecret','qqbotOpenID','qqbotGroupOpenID','qqbotPublicBase','qqbotCardEnabled','qqbotMediaEnabled','qqbotMarkdown'].forEach(id=>{
+  const el=$(id);
+  if(el) el.disabled=!available;
+ });
+}
+function renderTGBotAvailability(){
+ const available=tgbotAvailable();
+ const status=$('tgbotPluginStatus');
+ if(status){
+  status.textContent=available?(sys&&sys.tgbot_enabled?'已启用':'可配置'):tgbotUnavailableText();
+  status.className=available?'ok':'muted';
+ }
+ if($('tgbotPluginDesc')) $('tgbotPluginDesc').textContent=available?'Telegram 长轮询通道，可接入全部插件消息':'当前包未加载 Telegram 驱动，此功能不可用';
+ if($('tgbotUnavailable')) $('tgbotUnavailable').classList.toggle('hidden', available);
+ if($('tgbotSaveHint')) $('tgbotSaveHint').textContent=available?'保存后需重启；群聊自动解析可能需要关闭 BotFather privacy mode。':tgbotUnavailableText();
+ if($('tgbotSaveButton')) $('tgbotSaveButton').disabled=!available;
+ ['tgbotEnabled','tgbotName','tgbotToken','tgbotAPIBase','tgbotProxy','tgbotMediaEnabled'].forEach(id=>{
   const el=$(id);
   if(el) el.disabled=!available;
  });
@@ -2772,7 +2863,7 @@ async function load(){
  render();
 }
 function render(){
- const items=[['auto_parse','解析卡片'],['download_video','媒体下载'],['parse_reaction','解析回应'],['debug','调试日志'],['avoid_av1','禁用 AV1'],['use_yt_dlp_fallback','yt-dlp 备用']];
+ const items=[['auto_parse','解析卡片'],['download_video','媒体下载'],['long_article_cards','长文卡片'],['parse_reaction','解析回应'],['debug','调试日志'],['avoid_av1','禁用 AV1'],['use_yt_dlp_fallback','yt-dlp 备用']];
  renderMediaShieldSettings();
  $('globalControls').innerHTML=items.map(x=>'<label class="row">'+x[1]+switchHTML('cfg.'+x[0],!!cfg[x[0]])+'</label>').join('');
  cfg.platform_video_resolution=cfg.platform_video_resolution||{};
@@ -2839,6 +2930,16 @@ function renderSystemSettings(){
   $('qqbotMarkdown').checked=!!sys.qqbot_markdown;
  }
  renderQQBotAvailability();
+ if($('tgbotEnabled')){
+  $('tgbotEnabled').checked=!!sys.tgbot_enabled;
+  $('tgbotName').value=sys.tgbot_name||'telegram';
+  $('tgbotToken').value='';
+  $('tgbotToken').placeholder=sys.tgbot_token_set?'已设置，留空不修改':'留空表示不设置';
+  $('tgbotAPIBase').value=sys.tgbot_api_base||'https://api.telegram.org';
+  $('tgbotProxy').value=sys.tgbot_proxy||'';
+  $('tgbotMediaEnabled').checked=!!sys.tgbot_media_enabled;
+ }
+ renderTGBotAvailability();
  const pending=sys.pending_restart||[];
  $('sysPending').textContent=pending.length?'重启后生效：'+pending.join('、'):'当前没有待重启生效的配置';
  if($('restartTop')){
@@ -2868,6 +2969,16 @@ async function saveSystemSettings(){
    qqbot_card_disabled:$('qqbotCardEnabled')?!$('qqbotCardEnabled').checked:false,
    qqbot_media_enabled:$('qqbotMediaEnabled')?!!$('qqbotMediaEnabled').checked:false,
    qqbot_markdown:$('qqbotMarkdown')?!!$('qqbotMarkdown').checked:false
+ });
+ }
+ if(tgbotAvailable()){
+  Object.assign(payload,{
+   tgbot_enabled:$('tgbotEnabled')?!!$('tgbotEnabled').checked:false,
+   tgbot_name:$('tgbotName')?String($('tgbotName').value||'telegram').trim():'telegram',
+   tgbot_token:$('tgbotToken')?String($('tgbotToken').value||'').trim():'',
+   tgbot_api_base:$('tgbotAPIBase')?String($('tgbotAPIBase').value||'https://api.telegram.org').trim():'https://api.telegram.org',
+   tgbot_proxy:$('tgbotProxy')?String($('tgbotProxy').value||'').trim():'',
+   tgbot_media_enabled:$('tgbotMediaEnabled')?!!$('tgbotMediaEnabled').checked:false
   });
  }
  const r=await apiFetch('/api/system/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

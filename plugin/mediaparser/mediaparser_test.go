@@ -208,6 +208,106 @@ func TestQQBotRichMediaEnabledRespectsMediaSwitches(t *testing.T) {
 	}
 }
 
+func TestTelegramBotDriverCreationAndMediaAttachment(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
+	drv, ok := NewTelegramBotDriver(SystemSettings{
+		TGBotEnabled:      true,
+		TGBotName:         "tg",
+		TGBotToken:        "123456:token",
+		TGBotMediaEnabled: true,
+	})
+	if !ok {
+		t.Fatal("telegram driver should be created when enabled with token")
+	}
+	driver, ok := drv.(*tgBotDriver)
+	if !ok {
+		t.Fatalf("driver type = %T, want *tgBotDriver", drv)
+	}
+	if driver.apiBase != tgBotDefaultAPIBase {
+		t.Fatalf("api base = %q, want default", driver.apiBase)
+	}
+
+	imagePath := filepath.Join(cacheDir, "card.png")
+	if err := os.WriteFile(imagePath, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	item, ok := driver.mediaAttachment("file://"+filepath.ToSlash(imagePath), tgBotMediaPhoto)
+	if !ok {
+		t.Fatal("telegram should accept cache file media")
+	}
+	if item.kind != tgBotMediaPhoto || filepath.Clean(item.target) != filepath.Clean(imagePath) {
+		t.Fatalf("unexpected item: %#v", item)
+	}
+
+	blockedDir, err := os.MkdirTemp(".", ".tgbot-media-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(blockedDir) })
+	blocked, err := filepath.Abs(filepath.Join(blockedDir, "secret.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blocked, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := driver.mediaAttachment(blocked, tgBotMediaPhoto); ok {
+		t.Fatal("telegram should reject local media outside cache/temp allowlist")
+	}
+}
+
+func TestTelegramRichMediaEnabledRespectsSwitches(t *testing.T) {
+	oldSystem := runtimeSystem
+	defer SetRuntimeSystemSettings(oldSystem)
+
+	cfg := defaultConfig()
+	platform := "twitter"
+	cfg.SendMedia = true
+	cfg.DownloadVideo = true
+	cfg.PlatformSendMedia[platform] = true
+	cfg.PlatformDownload[platform] = true
+	cfg.OutputMode[platform] = outputAll
+
+	SetRuntimeSystemSettings(SystemSettings{TGBotMediaEnabled: true})
+	if !tgBotRichMediaEnabled(cfg, platform) {
+		t.Fatal("telegram rich media should be enabled when every gate is open")
+	}
+	cfg.DownloadVideo = false
+	if tgBotRichMediaEnabled(cfg, platform) {
+		t.Fatal("download_video=false should disable telegram rich media")
+	}
+	cfg.DownloadVideo = true
+	cfg.OutputMode[platform] = outputTextOnly
+	if tgBotRichMediaEnabled(cfg, platform) {
+		t.Fatal("text-only output should disable telegram rich media")
+	}
+}
+
+func TestLongArticleCardsRequireSwitchAndSupportedPlatform(t *testing.T) {
+	cfg := defaultConfig()
+	meta := mediaMeta{Platform: "twitter", Desc: strings.Repeat("长文内容", 80), ArticleCard: true}
+
+	if shouldSendLongArticleCards(cfg, meta) {
+		t.Fatal("long article cards should be disabled by default")
+	}
+	cfg.LongArticleCards = true
+	if !shouldSendLongArticleCards(cfg, meta) {
+		t.Fatal("twitter article should trigger when long article cards are enabled")
+	}
+	meta.Desc = "短文内容"
+	if shouldSendLongArticleCards(cfg, meta) {
+		t.Fatal("short article should not trigger long article cards")
+	}
+	meta.Desc = strings.Repeat("长文内容", 80)
+	meta.Platform = "linuxdo"
+	if shouldSendLongArticleCards(cfg, meta) {
+		t.Fatal("linuxdo should keep its existing card logic")
+	}
+}
+
 func cloneBoolMapForTest(src map[string]bool) map[string]bool {
 	dst := make(map[string]bool, len(src))
 	for key, value := range src {

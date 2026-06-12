@@ -225,19 +225,20 @@ func parseBilibiliOpus(cfg config, pageURL, sourceURL, opusID string) (mediaMeta
 	)
 	headers := biliHeaders(pageURL, cfg)
 	return mediaMeta{
-		URL:        pageURL,
-		SourceURL:  sourceURL,
-		Platform:   "bilibili",
-		Title:      title,
-		Author:     getString(authorObj, "name"),
-		Avatar:     ensureHTTPS(avatar),
-		Timestamp:  biliDynamicTime(authorObj),
-		Desc:       desc,
-		Cover:      firstURLGroup(images),
-		VideoURLs:  videos,
-		ImageURLs:  images,
-		VideoHeads: headers,
-		ImageHeads: headers,
+		URL:         pageURL,
+		SourceURL:   sourceURL,
+		Platform:    "bilibili",
+		Title:       title,
+		Author:      getString(authorObj, "name"),
+		Avatar:      ensureHTTPS(avatar),
+		Timestamp:   biliDynamicTime(authorObj),
+		Desc:        desc,
+		Cover:       firstURLGroup(images),
+		VideoURLs:   videos,
+		ImageURLs:   images,
+		VideoHeads:  headers,
+		ImageHeads:  headers,
+		ArticleCard: true,
 	}, nil
 }
 

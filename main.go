@@ -135,6 +135,10 @@ func init() {
 		config.Z.Driver = append(config.Z.Driver, qqDriver)
 		logrus.Infoln("[main] official QQBot driver enabled")
 	}
+	if tgDriver, ok := mediaparser.NewTelegramBotDriver(systemSettings); ok {
+		config.Z.Driver = append(config.Z.Driver, tgDriver)
+		logrus.Infoln("[main] Telegram Bot driver enabled")
+	}
 	config.ForceBase64File = *fb64
 	if *webui != "" {
 		os.Setenv("ZBP_BUILTIN_WEBUI", *webui)
@@ -157,6 +161,12 @@ func init() {
 		QQBotCardDisabled: systemSettings.QQBotCardDisabled,
 		QQBotMediaEnabled: systemSettings.QQBotMediaEnabled,
 		QQBotMarkdown:     systemSettings.QQBotMarkdown,
+		TGBotEnabled:      systemSettings.TGBotEnabled,
+		TGBotName:         systemSettings.TGBotName,
+		TGBotToken:        systemSettings.TGBotToken,
+		TGBotAPIBase:      systemSettings.TGBotAPIBase,
+		TGBotProxy:        systemSettings.TGBotProxy,
+		TGBotMediaEnabled: systemSettings.TGBotMediaEnabled,
 	})
 
 	if *save != "" {

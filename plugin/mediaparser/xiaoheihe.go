@@ -113,17 +113,18 @@ func parseXiaoheiheBBS(ctx xiaoheiheContext) (mediaMeta, error) {
 		return mediaMeta{}, fmt.Errorf("xiaoheihe BBS did not expose usable media")
 	}
 	return mediaMeta{
-		URL:        pageURL,
-		SourceURL:  ctx.SourceURL,
-		Platform:   "xiaoheihe",
-		Title:      title,
-		Desc:       desc,
-		Cover:      cover,
-		VideoURLs:  videos,
-		ImageURLs:  images,
-		VideoHeads: buildHeaders(true, "https://www.xiaoheihe.cn/", xiaoheiheUA),
-		ImageHeads: buildHeaders(false, "https://www.xiaoheihe.cn/", xiaoheiheUA),
-		ForceLocal: len(videos) > 0,
+		URL:         pageURL,
+		SourceURL:   ctx.SourceURL,
+		Platform:    "xiaoheihe",
+		Title:       title,
+		Desc:        desc,
+		Cover:       cover,
+		VideoURLs:   videos,
+		ImageURLs:   images,
+		VideoHeads:  buildHeaders(true, "https://www.xiaoheihe.cn/", xiaoheiheUA),
+		ImageHeads:  buildHeaders(false, "https://www.xiaoheihe.cn/", xiaoheiheUA),
+		ForceLocal:  len(videos) > 0,
+		ArticleCard: true,
 	}, nil
 }
 
@@ -167,20 +168,21 @@ func parseXiaoheiheBBSSignedAPI(ctx xiaoheiheContext) (mediaMeta, error) {
 		cover = firstNonEmpty(getString(link, "thumb"), getString(link, "cover"))
 	}
 	return mediaMeta{
-		URL:        fmt.Sprintf("https://www.xiaoheihe.cn/app/bbs/link/%s", ctx.LinkID),
-		SourceURL:  ctx.SourceURL,
-		Platform:   "xiaoheihe",
-		Title:      title,
-		Author:     author,
-		Avatar:     avatar,
-		Desc:       desc,
-		Timestamp:  timestamp,
-		Cover:      cover,
-		VideoURLs:  uniqueURLGroups(videos),
-		ImageURLs:  uniqueURLGroups(images),
-		VideoHeads: buildHeaders(true, "https://www.xiaoheihe.cn/", xiaoheiheUA),
-		ImageHeads: buildHeaders(false, "https://www.xiaoheihe.cn/", xiaoheiheUA),
-		ForceLocal: len(videos) > 0,
+		URL:         fmt.Sprintf("https://www.xiaoheihe.cn/app/bbs/link/%s", ctx.LinkID),
+		SourceURL:   ctx.SourceURL,
+		Platform:    "xiaoheihe",
+		Title:       title,
+		Author:      author,
+		Avatar:      avatar,
+		Desc:        desc,
+		Timestamp:   timestamp,
+		Cover:       cover,
+		VideoURLs:   uniqueURLGroups(videos),
+		ImageURLs:   uniqueURLGroups(images),
+		VideoHeads:  buildHeaders(true, "https://www.xiaoheihe.cn/", xiaoheiheUA),
+		ImageHeads:  buildHeaders(false, "https://www.xiaoheihe.cn/", xiaoheiheUA),
+		ForceLocal:  len(videos) > 0,
+		ArticleCard: true,
 	}, nil
 }
 

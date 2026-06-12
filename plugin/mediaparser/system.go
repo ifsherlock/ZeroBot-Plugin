@@ -27,6 +27,12 @@ type SystemSettings struct {
 	QQBotCardDisabled bool    `json:"qqbot_card_disabled,omitempty"`
 	QQBotMediaEnabled bool    `json:"qqbot_media_enabled"`
 	QQBotMarkdown     bool    `json:"qqbot_markdown"`
+	TGBotEnabled      bool    `json:"tgbot_enabled"`
+	TGBotName         string  `json:"tgbot_name"`
+	TGBotToken        string  `json:"tgbot_token,omitempty"`
+	TGBotAPIBase      string  `json:"tgbot_api_base,omitempty"`
+	TGBotProxy        string  `json:"tgbot_proxy,omitempty"`
+	TGBotMediaEnabled bool    `json:"tgbot_media_enabled"`
 }
 
 type systemSettingsResponse struct {
@@ -49,6 +55,13 @@ type systemSettingsResponse struct {
 	QQBotMediaEnabled bool     `json:"qqbot_media_enabled"`
 	QQBotMarkdown     bool     `json:"qqbot_markdown"`
 	QQBotAvailable    bool     `json:"qqbot_available"`
+	TGBotEnabled      bool     `json:"tgbot_enabled"`
+	TGBotName         string   `json:"tgbot_name"`
+	TGBotTokenSet     bool     `json:"tgbot_token_set"`
+	TGBotAPIBase      string   `json:"tgbot_api_base,omitempty"`
+	TGBotProxy        string   `json:"tgbot_proxy,omitempty"`
+	TGBotMediaEnabled bool     `json:"tgbot_media_enabled"`
+	TGBotAvailable    bool     `json:"tgbot_available"`
 	PendingRestart    []string `json:"pending_restart"`
 }
 
@@ -121,6 +134,16 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 	settings.QQBotOpenID = strings.TrimSpace(settings.QQBotOpenID)
 	settings.QQBotGroupOpenID = strings.TrimSpace(settings.QQBotGroupOpenID)
 	settings.QQBotPublicBase = strings.TrimSpace(settings.QQBotPublicBase)
+	settings.TGBotName = strings.TrimSpace(settings.TGBotName)
+	if settings.TGBotName == "" {
+		settings.TGBotName = "telegram"
+	}
+	settings.TGBotToken = strings.TrimSpace(settings.TGBotToken)
+	settings.TGBotAPIBase = strings.TrimRight(strings.TrimSpace(settings.TGBotAPIBase), "/")
+	if settings.TGBotAPIBase == "" {
+		settings.TGBotAPIBase = "https://api.telegram.org"
+	}
+	settings.TGBotProxy = strings.TrimSpace(settings.TGBotProxy)
 	return settings
 }
 
