@@ -670,6 +670,27 @@ func TestLinuxdoExtractImagesSkipsCustomEmoji(t *testing.T) {
 	}
 }
 
+func TestLinuxdoExtractImagesSkipsPageLogoFromRenderedHTML(t *testing.T) {
+	htmlBody := `<html><body>
+<header><a href="/"><img id="site-logo" class="site-logo" alt="LINUX DO" src="/uploads/default/original/1X/linuxdo-logo.png"></a></header>
+<article><div class="topic-body"><div class="cooked">
+<p>帖子正文</p>
+<p><img src="/uploads/default/original/1X/post-first.png"></p>
+<p><a href="/uploads/default/original/1X/post-second.jpg">附件</a></p>
+</div></div></article>
+</body></html>`
+	images := linuxdoExtractImages(htmlBody, "https://linux.do/t/topic/2367256")
+	if len(images) != 2 {
+		t.Fatalf("images=%#v, want two post images", images)
+	}
+	if strings.Contains(strings.Join([]string{images[0][0], images[1][0]}, "\n"), "linuxdo-logo") {
+		t.Fatalf("site logo leaked into post images: %#v", images)
+	}
+	if !strings.Contains(images[0][0], "post-first.png") || !strings.Contains(images[1][0], "post-second.jpg") {
+		t.Fatalf("unexpected post images: %#v", images)
+	}
+}
+
 func TestLinuxdoBodyLinesKeepsLongBody(t *testing.T) {
 	body := strings.Repeat("Linux.do full body line with enough words to wrap.\n", 40)
 	lines := linuxdoBodyLines(nil, body, 620)

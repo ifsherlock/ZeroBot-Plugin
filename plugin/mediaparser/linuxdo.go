@@ -866,6 +866,10 @@ func linuxdoAvatarURL(template string, size int) string {
 func linuxdoExtractImages(cooked, base string) [][]string {
 	seen := map[string]bool{}
 	out := [][]string{}
+	fragments := linuxdoImageSourceFragments(cooked)
+	if len(fragments) == 0 {
+		fragments = []string{cooked}
+	}
 	add := func(raw string) {
 		raw = strings.Trim(strings.TrimSpace(html.UnescapeString(htmlUnescape(raw))), ` "'`)
 		if raw == "" {
@@ -878,16 +882,95 @@ func linuxdoExtractImages(cooked, base string) [][]string {
 		seen[raw] = true
 		out = append(out, []string{raw})
 	}
-	for _, tag := range regexp.MustCompile(`(?is)<img\b[^>]+>`).FindAllString(cooked, -1) {
-		if linuxdoImageTagLooksEmoji(tag) {
-			continue
+	for _, fragment := range fragments {
+		for _, tag := range regexp.MustCompile(`(?is)<img\b[^>]+>`).FindAllString(fragment, -1) {
+			if linuxdoImageTagLooksNonContent(tag) {
+				continue
+			}
+			add(linuxdoTagAttr(tag, "src"))
 		}
-		add(linuxdoTagAttr(tag, "src"))
-	}
-	for _, m := range regexp.MustCompile(`(?is)<a\b[^>]+href=["']([^"']+\.(?:png|jpe?g|webp|gif)(?:\?[^"']*)?)["']`).FindAllStringSubmatch(cooked, -1) {
-		add(m[1])
+		for _, m := range regexp.MustCompile(`(?is)<a\b[^>]+href=["']([^"']+\.(?:png|jpe?g|webp|gif)(?:\?[^"']*)?)["']`).FindAllStringSubmatch(fragment, -1) {
+			add(m[1])
+		}
 	}
 	return dedupeMediaGroups(out)
+}
+
+func linuxdoImageSourceFragments(body string) []string {
+	for _, className := range []string{"cooked", "topic-body", "crawler-post"} {
+		if fragments := linuxdoClassDivFragments(body, className); len(fragments) > 0 {
+			return fragments
+		}
+	}
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`),
+		regexp.MustCompile(`(?is)<main\b[^>]*>(.*?)</main>`),
+	} {
+		matches := re.FindAllStringSubmatch(body, -1)
+		if len(matches) == 0 {
+			continue
+		}
+		fragments := make([]string, 0, len(matches))
+		for _, m := range matches {
+			if len(m) > 1 && strings.TrimSpace(m[1]) != "" {
+				fragments = append(fragments, m[1])
+			}
+		}
+		if len(fragments) > 0 {
+			return fragments
+		}
+	}
+	return nil
+}
+
+func linuxdoClassDivFragments(body, className string) []string {
+	className = strings.TrimSpace(className)
+	if className == "" {
+		return nil
+	}
+	startRe := regexp.MustCompile(`(?is)<div\b[^>]*\bclass\s*=\s*(?:"[^"]*\b` + regexp.QuoteMeta(className) + `\b[^"]*"|'[^']*\b` + regexp.QuoteMeta(className) + `\b[^']*')[^>]*>`)
+	fragments := []string{}
+	pos := 0
+	for {
+		loc := startRe.FindStringIndex(body[pos:])
+		if loc == nil {
+			break
+		}
+		start := pos + loc[0]
+		end, ok := linuxdoBalancedDivEnd(body, start)
+		if !ok {
+			break
+		}
+		fragments = append(fragments, body[start:end])
+		pos = end
+	}
+	return fragments
+}
+
+func linuxdoImageTagLooksNonContent(tag string) bool {
+	if linuxdoImageTagLooksEmoji(tag) {
+		return true
+	}
+	for _, name := range []string{"class", "id"} {
+		text := strings.ToLower(strings.TrimSpace(html.UnescapeString(htmlUnescape(linuxdoTagAttr(tag, name)))))
+		if text == "" {
+			continue
+		}
+		if strings.Contains(text, "avatar") || strings.Contains(text, "user-avatar") ||
+			strings.Contains(text, "site-logo") || strings.Contains(text, "logo") {
+			return true
+		}
+	}
+	for _, name := range []string{"alt", "title", "aria-label"} {
+		text := strings.ToLower(strings.TrimSpace(html.UnescapeString(htmlUnescape(linuxdoTagAttr(tag, name)))))
+		if text == "" {
+			continue
+		}
+		if strings.Contains(text, "linux do") || strings.Contains(text, "linux.do") {
+			return true
+		}
+	}
+	return false
 }
 
 func linuxdoUsableImage(raw string) bool {
