@@ -219,7 +219,9 @@ func (d *tgBotDriver) zeroEvent(update tgBotUpdate) []byte {
 	group := tgBotIsGroupChat(msg.Chat.Type)
 	targetID := tgBotStableID("chat:" + strconv.FormatInt(msg.Chat.ID, 10))
 	userID := tgBotStableID("user:" + strconv.FormatInt(firstNonZeroInt64(msg.From.ID, msg.Sender.ID, msg.Chat.ID), 10))
-	if ok, reason := tgBotAccessOK(tgBotRuntimeSettings(), group, userID, targetID); !ok {
+	settings := tgBotRuntimeSettings()
+	isSuperUser := tgBotIsSuperUser(settings, userID)
+	if ok, reason := tgBotAccessOK(settings, group, userID, targetID); !ok {
 		if group {
 			logrus.Infof("[tgbot] access_blocked type=group reason=%s message_id=%d group_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, targetID, userID, msg.Chat.ID)
 		} else {
@@ -240,6 +242,7 @@ func (d *tgBotDriver) zeroEvent(update tgBotUpdate) []byte {
 		"raw_message":         content,
 		"font":                0,
 		"tgbot_source":        eventType,
+		"tgbot_super_user":    isSuperUser,
 		"telegram_chat_id":    msg.Chat.ID,
 		"telegram_message_id": msg.MessageID,
 	}
@@ -273,6 +276,9 @@ func tgBotRuntimeSettings() SystemSettings {
 
 func tgBotAccessOK(settings SystemSettings, group bool, userID, groupID int64) (bool, string) {
 	settings = normalizeSystemSettings(settings)
+	if tgBotIsSuperUser(settings, userID) {
+		return true, "tgbot_super_user"
+	}
 	if !group {
 		return tgBotAccessListOK(settings.TGBotPrivateMode, userID, settings.TGBotUserWhitelist, settings.TGBotUserBlacklist, "private")
 	}
@@ -280,6 +286,11 @@ func tgBotAccessOK(settings SystemSettings, group bool, userID, groupID int64) (
 		return false, reason
 	}
 	return tgBotAccessListOK(settings.TGBotGroupUserMode, userID, settings.TGBotGroupUserWhitelist, settings.TGBotGroupUserBlacklist, "group_user")
+}
+
+func tgBotIsSuperUser(settings SystemSettings, userID int64) bool {
+	settings = normalizeSystemSettings(settings)
+	return int64SliceContains(settings.TGBotSuperUsers, userID)
 }
 
 func tgBotAccessListOK(mode string, id int64, whitelist, blacklist []int64, scope string) (bool, string) {

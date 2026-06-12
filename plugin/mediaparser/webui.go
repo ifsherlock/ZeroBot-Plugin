@@ -787,6 +787,7 @@ func serveSystemSettingsAPI(w http.ResponseWriter, r *http.Request) {
 			payload.TGBotAPIBase = current.TGBotAPIBase
 			payload.TGBotProxy = current.TGBotProxy
 			payload.TGBotMediaEnabled = current.TGBotMediaEnabled
+			payload.TGBotSuperUsers = append([]int64{}, current.TGBotSuperUsers...)
 			payload.TGBotPrivateMode = current.TGBotPrivateMode
 			payload.TGBotGroupMode = current.TGBotGroupMode
 			payload.TGBotGroupUserMode = current.TGBotGroupUserMode
@@ -1530,6 +1531,7 @@ func systemSettingsForWeb() systemSettingsResponse {
 		TGBotProxy:              settings.TGBotProxy,
 		TGBotMediaEnabled:       settings.TGBotMediaEnabled,
 		TGBotAvailable:          tgBotDriverAvailable(),
+		TGBotSuperUsers:         append([]int64{}, settings.TGBotSuperUsers...),
 		TGBotPrivateMode:        settings.TGBotPrivateMode,
 		TGBotGroupMode:          settings.TGBotGroupMode,
 		TGBotGroupUserMode:      settings.TGBotGroupUserMode,
@@ -1559,6 +1561,7 @@ func applyRuntimeSystemSettings(settings SystemSettings) {
 	runtimeSystem.Nickname = firstNonEmpty(settings.Nickname, runtimeSystem.Nickname)
 	runtimeSystem.CommandPrefix = firstNonEmpty(settings.CommandPrefix, runtimeSystem.CommandPrefix)
 	runtimeSystem.SuperUsers = uniqueInt64(settings.SuperUsers)
+	runtimeSystem.TGBotSuperUsers = append([]int64{}, settings.TGBotSuperUsers...)
 	runtimeSystem.TGBotPrivateMode = settings.TGBotPrivateMode
 	runtimeSystem.TGBotGroupMode = settings.TGBotGroupMode
 	runtimeSystem.TGBotGroupUserMode = settings.TGBotGroupUserMode
@@ -2145,6 +2148,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsCard">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">只拦截 Telegram 通道。</span></div>
 <div class="settingsFields">
+<label class="field span2">TG 超级管理员 <textarea id="tgbotSuperUsers" placeholder="每行一个 Telegram 映射 user_id"></textarea><span class="muted">只管理 TG 通道；不写入全局 QQ 管理员。</span></label>
 <label class="field">私聊模式 <select id="tgbotPrivateMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
 <label class="field">群/频道模式 <select id="tgbotGroupMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
 <label class="field span2">群内发言人模式 <select id="tgbotGroupUserMode" onchange="onTGBotAccessModeChange()"><option value="none">关闭名单</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
@@ -2859,9 +2863,10 @@ function tgbotStatusText(){
 }
 function tgbotPolicyText(){
  if(!tgbotAvailable()) return tgbotUnavailableText();
- return (sys&&sys.tgbot_enabled?'长轮询开启':'未启用')+' / 媒体上传 '+onText(sys&&sys.tgbot_media_enabled)+' / '+tgbotAccessSummary();
+ return (sys&&sys.tgbot_enabled?'长轮询开启':'未启用')+' / 媒体上传 '+onText(sys&&sys.tgbot_media_enabled)+' / 超管 '+tgbotSuperUserCount()+' / '+tgbotAccessSummary();
 }
 function accessModeText(mode){return mode==='whitelist'?'白名单':(mode==='blacklist'?'黑名单':'未限制')}
+function tgbotSuperUserCount(){return ((sys&&sys.tgbot_super_users)||[]).length}
 function tgbotAccessSummary(){
  if(!sys) return '未限制';
  return '私聊 '+accessModeText(sys.tgbot_private_mode)+'，群 '+accessModeText(sys.tgbot_group_mode)+'，发言人 '+accessModeText(sys.tgbot_group_user_mode);
@@ -2893,7 +2898,7 @@ function renderTGBotAvailability(){
  if($('tgbotUnavailable')) $('tgbotUnavailable').classList.toggle('hidden', available);
  if($('tgbotSaveHint')) $('tgbotSaveHint').textContent=available?'保存后需重启；群聊自动解析可能需要关闭 BotFather privacy mode。':tgbotUnavailableText();
  if($('tgbotSaveButton')) $('tgbotSaveButton').disabled=!available;
- ['tgbotEnabled','tgbotName','tgbotToken','tgbotAPIBase','tgbotProxy','tgbotMediaEnabled','tgbotPrivateMode','tgbotGroupMode','tgbotGroupUserMode','tgbotUserWhitelist','tgbotUserBlacklist','tgbotGroupWhitelist','tgbotGroupBlacklist','tgbotGroupUserWhitelist','tgbotGroupUserBlacklist'].forEach(id=>{
+ ['tgbotEnabled','tgbotName','tgbotToken','tgbotAPIBase','tgbotProxy','tgbotMediaEnabled','tgbotSuperUsers','tgbotPrivateMode','tgbotGroupMode','tgbotGroupUserMode','tgbotUserWhitelist','tgbotUserBlacklist','tgbotGroupWhitelist','tgbotGroupBlacklist','tgbotGroupUserWhitelist','tgbotGroupUserBlacklist'].forEach(id=>{
   const el=$(id);
   if(el) el.disabled=!available;
  });
@@ -2996,6 +3001,7 @@ function renderSystemSettings(){
   $('tgbotAPIBase').value=sys.tgbot_api_base||'https://api.telegram.org';
   $('tgbotProxy').value=sys.tgbot_proxy||'';
   $('tgbotMediaEnabled').checked=!!sys.tgbot_media_enabled;
+  $('tgbotSuperUsers').value=idListText(sys.tgbot_super_users);
   $('tgbotPrivateMode').value=sys.tgbot_private_mode||'none';
   $('tgbotGroupMode').value=sys.tgbot_group_mode||'none';
   $('tgbotGroupUserMode').value=sys.tgbot_group_user_mode||'none';
@@ -3047,6 +3053,7 @@ async function saveSystemSettings(){
    tgbot_api_base:$('tgbotAPIBase')?String($('tgbotAPIBase').value||'https://api.telegram.org').trim():'https://api.telegram.org',
    tgbot_proxy:$('tgbotProxy')?String($('tgbotProxy').value||'').trim():'',
    tgbot_media_enabled:$('tgbotMediaEnabled')?!!$('tgbotMediaEnabled').checked:false,
+   tgbot_super_users:$('tgbotSuperUsers')?parseIDArray($('tgbotSuperUsers').value):[],
    tgbot_private_mode:$('tgbotPrivateMode')?String($('tgbotPrivateMode').value||'none'):'none',
    tgbot_group_mode:$('tgbotGroupMode')?String($('tgbotGroupMode').value||'none'):'none',
    tgbot_group_user_mode:$('tgbotGroupUserMode')?String($('tgbotGroupUserMode').value||'none'):'none',

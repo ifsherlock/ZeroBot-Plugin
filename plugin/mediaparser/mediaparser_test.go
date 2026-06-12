@@ -267,6 +267,7 @@ func TestTelegramAccessUsesDedicatedLists(t *testing.T) {
 		TGBotGroupMode:      accessWhitelist,
 		TGBotGroupWhitelist: []int64{groupID},
 		TGBotUserBlacklist:  []int64{userID},
+		TGBotSuperUsers:     []int64{999999},
 	}
 	if ok, reason := tgBotAccessOK(settings, true, userID, groupID); !ok {
 		t.Fatalf("group whitelist should allow telegram group even when private blacklist contains user, reason=%s", reason)
@@ -276,6 +277,10 @@ func TestTelegramAccessUsesDedicatedLists(t *testing.T) {
 	}
 	if ok, reason := tgBotAccessOK(settings, true, userID, tgBotStableID("chat:-100999")); ok {
 		t.Fatalf("unlisted telegram group should be blocked, reason=%s", reason)
+	}
+	settings.TGBotSuperUsers = []int64{userID}
+	if ok, reason := tgBotAccessOK(settings, true, userID, tgBotStableID("chat:-100999")); !ok {
+		t.Fatalf("telegram super user should bypass telegram access lists, reason=%s", reason)
 	}
 }
 
@@ -298,6 +303,36 @@ func TestTelegramZeroEventBlocksBeforeDispatch(t *testing.T) {
 	}})
 	if len(event) != 0 {
 		t.Fatalf("blocked telegram message should not be dispatched: %s", string(event))
+	}
+}
+
+func TestTelegramZeroEventMarksSuperUser(t *testing.T) {
+	oldSystem := runtimeSystem
+	defer SetRuntimeSystemSettings(oldSystem)
+
+	chatID := int64(-100123456)
+	userID := tgBotStableID("user:42")
+	SetRuntimeSystemSettings(SystemSettings{
+		TGBotGroupMode:      accessBlacklist,
+		TGBotGroupBlacklist: []int64{tgBotStableID("chat:" + strconv.FormatInt(chatID, 10))},
+		TGBotSuperUsers:     []int64{userID},
+	})
+	driver := &tgBotDriver{selfID: 1, targets: map[int64]tgBotTarget{}}
+	event := driver.zeroEvent(tgBotUpdate{Message: tgBotMessage{
+		MessageID: 10,
+		Text:      "https://x.com/example/status/1",
+		Chat:      tgBotChat{ID: chatID, Type: "supergroup", Title: "test"},
+		From:      tgBotUser{ID: 42, FirstName: "tg"},
+	}})
+	if len(event) == 0 {
+		t.Fatal("telegram super user should not be blocked before dispatch")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(event, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["tgbot_super_user"] != true {
+		t.Fatalf("tgbot_super_user = %#v, want true", payload["tgbot_super_user"])
 	}
 }
 

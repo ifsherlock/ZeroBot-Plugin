@@ -33,6 +33,7 @@ type SystemSettings struct {
 	TGBotAPIBase            string  `json:"tgbot_api_base,omitempty"`
 	TGBotProxy              string  `json:"tgbot_proxy,omitempty"`
 	TGBotMediaEnabled       bool    `json:"tgbot_media_enabled"`
+	TGBotSuperUsers         []int64 `json:"tgbot_super_users,omitempty"`
 	TGBotPrivateMode        string  `json:"tgbot_private_mode,omitempty"`
 	TGBotGroupMode          string  `json:"tgbot_group_mode,omitempty"`
 	TGBotGroupUserMode      string  `json:"tgbot_group_user_mode,omitempty"`
@@ -71,6 +72,7 @@ type systemSettingsResponse struct {
 	TGBotProxy              string   `json:"tgbot_proxy,omitempty"`
 	TGBotMediaEnabled       bool     `json:"tgbot_media_enabled"`
 	TGBotAvailable          bool     `json:"tgbot_available"`
+	TGBotSuperUsers         []int64  `json:"tgbot_super_users,omitempty"`
 	TGBotPrivateMode        string   `json:"tgbot_private_mode"`
 	TGBotGroupMode          string   `json:"tgbot_group_mode"`
 	TGBotGroupUserMode      string   `json:"tgbot_group_user_mode"`
@@ -162,6 +164,7 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 		settings.TGBotAPIBase = "https://api.telegram.org"
 	}
 	settings.TGBotProxy = strings.TrimSpace(settings.TGBotProxy)
+	settings.TGBotSuperUsers = uniqueInt64(settings.TGBotSuperUsers)
 	settings.TGBotPrivateMode = normalizeSystemAccessMode(settings.TGBotPrivateMode)
 	settings.TGBotGroupMode = normalizeSystemAccessMode(settings.TGBotGroupMode)
 	settings.TGBotGroupUserMode = normalizeSystemAccessMode(settings.TGBotGroupUserMode)

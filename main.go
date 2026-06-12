@@ -167,6 +167,7 @@ func init() {
 		TGBotAPIBase:            systemSettings.TGBotAPIBase,
 		TGBotProxy:              systemSettings.TGBotProxy,
 		TGBotMediaEnabled:       systemSettings.TGBotMediaEnabled,
+		TGBotSuperUsers:         append([]int64{}, systemSettings.TGBotSuperUsers...),
 		TGBotPrivateMode:        systemSettings.TGBotPrivateMode,
 		TGBotGroupMode:          systemSettings.TGBotGroupMode,
 		TGBotGroupUserMode:      systemSettings.TGBotGroupUserMode,
