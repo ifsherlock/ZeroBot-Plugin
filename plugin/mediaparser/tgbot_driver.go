@@ -555,7 +555,7 @@ func (d *tgBotDriver) apiJSON(ctx context.Context, method string, body any) (tgB
 	req.Header.Set("User-Agent", tgBotUserAgent)
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return tgBotAPIResult{}, err
+		return tgBotAPIResult{}, fmt.Errorf("telegram api %s request failed: %s", method, d.redactSecret(err.Error()))
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -605,7 +605,7 @@ func (d *tgBotDriver) apiMultipart(ctx context.Context, method string, fields ma
 	req.Header.Set("User-Agent", tgBotUserAgent)
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return tgBotAPIResult{}, err
+		return tgBotAPIResult{}, fmt.Errorf("telegram api %s request failed: %s", method, d.redactSecret(err.Error()))
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -620,6 +620,15 @@ func (d *tgBotDriver) apiMultipart(ctx context.Context, method string, fields ma
 
 func (d *tgBotDriver) endpoint(method string) string {
 	return d.apiBase + "/bot" + d.token + "/" + method
+}
+
+func (d *tgBotDriver) redactSecret(text string) string {
+	if d == nil || d.token == "" || text == "" {
+		return text
+	}
+	redacted := strings.ReplaceAll(text, d.token, "<redacted>")
+	redacted = strings.ReplaceAll(redacted, "bot"+d.token, "bot<redacted>")
+	return redacted
 }
 
 func (d *tgBotDriver) rememberTarget(id, chatID int64, group bool) {

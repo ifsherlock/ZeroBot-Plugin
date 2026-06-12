@@ -259,6 +259,19 @@ func TestTelegramBotDriverCreationAndMediaAttachment(t *testing.T) {
 	}
 }
 
+func TestTelegramRedactsTokenFromErrors(t *testing.T) {
+	driver := &tgBotDriver{token: "123456:secret-token"}
+	raw := `Post "https://api.telegram.org/bot123456:secret-token/getUpdates": unexpected EOF`
+
+	got := driver.redactSecret(raw)
+	if strings.Contains(got, driver.token) {
+		t.Fatalf("redacted error still contains token: %s", got)
+	}
+	if !strings.Contains(got, "bot<redacted>") {
+		t.Fatalf("redacted error should keep a useful endpoint hint: %s", got)
+	}
+}
+
 func TestTelegramAccessUsesDedicatedLists(t *testing.T) {
 	groupID := tgBotStableID("chat:-100123456")
 	userID := tgBotStableID("user:456789")
