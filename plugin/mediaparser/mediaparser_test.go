@@ -341,6 +341,22 @@ func TestLinuxdoPostNumber(t *testing.T) {
 	}
 }
 
+func TestLinuxdoMainPostURLNormalizesFloorLink(t *testing.T) {
+	cases := map[string]string{
+		"https://linux.do/t/topic-title/12345":      "https://linux.do/t/topic-title/12345",
+		"https://linux.do/t/topic-title/12345/1":    "https://linux.do/t/topic-title/12345/1",
+		"https://linux.do/t/topic-title/12345/10":   "https://linux.do/t/topic-title/12345/1",
+		"https://linux.do/t/topic-title/12345/10?u": "https://linux.do/t/topic-title/12345/1?u",
+		"https://linux.do/t/12345/10":               "https://linux.do/t/12345/1",
+		"https://linux.do/t/12345.json":             "https://linux.do/t/12345.json",
+	}
+	for raw, want := range cases {
+		if got := linuxdoMainPostURL(raw, linuxdoTopicID(raw)); got != want {
+			t.Fatalf("linuxdoMainPostURL(%q)=%q, want %q", raw, got, want)
+		}
+	}
+}
+
 func TestParseLinuxdoTopicJSON(t *testing.T) {
 	body := `{
 	  "id": 12345,
@@ -470,6 +486,45 @@ func TestParseLinuxdoUsesFlaresolverrFirst(t *testing.T) {
 	}
 	if meta.ImageHeads["Cookie"] != cfg.LinuxdoCookie || meta.ImageHeads["User-Agent"] != cfg.LinuxdoUA {
 		t.Fatalf("headers=%v", meta.ImageHeads)
+	}
+}
+
+func TestParseLinuxdoIgnoresFloorSuffix(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1" || r.Method != http.MethodPost {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req linuxdoFlaresolverrRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req.URL != "https://linux.do/t/topic-title/12345/1" {
+			t.Fatalf("bad flaresolverr url: %s", req.URL)
+		}
+		topicJSON := `{"id":12345,"slug":"topic-title","title":"Linux.do 主帖","post_stream":{"posts":[{"post_number":1,"username":"neo","cooked":"<p>一楼主帖内容</p>"},{"post_number":10,"username":"ada","cooked":"<p>十楼回复内容</p>"}]}}`
+		attrJSON := `{"topic_12345":` + strconv.Quote(topicJSON) + `}`
+		htmlBody := `<html><body><div id="data-preloaded" data-preloaded="` + html.EscapeString(attrJSON) + `"></div></body></html>`
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "ok",
+			"solution": map[string]any{
+				"url":       "https://linux.do/t/topic-title/12345/1",
+				"status":    200,
+				"response":  htmlBody,
+				"userAgent": "UnitTest/Chrome",
+			},
+		})
+	}))
+	defer srv.Close()
+	cfg := config{LinuxdoFlaresolverrURL: srv.URL}
+	meta, err := parseLinuxdo(cfg, "https://linux.do/t/topic-title/12345/10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(meta.Desc, "一楼主帖内容") || strings.Contains(meta.Desc, "十楼回复内容") {
+		t.Fatalf("wrong desc=%q", meta.Desc)
+	}
+	if meta.URL != "https://linux.do/t/topic-title/12345/1" {
+		t.Fatalf("url=%q", meta.URL)
 	}
 }
 

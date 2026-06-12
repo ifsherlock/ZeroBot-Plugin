@@ -25,33 +25,34 @@ func parseLinuxdo(cfg config, raw string) (mediaMeta, error) {
 	if topicID == "" {
 		return mediaMeta{}, fmt.Errorf("linux.do topic id not found")
 	}
-	postNumber := linuxdoPostNumber(raw)
+	sourceURL := linuxdoMainPostURL(raw, topicID)
+	postNumber := "1"
 	if strings.TrimSpace(cfg.LinuxdoFlaresolverrURL) != "" {
-		if meta, err := linuxdoParseWithFlaresolverr(cfg, raw, topicID, postNumber); err == nil {
+		if meta, err := linuxdoParseWithFlaresolverr(cfg, sourceURL, topicID, postNumber); err == nil {
 			return meta, nil
 		} else {
 			logDebug(cfg, "linuxdo_flaresolverr_failed url=%s error=%v", raw, err)
 		}
 	}
 	api := linuxdoBase + "/t/" + topicID + ".json"
-	headers := linuxdoHeaders(cfg, raw)
+	headers := linuxdoHeaders(cfg, sourceURL)
 	body, finalURL, status, err := fetchTextWithPlatform(cfg, "linuxdo", api, headers, true)
 	if err != nil {
 		return mediaMeta{}, err
 	}
 	if status >= 400 {
-		if htmlMeta, htmlErr := linuxdoParseHTMLFallback(cfg, raw, topicID, postNumber); htmlErr == nil {
+		if htmlMeta, htmlErr := linuxdoParseHTMLFallback(cfg, sourceURL, topicID, postNumber); htmlErr == nil {
 			return htmlMeta, nil
 		} else {
 			return mediaMeta{}, fmt.Errorf("linux.do API HTTP %d final=%s %s request=%s; html fallback: %v", status, finalURL, linuxdoErrorSummary(body), linuxdoRequestSummary(cfg), htmlErr)
 		}
 	}
 	if postNumber != "" {
-		if body, finalURL, err = linuxdoEnsurePostLoaded(cfg, raw, body, postNumber, finalURL); err != nil {
+		if body, finalURL, err = linuxdoEnsurePostLoaded(cfg, sourceURL, body, postNumber, finalURL); err != nil {
 			return mediaMeta{}, err
 		}
 	}
-	meta, err := parseLinuxdoTopicJSON(raw, finalURL, body)
+	meta, err := parseLinuxdoTopicJSON(sourceURL, finalURL, body)
 	if err != nil {
 		return mediaMeta{}, err
 	}
@@ -326,6 +327,36 @@ func linuxdoTopicPageURL(sourceURL, topicID, postNumber string) string {
 		postNumber = "1"
 	}
 	return linuxdoBase + "/t/" + topicID + "/" + postNumber
+}
+
+func linuxdoMainPostURL(raw, topicID string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.HasSuffix(strings.ToLower(raw), ".json") {
+		return raw
+	}
+	postNumber := linuxdoPostNumber(raw)
+	if postNumber == "" || postNumber == "1" {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 3 || parts[0] != "t" {
+		return raw
+	}
+	for i := len(parts) - 1; i >= 1; i-- {
+		if parts[i] == postNumber {
+			parts[i] = "1"
+			u.Path = "/" + strings.Join(parts, "/")
+			return u.String()
+		}
+	}
+	if topicID != "" {
+		return linuxdoBase + "/t/" + topicID + "/1"
+	}
+	return raw
 }
 
 func linuxdoExtractTopicJSONFromHTML(htmlBody string) map[string]any {
