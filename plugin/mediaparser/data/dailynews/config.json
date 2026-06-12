@@ -1,0 +1,953 @@
+{
+  "default_source": "60s",
+  "default_format": "image",
+  "commands": [
+    "今日早报",
+    "60秒读懂世界",
+    "每天60秒读懂世界",
+    "60秒早报",
+    "60s早报"
+  ],
+  "sources": [
+    {
+      "id": "60s",
+      "name": "每天60秒",
+      "category": "news",
+      "desc": "每日新闻、微语和图片早报",
+      "url": "https://60s.744524299.xyz/v2/60s",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "date",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "YYYY-MM-DD"
+        }
+      ],
+      "commands": [
+        "今日早报",
+        "60秒读懂世界",
+        "每天60秒读懂世界",
+        "60秒早报",
+        "60s早报"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "60s-image",
+      "name": "60s 图片跳转",
+      "category": "news",
+      "desc": "图片跳转早报",
+      "url": "https://60s.744524299.xyz/v2/60s",
+      "method": "GET",
+      "encoding": "image",
+      "params": [
+        {
+          "name": "date",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "YYYY-MM-DD"
+        }
+      ],
+      "commands": [
+        "图片早报"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "60s-image-proxy",
+      "name": "60s 图片代理",
+      "category": "news",
+      "desc": "直接下载图片早报",
+      "url": "https://60s.744524299.xyz/v2/60s",
+      "method": "GET",
+      "encoding": "image-proxy",
+      "params": [
+        {
+          "name": "date",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "YYYY-MM-DD"
+        }
+      ],
+      "commands": [
+        "早报图片"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "60s-markdown",
+      "name": "60s Markdown",
+      "category": "news",
+      "desc": "Markdown 格式早报",
+      "url": "https://60s.744524299.xyz/v2/60s",
+      "method": "GET",
+      "encoding": "markdown",
+      "params": [
+        {
+          "name": "date",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "YYYY-MM-DD"
+        }
+      ],
+      "commands": [
+        "markdown早报",
+        "md早报"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "60s-text",
+      "name": "60s 文本",
+      "category": "news",
+      "desc": "文本格式早报",
+      "url": "https://60s.744524299.xyz/v2/60s",
+      "method": "GET",
+      "encoding": "text",
+      "params": [
+        {
+          "name": "date",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "YYYY-MM-DD"
+        }
+      ],
+      "commands": [
+        "文字早报",
+        "早报文本"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "baidu-hot",
+      "name": "百度热搜",
+      "category": "hot",
+      "desc": "百度热搜榜",
+      "url": "https://60s.viki.moe/v2/baidu/hot",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "百度热搜",
+        "百度热点"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "baike",
+      "name": "百科查询",
+      "category": "data",
+      "desc": "中文百科搜索",
+      "url": "https://60s.viki.moe/v2/baike",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "keyword",
+          "label": "关键词",
+          "source": "rest",
+          "required": true,
+          "placeholder": "Python编程"
+        }
+      ],
+      "commands": [
+        "百科",
+        "百科查询"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "bili-hot",
+      "name": "B站热榜",
+      "category": "hot",
+      "desc": "哔哩哔哩热门视频",
+      "url": "https://60s.viki.moe/v2/bili",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "B站热榜",
+        "b站热榜",
+        "哔哩热榜"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "chemical",
+      "name": "化学元素",
+      "category": "data",
+      "desc": "元素信息查询",
+      "url": "https://60s.viki.moe/v2/chemical",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "query",
+          "label": "元素",
+          "source": "rest",
+          "required": true,
+          "placeholder": "H"
+        }
+      ],
+      "commands": [
+        "化学元素",
+        "元素查询"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "dad-joke",
+      "name": "英文冷笑话",
+      "category": "fun",
+      "desc": "Dad joke",
+      "url": "https://60s.viki.moe/v2/dad-joke",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "英文笑话",
+        "dad joke"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "douyin-hot",
+      "name": "抖音热点",
+      "category": "hot",
+      "desc": "抖音热点榜",
+      "url": "https://60s.viki.moe/v2/douyin",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "抖音热点",
+        "抖音热榜"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "duanzi",
+      "name": "中文段子",
+      "category": "fun",
+      "desc": "随机中文段子",
+      "url": "https://60s.viki.moe/v2/duanzi",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "讲个笑话",
+        "段子",
+        "笑话"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "exchange-rate",
+      "name": "汇率查询",
+      "category": "data",
+      "desc": "货币汇率查询",
+      "url": "https://60s.viki.moe/v2/exchange-rate",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "from",
+          "label": "源币种",
+          "source": "arg",
+          "default": "USD",
+          "placeholder": "USD"
+        },
+        {
+          "name": "to",
+          "label": "目标币种",
+          "source": "arg",
+          "default": "CNY",
+          "placeholder": "CNY"
+        }
+      ],
+      "commands": [
+        "汇率",
+        "汇率查询"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "fanyi",
+      "name": "文本翻译",
+      "category": "tool",
+      "desc": "多语言翻译",
+      "url": "https://60s.viki.moe/v2/fanyi",
+      "method": "POST",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "text",
+          "label": "文本",
+          "source": "rest",
+          "required": true,
+          "placeholder": "你好世界"
+        },
+        {
+          "name": "from",
+          "label": "源语言",
+          "source": "default",
+          "default": "auto"
+        },
+        {
+          "name": "to",
+          "label": "目标语言",
+          "source": "arg",
+          "default": "zh",
+          "placeholder": "en"
+        }
+      ],
+      "commands": [
+        "翻译"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "fanyi-langs",
+      "name": "翻译语言",
+      "category": "tool",
+      "desc": "支持语言列表",
+      "url": "https://60s.viki.moe/v2/fanyi/langs",
+      "method": "POST",
+      "encoding": "json",
+      "commands": [
+        "翻译语言"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "fuel-price",
+      "name": "油价查询",
+      "category": "data",
+      "desc": "国内油价",
+      "url": "https://60s.viki.moe/v2/fuel-price",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "province",
+          "label": "省份",
+          "source": "rest",
+          "required": true,
+          "placeholder": "北京"
+        }
+      ],
+      "commands": [
+        "油价",
+        "油价查询"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "gold-price",
+      "name": "金价查询",
+      "category": "data",
+      "desc": "黄金价格",
+      "url": "https://60s.viki.moe/v2/gold-price",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "金价",
+        "黄金价格"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "hash",
+      "name": "哈希计算",
+      "category": "tool",
+      "desc": "MD5/SHA 计算",
+      "url": "https://60s.viki.moe/v2/hash",
+      "method": "POST",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "text",
+          "label": "文本",
+          "source": "rest",
+          "required": true,
+          "placeholder": "Hello World"
+        },
+        {
+          "name": "algorithm",
+          "label": "算法",
+          "source": "arg",
+          "default": "md5",
+          "placeholder": "sha256"
+        }
+      ],
+      "commands": [
+        "哈希",
+        "hash"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "hitokoto",
+      "name": "一言",
+      "category": "fun",
+      "desc": "随机一句话",
+      "url": "https://60s.viki.moe/v2/hitokoto",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "category",
+          "label": "分类",
+          "source": "arg",
+          "placeholder": "anime"
+        }
+      ],
+      "commands": [
+        "一言",
+        "来句一言"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "ip",
+      "name": "IP 查询",
+      "category": "tool",
+      "desc": "IP 归属地和运营商",
+      "url": "https://60s.viki.moe/v2/ip",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "ip",
+          "label": "IP",
+          "source": "rest",
+          "placeholder": "8.8.8.8"
+        }
+      ],
+      "commands": [
+        "ip查询",
+        "查ip"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "kfc",
+      "name": "疯狂星期四",
+      "category": "fun",
+      "desc": "KFC 梗文案",
+      "url": "https://60s.viki.moe/v2/kfc",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "疯狂星期四",
+        "kfc"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "legacy-image",
+      "name": "旧版早报图片",
+      "category": "news",
+      "desc": "旧版图片接口",
+      "url": "https://uapis.cn/api/v1/daily/news-image",
+      "method": "GET",
+      "encoding": "image-proxy",
+      "commands": [
+        "旧版早报"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "luck",
+      "name": "今日运势",
+      "category": "fun",
+      "desc": "每日运势",
+      "url": "https://60s.viki.moe/v2/luck",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "今日运势",
+        "运势"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "lunar",
+      "name": "农历查询",
+      "category": "data",
+      "desc": "公历农历与生肖节气",
+      "url": "https://60s.viki.moe/v2/lunar",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "date",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "YYYY-MM-DD"
+        }
+      ],
+      "commands": [
+        "农历",
+        "今日农历"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "lyric",
+      "name": "歌词搜索",
+      "category": "media",
+      "desc": "搜索歌词",
+      "url": "https://60s.viki.moe/v2/lyric",
+      "method": "POST",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "keyword",
+          "label": "歌曲",
+          "source": "rest",
+          "required": true,
+          "placeholder": "稻香 周杰伦"
+        }
+      ],
+      "commands": [
+        "歌词",
+        "歌词搜索"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "maoyan-all-movie",
+      "name": "电影资料",
+      "category": "media",
+      "desc": "猫眼电影资料",
+      "url": "https://60s.viki.moe/v2/maoyan/all/movie",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "电影资料"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "maoyan-movie",
+      "name": "实时票房",
+      "category": "media",
+      "desc": "电影票房排行",
+      "url": "https://60s.viki.moe/v2/maoyan/realtime/movie",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "电影票房",
+        "实时票房"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "maoyan-tv",
+      "name": "电视剧收视",
+      "category": "media",
+      "desc": "电视剧收视率",
+      "url": "https://60s.viki.moe/v2/maoyan/realtime/tv",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "电视剧收视",
+        "收视率"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "maoyan-web",
+      "name": "网剧热度",
+      "category": "media",
+      "desc": "网剧热度排行",
+      "url": "https://60s.viki.moe/v2/maoyan/realtime/web",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "网剧热度",
+        "网剧排行"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "moyu",
+      "name": "摸鱼日历",
+      "category": "fun",
+      "desc": "摸鱼日历图片",
+      "url": "https://60s.viki.moe/v2/moyu",
+      "method": "GET",
+      "encoding": "image-proxy",
+      "commands": [
+        "摸鱼日历",
+        "摸鱼"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "ncm-rank",
+      "name": "网易云榜单详情",
+      "category": "media",
+      "desc": "音乐榜单歌曲",
+      "url": "https://60s.viki.moe/v2/ncm-rank/{id}",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "id",
+          "label": "榜单ID",
+          "source": "arg",
+          "default": "3778678",
+          "placeholder": "3778678"
+        }
+      ],
+      "commands": [
+        "网易云热歌",
+        "音乐排行"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "ncm-rank-list",
+      "name": "网易云榜单",
+      "category": "media",
+      "desc": "音乐榜单列表",
+      "url": "https://60s.viki.moe/v2/ncm-rank/list",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "网易云榜单",
+        "音乐榜单"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "og",
+      "name": "网页元信息",
+      "category": "tool",
+      "desc": "提取网页标题描述图片",
+      "url": "https://60s.viki.moe/v2/og",
+      "method": "POST",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "url",
+          "label": "网址",
+          "source": "rest",
+          "required": true,
+          "placeholder": "https://example.com"
+        }
+      ],
+      "commands": [
+        "网页信息",
+        "og"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "password",
+      "name": "密码生成",
+      "category": "tool",
+      "desc": "生成随机密码",
+      "url": "https://60s.viki.moe/v2/password",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "length",
+          "label": "长度",
+          "source": "arg",
+          "default": "16",
+          "placeholder": "16"
+        },
+        {
+          "name": "numbers",
+          "label": "数字",
+          "source": "default",
+          "default": "true"
+        },
+        {
+          "name": "lowercase",
+          "label": "小写",
+          "source": "default",
+          "default": "true"
+        },
+        {
+          "name": "uppercase",
+          "label": "大写",
+          "source": "default",
+          "default": "true"
+        },
+        {
+          "name": "symbols",
+          "label": "符号",
+          "source": "default",
+          "default": "true"
+        }
+      ],
+      "commands": [
+        "生成密码",
+        "随机密码"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "qrcode",
+      "name": "二维码",
+      "category": "tool",
+      "desc": "生成二维码图片",
+      "url": "https://60s.viki.moe/v2/qrcode",
+      "method": "GET",
+      "encoding": "image-proxy",
+      "params": [
+        {
+          "name": "text",
+          "label": "内容",
+          "source": "rest",
+          "required": true,
+          "placeholder": "https://example.com"
+        },
+        {
+          "name": "size",
+          "label": "尺寸",
+          "source": "arg",
+          "default": "300",
+          "placeholder": "300"
+        }
+      ],
+      "commands": [
+        "二维码",
+        "生成二维码"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "today-history",
+      "name": "历史上的今天",
+      "category": "data",
+      "desc": "历史事件查询",
+      "url": "https://60s.viki.moe/v2/today-in-history",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "month",
+          "label": "月份",
+          "source": "arg",
+          "placeholder": "1"
+        },
+        {
+          "name": "day",
+          "label": "日期",
+          "source": "arg",
+          "placeholder": "15"
+        }
+      ],
+      "commands": [
+        "历史上的今天",
+        "历史今天"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "toutiao",
+      "name": "头条热点",
+      "category": "hot",
+      "desc": "今日头条热点",
+      "url": "https://60s.viki.moe/v2/toutiao",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "头条热点",
+        "今日头条"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "weather-forecast",
+      "name": "天气预报",
+      "category": "weather",
+      "desc": "查询城市天气预报",
+      "url": "https://60s.viki.moe/v2/weather/forecast",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "query",
+          "label": "地点",
+          "source": "rest",
+          "required": true,
+          "placeholder": "上海"
+        }
+      ],
+      "commands": [
+        "天气预报",
+        "未来天气"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "weather-realtime",
+      "name": "实时天气",
+      "category": "weather",
+      "desc": "查询城市实时天气",
+      "url": "https://60s.viki.moe/v2/weather/realtime",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "query",
+          "label": "地点",
+          "source": "rest",
+          "required": true,
+          "placeholder": "北京"
+        }
+      ],
+      "commands": [
+        "天气",
+        "实时天气"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "weibo",
+      "name": "微博热搜",
+      "category": "hot",
+      "desc": "微博热搜榜",
+      "url": "https://60s.viki.moe/v2/weibo",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "微博热搜",
+        "微博热点"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "whois",
+      "name": "WHOIS 查询",
+      "category": "tool",
+      "desc": "域名注册信息",
+      "url": "https://60s.viki.moe/v2/whois",
+      "method": "GET",
+      "encoding": "json",
+      "params": [
+        {
+          "name": "domain",
+          "label": "域名",
+          "source": "rest",
+          "required": true,
+          "placeholder": "github.com"
+        }
+      ],
+      "commands": [
+        "whois",
+        "域名查询"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    },
+    {
+      "id": "zhihu",
+      "name": "知乎热榜",
+      "category": "hot",
+      "desc": "知乎热门话题",
+      "url": "https://60s.viki.moe/v2/zhihu",
+      "method": "GET",
+      "encoding": "json",
+      "commands": [
+        "知乎热榜",
+        "知乎热点"
+      ],
+      "timeout_seconds": 20,
+      "enabled": true,
+      "builtin": true
+    }
+  ],
+  "schedules": null,
+  "access": {
+    "enabled": true,
+    "private_enabled": true,
+    "private_mode": "none",
+    "group_mode": "none"
+  }
+}
