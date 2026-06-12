@@ -2150,20 +2150,20 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <div class="settingsCard">
 <div class="sectionTitle"><b>访问控制</b><span class="muted">只拦截 Telegram 通道。</span></div>
 <div class="settingsFields">
-<label class="field span2">TG 超级管理员 <textarea id="tgbotSuperUsers" placeholder="每行一个 Telegram 映射 user_id"></textarea><span class="muted">只管理 TG 通道；不写入全局 QQ 管理员。</span></label>
+<label class="field span2">TG 超级管理员 <textarea id="tgbotSuperUsers" placeholder="每行一个 Telegram 原始 user_id 或映射 ID"></textarea><span class="muted">只管理 TG 通道；不写入全局 QQ 管理员。</span></label>
 <label class="field">私聊模式 <select id="tgbotPrivateMode" onchange="onTGBotAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单</option><option value="blacklist">屏蔽黑名单</option></select></label>
 <label class="field">群/频道模式 <select id="tgbotGroupMode" onchange="onTGBotAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单</option><option value="blacklist">屏蔽黑名单</option></select></label>
 <label class="field span2">群内发言人模式 <select id="tgbotGroupUserMode" onchange="onTGBotAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单</option><option value="blacklist">屏蔽黑名单</option></select></label>
 </div>
 <div class="accessGrid">
-<label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="whitelist">私聊白名单<textarea id="tgbotUserWhitelist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
-<label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="blacklist">私聊黑名单<textarea id="tgbotUserBlacklist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
-<label class="field tgbotAccessField" data-mode="tgbotGroupMode" data-kind="whitelist">群/频道白名单<textarea id="tgbotGroupWhitelist" placeholder="每行一个 Telegram 映射 group_id"></textarea></label>
-<label class="field tgbotAccessField" data-mode="tgbotGroupMode" data-kind="blacklist">群/频道黑名单<textarea id="tgbotGroupBlacklist" placeholder="每行一个 Telegram 映射 group_id"></textarea></label>
-<label class="field tgbotAccessField" data-mode="tgbotGroupUserMode" data-kind="whitelist">群内发言人白名单<textarea id="tgbotGroupUserWhitelist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
-<label class="field tgbotAccessField" data-mode="tgbotGroupUserMode" data-kind="blacklist">群内发言人黑名单<textarea id="tgbotGroupUserBlacklist" placeholder="每行一个 Telegram 映射 user_id"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="whitelist">私聊白名单<textarea id="tgbotUserWhitelist" placeholder="每行一个 Telegram 原始 user_id 或映射 ID"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotPrivateMode" data-kind="blacklist">私聊黑名单<textarea id="tgbotUserBlacklist" placeholder="每行一个 Telegram 原始 user_id 或映射 ID"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupMode" data-kind="whitelist">群/频道白名单<textarea id="tgbotGroupWhitelist" placeholder="每行一个 Telegram 原始 chat_id/group_id，支持负数"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupMode" data-kind="blacklist">群/频道黑名单<textarea id="tgbotGroupBlacklist" placeholder="每行一个 Telegram 原始 chat_id/group_id，支持负数"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupUserMode" data-kind="whitelist">群内发言人白名单<textarea id="tgbotGroupUserWhitelist" placeholder="每行一个 Telegram 原始 user_id 或映射 ID"></textarea></label>
+<label class="field tgbotAccessField" data-mode="tgbotGroupUserMode" data-kind="blacklist">群内发言人黑名单<textarea id="tgbotGroupUserBlacklist" placeholder="每行一个 Telegram 原始 user_id 或映射 ID"></textarea></label>
 </div>
-<p class="muted" style="margin-bottom:0">名单使用 TG 日志里的映射 ID；不写入聚合解析或 QQ 名单。</p>
+<p class="muted" style="margin-bottom:0">优先填写 Telegram 原始 ID；旧的映射 ID 仍兼容。不写入 QQ 名单。</p>
 </div>
 </div>
 <div class="settingsStack">
@@ -2799,7 +2799,7 @@ function logoCell(p){const info=logos[p.name]||{};const custom=!!info.exists;con
 function listText(map){return Object.keys(map||{}).filter(k=>map[k]).sort((a,b)=>Number(a)-Number(b)).join('\n')}
 function parseList(text){const out={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)) out[x]=true}); return out}
 function idListText(list){return (list||[]).map(String).join('\n')}
-function parseIDArray(text){const seen={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^\d+$/.test(x)) seen[x]=true}); return Object.keys(seen).map(Number).filter(Boolean).sort((a,b)=>a-b)}
+function parseIDArray(text){const seen={}; String(text||'').split(/[\s,，;；]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(/^-?\d+$/.test(x)&&x!=='0') seen[x]=true}); return Object.keys(seen).map(Number).filter(n=>n!==0).sort((a,b)=>a-b)}
 function setTextareaMap(id,map){$(id).value=listText(map)}
 function addListID(textarea,id,on){const map=parseList($(textarea).value); if(on) map[String(id)]=true; else delete map[String(id)]; setTextareaMap(textarea,map); markDirty()}
 function toggleLastMsg(){const el=$('lastMsg'); el.classList.toggle('expanded')}

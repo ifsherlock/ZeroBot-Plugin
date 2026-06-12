@@ -170,8 +170,8 @@ func normalizeSystemSettings(settings SystemSettings) SystemSettings {
 	settings.TGBotGroupUserMode = normalizeSystemAccessMode(settings.TGBotGroupUserMode)
 	settings.TGBotUserWhitelist = uniqueInt64(settings.TGBotUserWhitelist)
 	settings.TGBotUserBlacklist = uniqueInt64(settings.TGBotUserBlacklist)
-	settings.TGBotGroupWhitelist = uniqueInt64(settings.TGBotGroupWhitelist)
-	settings.TGBotGroupBlacklist = uniqueInt64(settings.TGBotGroupBlacklist)
+	settings.TGBotGroupWhitelist = uniqueInt64Signed(settings.TGBotGroupWhitelist)
+	settings.TGBotGroupBlacklist = uniqueInt64Signed(settings.TGBotGroupBlacklist)
 	settings.TGBotGroupUserWhitelist = uniqueInt64(settings.TGBotGroupUserWhitelist)
 	settings.TGBotGroupUserBlacklist = uniqueInt64(settings.TGBotGroupUserBlacklist)
 	return settings
@@ -190,6 +190,20 @@ func uniqueInt64(in []int64) []int64 {
 	out := make([]int64, 0, len(in))
 	for _, v := range in {
 		if v <= 0 || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+func uniqueInt64Signed(in []int64) []int64 {
+	seen := map[int64]bool{}
+	out := make([]int64, 0, len(in))
+	for _, v := range in {
+		if v == 0 || seen[v] {
 			continue
 		}
 		seen[v] = true

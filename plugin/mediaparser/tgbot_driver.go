@@ -217,21 +217,27 @@ func (d *tgBotDriver) zeroEvent(update tgBotUpdate) []byte {
 		return nil
 	}
 	group := tgBotIsGroupChat(msg.Chat.Type)
-	targetID := tgBotStableID("chat:" + strconv.FormatInt(msg.Chat.ID, 10))
-	userID := tgBotStableID("user:" + strconv.FormatInt(firstNonZeroInt64(msg.From.ID, msg.Sender.ID, msg.Chat.ID), 10))
+	nativeChatID := msg.Chat.ID
+	nativeUserID := firstNonZeroInt64(msg.From.ID, msg.Sender.ID, nativeChatID)
+	targetID := tgBotStableID("chat:" + strconv.FormatInt(nativeChatID, 10))
+	userID := tgBotStableID("user:" + strconv.FormatInt(nativeUserID, 10))
 	settings := tgBotRuntimeSettings()
-	isSuperUser := tgBotIsSuperUser(settings, userID)
-	if ok, reason := tgBotAccessOK(settings, group, userID, targetID); !ok {
+	accessIDs := tgBotAccessIDs{
+		UserIDs:  tgBotIDCandidates(userID, nativeUserID),
+		GroupIDs: tgBotIDCandidates(targetID, nativeChatID),
+	}
+	isSuperUser := tgBotIsSuperUser(settings, accessIDs.UserIDs...)
+	if ok, reason := tgBotAccessOK(settings, group, accessIDs); !ok {
 		if group {
-			logrus.Infof("[tgbot] access_blocked type=group reason=%s message_id=%d group_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, targetID, userID, msg.Chat.ID)
+			logrus.Infof("[tgbot] access_blocked type=group reason=%s message_id=%d group_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, targetID, userID, nativeChatID)
 		} else {
-			logrus.Infof("[tgbot] access_blocked type=private reason=%s message_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, userID, msg.Chat.ID)
+			logrus.Infof("[tgbot] access_blocked type=private reason=%s message_id=%d user_id=%d chat_id=%d", reason, msg.MessageID, userID, nativeChatID)
 		}
 		return nil
 	}
-	d.rememberTarget(targetID, msg.Chat.ID, group)
+	d.rememberTarget(targetID, nativeChatID, group)
 	if !group {
-		d.rememberTarget(userID, msg.Chat.ID, false)
+		d.rememberTarget(userID, nativeChatID, false)
 	}
 	event := map[string]any{
 		"time":                firstNonZeroInt64(msg.Date, time.Now().Unix()),
@@ -274,40 +280,67 @@ func tgBotRuntimeSettings() SystemSettings {
 	return normalizeSystemSettings(settings)
 }
 
-func tgBotAccessOK(settings SystemSettings, group bool, userID, groupID int64) (bool, string) {
+type tgBotAccessIDs struct {
+	UserIDs  []int64
+	GroupIDs []int64
+}
+
+func tgBotAccessOK(settings SystemSettings, group bool, ids tgBotAccessIDs) (bool, string) {
 	settings = normalizeSystemSettings(settings)
-	if tgBotIsSuperUser(settings, userID) {
+	if tgBotIsSuperUser(settings, ids.UserIDs...) {
 		return true, "tgbot_super_user"
 	}
 	if !group {
-		return tgBotAccessListOK(settings.TGBotPrivateMode, userID, settings.TGBotUserWhitelist, settings.TGBotUserBlacklist, "private")
+		return tgBotAccessListOK(settings.TGBotPrivateMode, ids.UserIDs, settings.TGBotUserWhitelist, settings.TGBotUserBlacklist, "private")
 	}
-	if ok, reason := tgBotAccessListOK(settings.TGBotGroupMode, groupID, settings.TGBotGroupWhitelist, settings.TGBotGroupBlacklist, "group"); !ok {
+	if ok, reason := tgBotAccessListOK(settings.TGBotGroupMode, ids.GroupIDs, settings.TGBotGroupWhitelist, settings.TGBotGroupBlacklist, "group"); !ok {
 		return false, reason
 	}
-	return tgBotAccessListOK(settings.TGBotGroupUserMode, userID, settings.TGBotGroupUserWhitelist, settings.TGBotGroupUserBlacklist, "group_user")
+	return tgBotAccessListOK(settings.TGBotGroupUserMode, ids.UserIDs, settings.TGBotGroupUserWhitelist, settings.TGBotGroupUserBlacklist, "group_user")
 }
 
-func tgBotIsSuperUser(settings SystemSettings, userID int64) bool {
+func tgBotIsSuperUser(settings SystemSettings, ids ...int64) bool {
 	settings = normalizeSystemSettings(settings)
-	return int64SliceContains(settings.TGBotSuperUsers, userID)
+	return int64SliceOverlaps(settings.TGBotSuperUsers, ids)
 }
 
-func tgBotAccessListOK(mode string, id int64, whitelist, blacklist []int64, scope string) (bool, string) {
+func tgBotAccessListOK(mode string, ids []int64, whitelist, blacklist []int64, scope string) (bool, string) {
 	switch normalizeSystemAccessMode(mode) {
 	case accessWhitelist:
-		if int64SliceContains(whitelist, id) {
+		if int64SliceOverlaps(whitelist, ids) {
 			return true, scope + "_whitelisted"
 		}
 		return false, scope + "_not_in_whitelist"
 	case accessBlacklist:
-		if int64SliceContains(blacklist, id) {
+		if int64SliceOverlaps(blacklist, ids) {
 			return false, scope + "_blacklisted"
 		}
 		return true, scope + "_not_blacklisted"
 	default:
 		return true, scope + "_access_none"
 	}
+}
+
+func tgBotIDCandidates(ids ...int64) []int64 {
+	out := make([]int64, 0, len(ids))
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+func int64SliceOverlaps(list []int64, ids []int64) bool {
+	for _, id := range ids {
+		if int64SliceContains(list, id) {
+			return true
+		}
+	}
+	return false
 }
 
 func int64SliceContains(list []int64, id int64) bool {

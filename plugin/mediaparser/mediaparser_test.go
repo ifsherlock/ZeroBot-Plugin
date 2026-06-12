@@ -275,6 +275,7 @@ func TestTelegramRedactsTokenFromErrors(t *testing.T) {
 func TestTelegramAccessUsesDedicatedLists(t *testing.T) {
 	groupID := tgBotStableID("chat:-100123456")
 	userID := tgBotStableID("user:456789")
+	ids := tgBotAccessIDs{UserIDs: []int64{userID}, GroupIDs: []int64{groupID}}
 	settings := SystemSettings{
 		TGBotPrivateMode:    accessBlacklist,
 		TGBotGroupMode:      accessWhitelist,
@@ -282,18 +283,50 @@ func TestTelegramAccessUsesDedicatedLists(t *testing.T) {
 		TGBotUserBlacklist:  []int64{userID},
 		TGBotSuperUsers:     []int64{999999},
 	}
-	if ok, reason := tgBotAccessOK(settings, true, userID, groupID); !ok {
+	if ok, reason := tgBotAccessOK(settings, true, ids); !ok {
 		t.Fatalf("group whitelist should allow telegram group even when private blacklist contains user, reason=%s", reason)
 	}
-	if ok, reason := tgBotAccessOK(settings, false, userID, 0); ok {
+	if ok, reason := tgBotAccessOK(settings, false, ids); ok {
 		t.Fatalf("private blacklist should still block private telegram message, reason=%s", reason)
 	}
-	if ok, reason := tgBotAccessOK(settings, true, userID, tgBotStableID("chat:-100999")); ok {
+	ids.GroupIDs = []int64{tgBotStableID("chat:-100999")}
+	if ok, reason := tgBotAccessOK(settings, true, ids); ok {
 		t.Fatalf("unlisted telegram group should be blocked, reason=%s", reason)
 	}
 	settings.TGBotSuperUsers = []int64{userID}
-	if ok, reason := tgBotAccessOK(settings, true, userID, tgBotStableID("chat:-100999")); !ok {
+	if ok, reason := tgBotAccessOK(settings, true, ids); !ok {
 		t.Fatalf("telegram super user should bypass telegram access lists, reason=%s", reason)
+	}
+}
+
+func TestTelegramAccessAcceptsNativeIDs(t *testing.T) {
+	nativeUserID := int64(1740941511)
+	mappedUserID := tgBotStableID("user:" + strconv.FormatInt(nativeUserID, 10))
+	nativeGroupID := int64(-1001234567890)
+	mappedGroupID := tgBotStableID("chat:" + strconv.FormatInt(nativeGroupID, 10))
+	ids := tgBotAccessIDs{
+		UserIDs:  []int64{mappedUserID, nativeUserID},
+		GroupIDs: []int64{mappedGroupID, nativeGroupID},
+	}
+
+	privateSettings := SystemSettings{
+		TGBotPrivateMode:   accessWhitelist,
+		TGBotUserWhitelist: []int64{nativeUserID},
+	}
+	if ok, reason := tgBotAccessOK(privateSettings, false, ids); !ok {
+		t.Fatalf("native telegram private user_id should pass whitelist, reason=%s", reason)
+	}
+
+	groupSettings := SystemSettings{
+		TGBotGroupMode:      accessWhitelist,
+		TGBotGroupWhitelist: []int64{nativeGroupID},
+	}
+	if ok, reason := tgBotAccessOK(groupSettings, true, ids); !ok {
+		t.Fatalf("native negative telegram chat_id should pass group whitelist, reason=%s", reason)
+	}
+
+	if got := normalizeSystemSettings(groupSettings).TGBotGroupWhitelist; len(got) != 1 || got[0] != nativeGroupID {
+		t.Fatalf("negative telegram group id should survive normalization: %#v", got)
 	}
 }
 
