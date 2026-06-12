@@ -21,6 +21,7 @@ import (
 	"github.com/FloatTech/gg"
 	zip "github.com/alexmullins/zip"
 	"github.com/disintegration/imaging"
+	"github.com/tidwall/gjson"
 	zero "github.com/wdvxdr1123/ZeroBot"
 )
 
@@ -142,6 +143,18 @@ func TestMediaParserPermissionSkipsQQListsForTelegram(t *testing.T) {
 	if ok, reason := mediaParserPermissionOK(cfg, 10000, 0, true); !ok {
 		t.Fatalf("telegram event should rely on Telegram channel access, reason=%s", reason)
 	}
+}
+
+func TestTelegramParseReactionSkipsUnsupportedAPI(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.ParseReaction = true
+	ctx := &zero.Ctx{Event: &zero.Event{
+		MessageID: int64(123),
+		RawEvent:  gjson.Parse(`{"tgbot_source":"message"}`),
+	}}
+
+	sendParseReaction(ctx, cfg)
+	sendFailReaction(ctx, cfg)
 }
 
 func TestQQBotRichMediaEnabledRespectsMediaSwitches(t *testing.T) {
@@ -274,6 +287,40 @@ func TestTelegramBotDriverCreationAndMediaAttachment(t *testing.T) {
 	}
 	if _, ok := driver.mediaAttachment(blocked, tgBotMediaPhoto); ok {
 		t.Fatal("telegram should reject local media outside cache/temp allowlist")
+	}
+}
+
+func TestTelegramAllowsParserCardsWhenMediaDisabled(t *testing.T) {
+	oldCacheDir := cacheDir
+	cacheDir = t.TempDir()
+	defer func() { cacheDir = oldCacheDir }()
+
+	card := filepath.Join(cacheDir, "card_twitter_test.png")
+	ordinary := filepath.Join(cacheDir, "image_twitter_test.jpg")
+	for _, path := range []string{card, ordinary} {
+		if err := os.WriteFile(path, []byte("media"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	disabled := &tgBotDriver{mediaEnabled: false}
+	cardItem := tgBotMediaAttachment{kind: tgBotMediaPhoto, target: card, name: filepath.Base(card)}
+	ordinaryItem := tgBotMediaAttachment{kind: tgBotMediaPhoto, target: ordinary, name: filepath.Base(ordinary)}
+	videoItem := tgBotMediaAttachment{kind: tgBotMediaVideo, target: filepath.Join(cacheDir, "card_video.mp4"), name: "card_video.mp4"}
+
+	if !disabled.shouldSendMediaAttachment(cardItem) {
+		t.Fatal("telegram should send parser card images even when media upload is disabled")
+	}
+	if disabled.shouldSendMediaAttachment(ordinaryItem) {
+		t.Fatal("telegram should not send ordinary images when media upload is disabled")
+	}
+	if disabled.shouldSendMediaAttachment(videoItem) {
+		t.Fatal("telegram should not send videos when media upload is disabled")
+	}
+
+	enabled := &tgBotDriver{mediaEnabled: true}
+	if !enabled.shouldSendMediaAttachment(ordinaryItem) {
+		t.Fatal("telegram should send ordinary media when media upload is enabled")
 	}
 }
 
@@ -2942,6 +2989,19 @@ func TestSafetyBlockedUsesTwitterSensitiveMarker(t *testing.T) {
 	}
 }
 
+func TestTelegramChannelSkipsSafetyBlocked(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.SafetyGlobalCategories = map[string]bool{safetyCategoryAdult: true}
+	meta := mediaMeta{Platform: "twitter", Desc: "NSFW marker", AccessText: safetyMarkerTwitterSensitive}
+
+	if hit, blocked := safetyBlockedForChannel(cfg, meta, "", false); !blocked {
+		t.Fatalf("non-telegram channel should still block unsafe content, hit=%+v", hit)
+	}
+	if hit, blocked := safetyBlockedForChannel(cfg, meta, "", true); blocked {
+		t.Fatalf("telegram channel should skip safety filtering, hit=%+v", hit)
+	}
+}
+
 func TestSafetyBlockedSkipsTwitterSensitiveMarkerWhenDisabled(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.SafetyTwitterSensitive = false
@@ -3458,6 +3518,25 @@ func TestMediaShieldShouldHandleTwitterAdultOnlyWhenEnabled(t *testing.T) {
 	meta.Platform = "bilibili"
 	if mediaShieldShouldHandle(cfg, meta, "setu", hit, true, 0, 456) {
 		t.Fatalf("media shield must stay twitter-only")
+	}
+}
+
+func TestTelegramChannelSkipsMediaShield(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MediaShieldEnabled = true
+	cfg.MediaShieldActive = true
+	cfg.MediaShieldPassive = true
+	cfg.MediaShieldPrivateEnabled = true
+	cfg.MediaShieldUserEnabled = map[int64]bool{456: true}
+	cfg.MediaShieldPassiveWords = []string{"nsfw"}
+	meta := mediaMeta{Platform: "twitter", Title: "nsfw"}
+	hit := safetyHit{Category: safetyCategoryAdult, Keyword: "nsfw", Source: "builtin"}
+
+	if !mediaShieldShouldHandleForChannel(cfg, meta, "setu nsfw", hit, true, 0, 456, false) {
+		t.Fatal("non-telegram channel should still allow media shield takeover")
+	}
+	if mediaShieldShouldHandleForChannel(cfg, meta, "setu nsfw", hit, true, 0, 456, true) {
+		t.Fatal("telegram channel should skip media shield")
 	}
 }
 

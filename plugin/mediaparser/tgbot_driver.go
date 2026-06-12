@@ -362,20 +362,58 @@ func (d *tgBotDriver) sendTelegramMessage(ctx context.Context, chatID int64, msg
 		}
 		last = resp
 	}
-	if d.mediaEnabled {
-		for _, item := range attachments {
-			resp, err := d.sendTelegramMedia(ctx, chatID, item)
-			if err != nil {
-				logrus.Warnf("[tgbot] media_send_failed kind=%s target=%s error=%v", item.kind, item.target, err)
-				return resp, err
-			}
-			last = resp
+	for _, item := range attachments {
+		if !d.shouldSendMediaAttachment(item) {
+			logrus.Infof("[tgbot] media_send_skipped disabled kind=%s name=%s", item.kind, item.name)
+			continue
 		}
+		resp, err := d.sendTelegramMedia(ctx, chatID, item)
+		if err != nil {
+			logrus.Warnf("[tgbot] media_send_failed kind=%s target=%s error=%v", item.kind, item.target, err)
+			return resp, err
+		}
+		last = resp
 	}
 	if last.Status == "" {
 		return tgBotAPIError("empty message"), nil
 	}
 	return last, nil
+}
+
+func (d *tgBotDriver) shouldSendMediaAttachment(item tgBotMediaAttachment) bool {
+	return d != nil && (d.mediaEnabled || tgBotAlwaysAllowedMedia(item))
+}
+
+func tgBotAlwaysAllowedMedia(item tgBotMediaAttachment) bool {
+	if item.kind != tgBotMediaPhoto || item.target == "" {
+		return false
+	}
+	target := stripMediaPrefix(item.target)
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		return false
+	}
+	abs, err := filepath.Abs(target)
+	if err != nil || !tgBotPathUnder(abs, cacheDir) {
+		return false
+	}
+	base := filepath.Base(abs)
+	return strings.HasPrefix(base, "card_") && strings.EqualFold(filepath.Ext(base), ".png")
+}
+
+func tgBotPathUnder(path, root string) bool {
+	if strings.TrimSpace(root) == "" {
+		return false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rootAbs, abs)
+	return err == nil && rel != "." && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel)
 }
 
 func (d *tgBotDriver) sendTelegramText(ctx context.Context, chatID int64, content string) (zero.APIResponse, error) {

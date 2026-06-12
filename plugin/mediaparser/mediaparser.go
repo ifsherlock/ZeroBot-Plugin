@@ -1173,6 +1173,10 @@ func sendParseReaction(ctx *zero.Ctx, cfg config) {
 	if !cfg.ParseReaction || ctx.Event.MessageID == 0 {
 		return
 	}
+	if isTelegramBotEvent(ctx) {
+		logDebug(cfg, "parse_reaction_skip channel=tgbot")
+		return
+	}
 	emoji := firstReactionRune(cfg.ParseReactionEmoji)
 	if emoji == 0 {
 		return
@@ -1186,6 +1190,10 @@ func sendParseReaction(ctx *zero.Ctx, cfg config) {
 
 func sendFailReaction(ctx *zero.Ctx, cfg config) {
 	if !cfg.ParseReaction || ctx.Event.MessageID == 0 {
+		return
+	}
+	if isTelegramBotEvent(ctx) {
+		logDebug(cfg, "fail_reaction_skip channel=tgbot")
 		return
 	}
 	emoji := firstReactionRune(cfg.FailReactionEmoji)
@@ -1253,14 +1261,16 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		return err
 	}
 	meta.Author = cardDisplayAuthor(meta.Author)
-	hit, blocked := safetyBlocked(cfg, meta, rawMessage)
+	qqbotEvent := isOfficialQQBotEvent(ctx)
+	tgbotEvent := isTelegramBotEvent(ctx)
+	hit, blocked := safetyBlockedForChannel(cfg, meta, rawMessage, tgbotEvent)
 	groupID := int64(0)
 	userID := int64(0)
 	if ctx != nil && ctx.Event != nil {
 		groupID = ctx.Event.GroupID
 		userID = ctx.Event.UserID
 	}
-	if normalizePlatformName(meta.Platform) == "twitter" {
+	if !tgbotEvent && normalizePlatformName(meta.Platform) == "twitter" {
 		shieldSignal := blocked ||
 			mediaShieldHasTwitterSensitiveMarker(meta, rawMessage) ||
 			mediaShieldPassiveTriggered(cfg, meta, rawMessage) ||
@@ -1272,7 +1282,7 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 				mediaShieldPassiveTriggered(cfg, meta, rawMessage), mediaShieldActiveTriggered(cfg, rawMessage), mediaShieldHasTwitterSensitiveMarker(meta, rawMessage), truncate(meta.Title, 80))
 		}
 	}
-	if mediaShieldShouldHandle(cfg, meta, rawMessage, hit, blocked, groupID, userID) {
+	if mediaShieldShouldHandleForChannel(cfg, meta, rawMessage, hit, blocked, groupID, userID, tgbotEvent) {
 		if err := sendMediaShieldPackage(ctx, cfg, &meta, mediaShieldReason(cfg, meta, rawMessage, hit, blocked, groupID, userID)); err != nil {
 			logrus.Warnf("[mediaparser] media_shield_failed platform=%s title=%q error=%v", meta.Platform, truncate(meta.Title, 80), err)
 			if blocked {
@@ -1294,8 +1304,6 @@ func processLink(ctx *zero.Ctx, cfg config, link parsedLink, rawMessage string) 
 		return nil
 	}
 	applyOutputFlags(cfg, &meta)
-	qqbotEvent := isOfficialQQBotEvent(ctx)
-	tgbotEvent := isTelegramBotEvent(ctx)
 
 	infoCardSent := false
 	cardEnabled := cfg.SendInfoCard && cfg.PlatformInfoCard[meta.Platform] && wantsText(cfg, meta.Platform)
@@ -1359,6 +1367,20 @@ func isTelegramBotEvent(ctx *zero.Ctx) bool {
 	return ctx != nil && ctx.Event != nil && ctx.Event.RawEvent.Get("tgbot_source").Exists()
 }
 
+func safetyBlockedForChannel(cfg config, meta mediaMeta, raw string, telegramEvent bool) (safetyHit, bool) {
+	if telegramEvent {
+		return safetyHit{}, false
+	}
+	return safetyBlocked(cfg, meta, raw)
+}
+
+func mediaShieldShouldHandleForChannel(cfg config, meta mediaMeta, raw string, hit safetyHit, blocked bool, groupID, userID int64, telegramEvent bool) bool {
+	if telegramEvent {
+		return false
+	}
+	return mediaShieldShouldHandle(cfg, meta, raw, hit, blocked, groupID, userID)
+}
+
 func qqBotPublicImageEnabled() bool {
 	systemMu.RLock()
 	defer systemMu.RUnlock()
@@ -1412,7 +1434,16 @@ func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
 	if !isOfficialQQBotEvent(ctx) && !isTelegramBotEvent(ctx) {
 		target = oneBotLocalMediaTarget(card)
 	}
-	ctx.SendChain(message.Image(target))
+	res := ctx.SendChain(message.Image(target))
+	if isTelegramBotEvent(ctx) && res.ID() == 0 {
+		text := strings.TrimSpace(buildText(meta))
+		if text != "" {
+			ctx.SendChain(message.Text(text))
+			logrus.Warnf("[mediaparser] sent_info_card_fallback_text channel=tgbot platform=%s title=%q path=%s", meta.Platform, meta.Title, card)
+		}
+		scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
+		return false
+	}
 	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s target=%s", meta.Platform, meta.Title, card, target)
 	scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 	return true
