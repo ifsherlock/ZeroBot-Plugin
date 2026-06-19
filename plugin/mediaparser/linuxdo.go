@@ -521,9 +521,72 @@ func linuxdoMergeRenderedHTML(meta *mediaMeta, htmlBody, finalURL string) {
 	}
 	images := linuxdoExtractImages(htmlBody, finalURL)
 	if len(images) > 0 {
-		meta.ImageURLs = images
-		meta.Cover = firstImageURL(images)
+		meta.ImageURLs = linuxdoMergeImageURLs(meta.ImageURLs, images)
+		meta.Cover = firstImageURL(meta.ImageURLs)
 	}
+}
+
+func linuxdoMergeImageURLs(current, rendered [][]string) [][]string {
+	merged := make([][]string, 0, len(current)+len(rendered))
+	seen := map[string]bool{}
+	addGroup := func(group []string) {
+		if len(group) == 0 {
+			return
+		}
+		cleaned := make([]string, 0, len(group))
+		uniqueInGroup := map[string]bool{}
+		hasNew := false
+		for _, raw := range group {
+			u := strings.TrimSpace(raw)
+			if u == "" {
+				continue
+			}
+			key := linuxdoImageDedupeKey(u)
+			if uniqueInGroup[key] {
+				continue
+			}
+			uniqueInGroup[key] = true
+			cleaned = append(cleaned, u)
+			if !seen[key] {
+				hasNew = true
+			}
+		}
+		if !hasNew || len(cleaned) == 0 {
+			return
+		}
+		for _, u := range cleaned {
+			seen[linuxdoImageDedupeKey(u)] = true
+		}
+		merged = append(merged, cleaned)
+	}
+	for _, group := range current {
+		addGroup(group)
+	}
+	for _, group := range rendered {
+		addGroup(group)
+	}
+	return dedupeMediaGroups(merged)
+}
+
+func linuxdoImageDedupeKey(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return strings.TrimSpace(raw)
+	}
+	u.RawQuery = ""
+	u.Fragment = ""
+	p := u.EscapedPath()
+	p = strings.Replace(p, "/optimized/", "/original/", 1)
+	if idx := strings.LastIndex(p, "/"); idx >= 0 {
+		dir, file := p[:idx+1], p[idx+1:]
+		if dot := strings.LastIndex(file, "."); dot > 0 {
+			stem, ext := file[:dot], file[dot:]
+			stem = regexp.MustCompile(`_[0-9]+_[0-9]+x[0-9]+$`).ReplaceAllString(stem, "")
+			p = dir + stem + strings.ToLower(ext)
+		}
+	}
+	u.Path = p
+	return strings.ToLower(u.Host) + u.EscapedPath()
 }
 
 func linuxdoPreferRenderedDesc(current, rendered string) bool {

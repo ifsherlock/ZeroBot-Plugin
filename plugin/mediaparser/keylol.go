@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const keylolUA = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Mobile"
+const (
+	keylolUA                   = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Mobile"
+	keylolSteamCardRenderLimit = 15
+)
 
 var (
 	keylolAPIBase  = "https://keylol.com/api/mobile/index.php"
@@ -77,10 +80,11 @@ func parseKeylol(cfg config, raw string) (mediaMeta, error) {
 		return mediaMeta{}, fmt.Errorf("keylol reply-visible content requires manual unlock")
 	}
 	blocks := keylolBuildBlocks(messageHTML, getMap(post, "attachments"), finalURL)
+	blocks = keylolLimitSteamCards(blocks, raw, keylolSteamCardRenderLimit)
 	blocks = keylolEnrichSteamBlocks(blocks)
 	blocks = keylolEnsureASFSteamCards(blocks)
+	blocks = keylolLimitSteamCards(blocks, raw, keylolSteamCardRenderLimit)
 	blocks = keylolEnrichVideoBlocks(cfg, blocks)
-	blocks = keylolLimitSteamCards(blocks, raw, 20)
 	images := keylolImageGroupsFromBlocks(blocks)
 	desc := keylolDescFromBlocks(blocks)
 	title := keylolCleanTitle(firstNonEmpty(getString(thread, "subject"), getString(post, "subject")))
@@ -725,18 +729,21 @@ func keylolEnrichVideoBlocks(cfg config, blocks []keylolBlock) []keylolBlock {
 	return blocks
 }
 
-func keylolLimitSteamCards(blocks []keylolBlock, sourceURL string, limit int) []keylolBlock {
+func keylolLimitSteamCards(blocks []keylolBlock, _ string, limit int) []keylolBlock {
 	if limit <= 0 {
 		return blocks
 	}
 	count := 0
 	trimmed := false
-	out := make([]keylolBlock, 0, len(blocks)+1)
+	out := make([]keylolBlock, 0, len(blocks))
 	for _, block := range blocks {
 		if block.Kind == "steam_card" {
 			count++
 			if count > limit {
 				trimmed = true
+				if titleOnly := keylolSteamTitleOnlyBlock(block); strings.TrimSpace(titleOnly.Text) != "" {
+					out = append(out, titleOnly)
+				}
 				continue
 			}
 		}
@@ -745,10 +752,23 @@ func keylolLimitSteamCards(blocks []keylolBlock, sourceURL string, limit int) []
 		}
 		out = append(out, block)
 	}
-	if trimmed {
-		out = append(out, keylolBlock{Kind: "link", Text: "游戏链接较多，已仅展示前 20 个。详情请访问：" + sourceURL})
-	}
 	return out
+}
+
+func keylolSteamTitleOnlyBlock(block keylolBlock) keylolBlock {
+	title := strings.TrimSpace(block.Title)
+	if title == "" {
+		if appID := keylolSteamAppID(block.URL); appID != "" {
+			title = "Steam " + appID
+		} else {
+			title = strings.TrimSpace(block.URL)
+		}
+	}
+	title = strings.TrimSpace(html.UnescapeString(htmlUnescape(title)))
+	if title == "" {
+		return keylolBlock{}
+	}
+	return keylolBlock{Kind: "link", Text: "Steam: " + title}
 }
 
 func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {

@@ -1031,6 +1031,32 @@ func TestLinuxdoMergeRenderedHTMLAddsPollResults(t *testing.T) {
 	}
 }
 
+func TestLinuxdoMergeRenderedHTMLKeepsOriginalImageAsCover(t *testing.T) {
+	meta := mediaMeta{
+		Cover:     "https://cdn.ldstatic.com/uploads/default/original/3X/a/b/abcdef.png",
+		ImageURLs: [][]string{{"https://cdn.ldstatic.com/uploads/default/original/3X/a/b/abcdef.png"}},
+	}
+	htmlBody := `<article><div class="cooked">
+<p><img src="https://cdn.ldstatic.com/uploads/default/optimized/3X/a/b/abcdef_2_690x462.png"></p>
+<p><img src="https://cdn.ldstatic.com/uploads/default/original/3X/c/d/second.jpg"></p>
+</div></article>`
+
+	linuxdoMergeRenderedHTML(&meta, htmlBody, "https://linux.do/t/topic/2320981")
+
+	if meta.Cover != "https://cdn.ldstatic.com/uploads/default/original/3X/a/b/abcdef.png" {
+		t.Fatalf("cover=%q, want original first image", meta.Cover)
+	}
+	if len(meta.ImageURLs) != 2 {
+		t.Fatalf("images=%#v, want original plus second rendered image", meta.ImageURLs)
+	}
+	if strings.Contains(meta.ImageURLs[0][0], "/optimized/") {
+		t.Fatalf("optimized duplicate replaced original image: %#v", meta.ImageURLs)
+	}
+	if !strings.Contains(meta.ImageURLs[1][0], "second.jpg") {
+		t.Fatalf("rendered second image was not appended: %#v", meta.ImageURLs)
+	}
+}
+
 func TestLinuxdoExtractImagesSkipsCustomEmoji(t *testing.T) {
 	cooked := `<p>emoji <img src="https://cdn3.ldstatic.com/original/3X/2/e/2e09f3a3c7b27eacbabe9e9614b06b88d5b06343.png?v=15" title=":tieba_087:" class="emoji emoji-custom" alt=":tieba_087:" width="20" height="20"></p>
 <p>real <img src="https://cdn.ldstatic.com/uploads/default/original/1X/post.png"></p>`
@@ -1436,23 +1462,30 @@ func TestKeylolBuildBlocksHandlesNamedSpoilAndSteamMediaLinks(t *testing.T) {
 }
 
 func TestKeylolLimitSteamCards(t *testing.T) {
-	blocks := make([]keylolBlock, 0, 22)
-	for i := 0; i < 22; i++ {
-		blocks = append(blocks, keylolBlock{Kind: "steam_card", URL: fmt.Sprintf("https://store.steampowered.com/app/%d/", 1000+i)})
+	blocks := make([]keylolBlock, 0, 17)
+	for i := 0; i < 17; i++ {
+		blocks = append(blocks, keylolBlock{
+			Kind:  "steam_card",
+			URL:   fmt.Sprintf("https://store.steampowered.com/app/%d/", 1000+i),
+			Title: fmt.Sprintf("Game %02d", i+1),
+		})
 	}
-	got := keylolLimitSteamCards(blocks, "https://keylol.com/t1-1-1", 20)
+	got := keylolLimitSteamCards(blocks, "https://keylol.com/t1-1-1", 15)
 	steamCount := 0
-	hasLink := false
+	titleOnly := []string{}
 	for _, block := range got {
 		if block.Kind == "steam_card" {
 			steamCount++
 		}
-		if block.Kind == "link" && strings.Contains(block.Text, "https://keylol.com/t1-1-1") {
-			hasLink = true
+		if block.Kind == "link" && strings.HasPrefix(block.Text, "Steam: ") {
+			titleOnly = append(titleOnly, block.Text)
 		}
 	}
-	if steamCount != 20 || !hasLink {
-		t.Fatalf("bad limited blocks count=%d link=%v %#v", steamCount, hasLink, got)
+	if steamCount != 15 || len(titleOnly) != 2 {
+		t.Fatalf("bad limited blocks count=%d title_only=%v %#v", steamCount, titleOnly, got)
+	}
+	if !strings.Contains(titleOnly[0], "Game 16") || !strings.Contains(titleOnly[1], "Game 17") {
+		t.Fatalf("overflow steam titles were not kept: %#v", titleOnly)
 	}
 }
 
