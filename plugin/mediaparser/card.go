@@ -1417,6 +1417,11 @@ type keylolRenderBlock struct {
 	lines  []string
 }
 
+const (
+	keylolMaxRenderContentHeight = 12000
+	keylolTruncatedNotice        = "内容过长，后续已省略，请打开原帖查看。"
+)
+
 func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	const (
 		w           = 1320
@@ -1580,6 +1585,11 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 			}
 		}
 	}
+	originalRenderBlockCount := len(renderBlocks)
+	if trimmed, truncated := keylolTrimRenderBlocks(renderBlocks, keylolMaxRenderContentHeight, blockGap, imageGap); truncated {
+		renderBlocks = trimmed
+		logrus.Infof("[mediaparser] keylol_card_truncated title=%q blocks=%d rendered=%d max_content_height=%d", truncate(meta.Title, 80), originalRenderBlockCount, len(renderBlocks), keylolMaxRenderContentHeight)
+	}
 	titleLines := wrapTextByPixels(dcMeasure, fontBytes, titleSize, firstNonEmpty(meta.Title, "Keylol 帖子"), float64(contentW-150))
 	contentH := 0
 	for i, block := range renderBlocks {
@@ -1723,6 +1733,38 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 	setRGB(dc, theme.Footer)
 	dc.DrawStringAnchored(keylolFooterLine(meta), float64(w)/2, float64(height-outerPad-34), 0.5, 0.5)
 	return saveCardPNG(dc, meta)
+}
+
+func keylolTrimRenderBlocks(blocks []keylolRenderBlock, maxContentH, blockGap, imageGap int) ([]keylolRenderBlock, bool) {
+	if maxContentH <= 0 || len(blocks) == 0 {
+		return blocks, false
+	}
+	const noticeH = 52
+	budget := maxContentH - noticeH - blockGap
+	if budget < 0 {
+		budget = maxContentH
+	}
+	out := make([]keylolRenderBlock, 0, len(blocks))
+	contentH := 0
+	for _, block := range blocks {
+		nextH := block.height
+		if len(out) > 0 {
+			nextH += keylolBlockGap(out[len(out)-1], block, blockGap, imageGap)
+		}
+		if contentH+nextH > budget {
+			notice := keylolRenderBlock{
+				kind:   "hidden_label",
+				text:   keylolTruncatedNotice,
+				lines:  []string{keylolTruncatedNotice},
+				height: noticeH,
+			}
+			out = append(out, notice)
+			return out, true
+		}
+		out = append(out, block)
+		contentH += nextH
+	}
+	return blocks, false
 }
 
 func keylolFooterLine(meta mediaMeta) string {

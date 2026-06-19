@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	keylolUA                   = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Mobile"
-	keylolSteamCardRenderLimit = 15
+	keylolUA                       = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Mobile"
+	keylolSteamCardRenderLimit     = 15
+	keylolSteamOverflowTitleLimit  = 24
+	keylolSteamOverflowSummaryHead = "其余 Steam 链接"
 )
 
 var (
@@ -734,24 +736,45 @@ func keylolLimitSteamCards(blocks []keylolBlock, _ string, limit int) []keylolBl
 		return blocks
 	}
 	count := 0
-	trimmed := false
+	overflowTotal := 0
+	overflowTitles := []string{}
+	overflowActive := false
 	out := make([]keylolBlock, 0, len(blocks))
+	flushOverflow := func() {
+		if overflowTotal == 0 {
+			return
+		}
+		lines := []string{fmt.Sprintf("%s（%d 个，已折叠为标题）", keylolSteamOverflowSummaryHead, overflowTotal)}
+		lines = append(lines, overflowTitles...)
+		if hidden := overflowTotal - len(overflowTitles); hidden > 0 {
+			lines = append(lines, fmt.Sprintf("还有 %d 个 Steam 链接已省略，请打开原帖查看。", hidden))
+		}
+		out = append(out, keylolBlock{Kind: "link", Text: strings.Join(lines, "\n")})
+		overflowTotal = 0
+		overflowTitles = nil
+	}
 	for _, block := range blocks {
 		if block.Kind == "steam_card" {
 			count++
 			if count > limit {
-				trimmed = true
+				overflowActive = true
+				overflowTotal++
 				if titleOnly := keylolSteamTitleOnlyBlock(block); strings.TrimSpace(titleOnly.Text) != "" {
-					out = append(out, titleOnly)
+					if len(overflowTitles) < keylolSteamOverflowTitleLimit {
+						overflowTitles = append(overflowTitles, strings.TrimSpace(titleOnly.Text))
+					}
 				}
 				continue
 			}
 		}
-		if trimmed && block.Kind == "asf_link" {
+		if overflowActive && keylolSteamOverflowAuxBlock(block) {
 			continue
 		}
+		flushOverflow()
+		overflowActive = false
 		out = append(out, block)
 	}
+	flushOverflow()
 	return out
 }
 
@@ -769,6 +792,16 @@ func keylolSteamTitleOnlyBlock(block keylolBlock) keylolBlock {
 		return keylolBlock{}
 	}
 	return keylolBlock{Kind: "link", Text: "Steam: " + title}
+}
+
+func keylolSteamOverflowAuxBlock(block keylolBlock) bool {
+	if block.Kind == "asf_link" || block.Kind == "toolbar" {
+		return true
+	}
+	if block.Kind == "link" && strings.HasPrefix(strings.TrimSpace(block.Text), "Steam: ") {
+		return true
+	}
+	return false
 }
 
 func keylolFetchSteamApp(rawURL string) (keylolBlock, error) {

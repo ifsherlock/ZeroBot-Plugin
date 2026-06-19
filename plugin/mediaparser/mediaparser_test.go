@@ -1472,20 +1472,72 @@ func TestKeylolLimitSteamCards(t *testing.T) {
 	}
 	got := keylolLimitSteamCards(blocks, "https://keylol.com/t1-1-1", 15)
 	steamCount := 0
-	titleOnly := []string{}
+	var overflow string
 	for _, block := range got {
 		if block.Kind == "steam_card" {
 			steamCount++
 		}
-		if block.Kind == "link" && strings.HasPrefix(block.Text, "Steam: ") {
-			titleOnly = append(titleOnly, block.Text)
+		if block.Kind == "link" && strings.HasPrefix(block.Text, keylolSteamOverflowSummaryHead) {
+			overflow = block.Text
 		}
 	}
-	if steamCount != 15 || len(titleOnly) != 2 {
-		t.Fatalf("bad limited blocks count=%d title_only=%v %#v", steamCount, titleOnly, got)
+	if steamCount != 15 || overflow == "" {
+		t.Fatalf("bad limited blocks count=%d overflow=%q %#v", steamCount, overflow, got)
 	}
-	if !strings.Contains(titleOnly[0], "Game 16") || !strings.Contains(titleOnly[1], "Game 17") {
-		t.Fatalf("overflow steam titles were not kept: %#v", titleOnly)
+	if !strings.Contains(overflow, "Game 16") || !strings.Contains(overflow, "Game 17") {
+		t.Fatalf("overflow steam titles were not kept: %q", overflow)
+	}
+}
+
+func TestKeylolLimitSteamCardsCapsOverflowTitles(t *testing.T) {
+	blocks := make([]keylolBlock, 0, 50)
+	for i := 0; i < 50; i++ {
+		blocks = append(blocks, keylolBlock{
+			Kind:  "steam_card",
+			URL:   fmt.Sprintf("https://store.steampowered.com/app/%d/", 2000+i),
+			Title: fmt.Sprintf("Game %02d", i+1),
+		})
+		blocks = append(blocks, keylolBlock{Kind: "toolbar", Text: "Steam商店，复制ASF代码"})
+		blocks = append(blocks, keylolBlock{Kind: "asf_link", Title: fmt.Sprintf("%d", 2000+i)})
+	}
+	got := keylolLimitSteamCards(blocks, "https://keylol.com/t1-1-1", 15)
+	steamCount := 0
+	toolbarCount := 0
+	overflow := ""
+	for _, block := range got {
+		switch block.Kind {
+		case "steam_card":
+			steamCount++
+		case "toolbar":
+			toolbarCount++
+		case "link":
+			if strings.HasPrefix(block.Text, keylolSteamOverflowSummaryHead) {
+				overflow = block.Text
+			}
+		}
+	}
+	if steamCount != 15 || toolbarCount != 15 {
+		t.Fatalf("overflow steam aux blocks were not removed steam=%d toolbar=%d %#v", steamCount, toolbarCount, got)
+	}
+	if strings.Count(overflow, "Steam: ") != keylolSteamOverflowTitleLimit {
+		t.Fatalf("overflow title count not capped: %q", overflow)
+	}
+	if !strings.Contains(overflow, "还有 11 个 Steam 链接已省略") {
+		t.Fatalf("missing omitted summary: %q", overflow)
+	}
+}
+
+func TestKeylolTrimRenderBlocksCapsHeight(t *testing.T) {
+	blocks := make([]keylolRenderBlock, 0, 20)
+	for i := 0; i < 20; i++ {
+		blocks = append(blocks, keylolRenderBlock{kind: "text", height: 100, lines: []string{fmt.Sprintf("line %d", i)}})
+	}
+	got, truncated := keylolTrimRenderBlocks(blocks, 360, 20, 28)
+	if !truncated {
+		t.Fatalf("expected render blocks to be truncated")
+	}
+	if len(got) == 0 || got[len(got)-1].kind != "hidden_label" || got[len(got)-1].text != keylolTruncatedNotice {
+		t.Fatalf("missing truncation notice: %#v", got)
 	}
 }
 
