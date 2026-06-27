@@ -1435,12 +1435,12 @@ func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
 		target = oneBotLocalMediaTarget(card)
 	}
 	res := ctx.SendChain(message.Image(target))
-	if res.ID() == 0 {
+	if isTelegramBotEvent(ctx) && res.ID() == 0 {
 		text := strings.TrimSpace(buildText(meta))
 		if text != "" {
 			ctx.SendChain(message.Text(text))
 		}
-		logrus.Warnf("[mediaparser] sent_info_card_failed platform=%s title=%q path=%s target=%s fallback_text=%t", meta.Platform, meta.Title, card, target, text != "")
+		logrus.Warnf("[mediaparser] sent_info_card_fallback_text channel=tgbot platform=%s title=%q path=%s target=%s fallback_text=%t", meta.Platform, meta.Title, card, target, text != "")
 		scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 		return false
 	}

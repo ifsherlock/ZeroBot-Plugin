@@ -51,6 +51,7 @@ func init() {
 	rsz := flag.Uint("r", 4096, "Receiving buffer ring size.")
 	maxpt := flag.Uint("x", 4, "Max process time (min).")
 	markmsg := flag.Bool("m", false, "Don't mark message as read automatically")
+	markRead := flag.Bool("mark-message", false, "Mark message as read automatically")
 	fb64 := flag.Bool("fb64", false, "Force to send base64 file.")
 	webui := flag.String("webui", "0.0.0.0:3000", "Set built-in WebUI listen address, use off to disable.")
 	flag.BoolVar(&file.SkipOriginal, "mirror", false, "Use mirrored lazy data at first")
@@ -128,7 +129,7 @@ func init() {
 		RingLen:        *rsz,
 		Latency:        time.Duration(*late) * time.Millisecond,
 		MaxProcessTime: time.Duration(*maxpt) * time.Minute,
-		MarkMessage:    !*markmsg,
+		MarkMessage:    *markRead && !*markmsg,
 		Driver:         []zero.Driver{config.W[0]},
 	}
 	if qqDriver, ok := mediaparser.NewQQBotDriver(systemSettings); ok {
