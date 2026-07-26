@@ -141,8 +141,9 @@ func getRecords(groupID, userID int64, now time.Time) map[int]int {
 	return out
 }
 
-// checkIn 签到。day 为 0 表示签今天（重复签到计数 +1）；否则补签指定日期（已签过则失败）。
-func checkIn(groupID, userID int64, name string, now time.Time, day int) (ok bool, records map[int]int) {
+// checkIn 签到。day 为 0 表示签今天（计数 +times，连发多个🦌一次签多次）；
+// 否则补签指定日期（已签过则失败，times 无效恒记 1）。
+func checkIn(groupID, userID int64, name string, now time.Time, day, times int) (ok bool, records map[int]int) {
 	dataMu.Lock()
 	defer dataMu.Unlock()
 	cleanupLocked(now)
@@ -157,6 +158,9 @@ func checkIn(groupID, userID int64, name string, now time.Time, day int) (ok boo
 	if user.Records[month] == nil {
 		user.Records[month] = map[string]int{}
 	}
+	if times < 1 {
+		times = 1
+	}
 	target := day
 	if target == 0 {
 		target = now.Day()
@@ -165,7 +169,7 @@ func checkIn(groupID, userID int64, name string, now time.Time, day int) (ok boo
 	_, exists := user.Records[month][dayText]
 	switch {
 	case day == 0:
-		user.Records[month][dayText]++
+		user.Records[month][dayText] += times
 		ok = true
 	case exists:
 		ok = false

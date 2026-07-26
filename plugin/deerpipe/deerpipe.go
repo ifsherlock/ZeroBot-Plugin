@@ -34,7 +34,7 @@ var (
 		DisableOnDefault: false,
 		Brief:            "🦌管签到",
 		Help: "每月🦌管签到，移植自 nonebot-plugin-deer-pipe。\n" +
-			"- 🦌 / 鹿 → 🦌管1次\n" +
+			"- 🦌 / 鹿 → 🦌管1次（连发N个🦌一次🦌管N次）\n" +
 			"- 🦌 @xxx → 帮xxx🦌管1次（仅群聊）\n" +
 			"- 补🦌 x → 补🦌本月x日\n" +
 			"- 🦌历 [@xxx] → 看本月🦌日历\n" +
@@ -52,6 +52,9 @@ var (
 	atUserRE = regexp.MustCompile(`\[CQ:at,(?:\S*?,)?qq=(\d+)(?:,\S*?)?\]`)
 	unitRE   = regexp.MustCompile(`(\d+(?:\.\d+)?)\s*(天|日|小时|时|分钟|分|秒|d|h|m|s)`)
 )
+
+// deerCmdPattern 签到命令：一串🦌/鹿（连发 N 个一次签 N 次），后接可选 @。
+const deerCmdPattern = `^\s*((?:(?:🦌|鹿)\s*)+)((?:\[CQ:at,[^\]]*\]\s*)*)$`
 
 type deerAccess struct {
 	PrivateMode        string  `json:"private_mode"`
@@ -81,8 +84,8 @@ func init() {
 	loadConfig()
 	loadData()
 
-	// 🦌 / 鹿 [@xxx] 签到
-	engine.OnRegex(`^\s*(?:🦌|鹿)\s*((?:\[CQ:at,[^\]]*\]\s*)*)$`).SetBlock(true).Handle(handleDeer)
+	// 🦌 / 鹿 [@xxx] 签到，连发 N 个🦌一次签 N 次
+	engine.OnRegex(deerCmdPattern).SetBlock(true).Handle(handleDeer)
 	// 补🦌 x
 	engine.OnRegex(`^\s*补\s*(?:🦌|鹿)\s*(\d+)\s*$`).SetBlock(true).Handle(handleDeerPast)
 	// 🦌历 [@xxx]
@@ -287,7 +290,12 @@ func displayName(ctx *zero.Ctx, uid int64) string {
 	return name
 }
 
-// handleDeer 🦌 / 🦌 @xxx
+// countDeer 统计一串命令文本里🦌/鹿的个数。
+func countDeer(s string) int {
+	return strings.Count(s, "🦌") + strings.Count(s, "鹿")
+}
+
+// handleDeer 🦌 / 🦌🦌🦌 / 🦌 @xxx
 func handleDeer(ctx *zero.Ctx) {
 	if !accessOK(ctx) {
 		return
@@ -295,10 +303,14 @@ func handleDeer(ctx *zero.Ctx) {
 	c := snapshotConfig()
 	now := time.Now()
 	matched := regexMatched(ctx)
-	targets := []int64{}
-	if len(matched) > 1 {
-		targets = parseAtTargets(matched[1])
+	if len(matched) < 3 {
+		return
 	}
+	times := countDeer(matched[1])
+	if times < 1 {
+		return
+	}
+	targets := parseAtTargets(matched[2])
 	gid := ctx.Event.GroupID
 	uid := ctx.Event.UserID
 	// 帮别人🦌仅限群聊；私聊出现 @ 直接忽略
@@ -324,18 +336,22 @@ func handleDeer(ctx *zero.Ctx) {
 		return
 	}
 	name := displayName(ctx, target)
-	_, records := checkIn(gid, target, name, now, 0)
+	_, records := checkIn(gid, target, name, now, 0, times)
+	suffix := ""
+	if times > 1 {
+		suffix = "x" + strconv.Itoa(times)
+	}
 	img, err := renderCalendar(now, records, name, fetchAvatar(target))
 	if err != nil {
 		logrus.Warnf("[deerpipe] render calendar failed: %v", err)
-		replyChain(ctx, message.Text("成功🦌了，但是🦌历画不出来捏"))
+		replyChain(ctx, message.Text("成功🦌了"+suffix+"，但是🦌历画不出来捏"))
 		return
 	}
 	if helping {
-		replyChain(ctx, message.Text("成功帮"), message.At(target), message.Text("🦌了"), message.ImageBytes(img))
+		replyChain(ctx, message.Text("成功帮"), message.At(target), message.Text("🦌了"+suffix), message.ImageBytes(img))
 		return
 	}
-	replyChain(ctx, message.Text("成功🦌了"), message.ImageBytes(img))
+	replyChain(ctx, message.Text("成功🦌了"+suffix), message.ImageBytes(img))
 }
 
 func deerHelpTargetPermitted(ctx *zero.Ctx, hasTarget bool) bool {
@@ -368,7 +384,7 @@ func handleDeerPast(ctx *zero.Ctx) {
 	gid := ctx.Event.GroupID
 	uid := ctx.Event.UserID
 	name := displayName(ctx, uid)
-	ok, records := checkIn(gid, uid, name, now, day)
+	ok, records := checkIn(gid, uid, name, now, day, 1)
 	img, rerr := renderCalendar(now, records, name, fetchAvatar(uid))
 	if rerr != nil {
 		logrus.Warnf("[deerpipe] render calendar failed: %v", rerr)
@@ -532,7 +548,7 @@ func handleDeerHelp(ctx *zero.Ctx) {
 	}
 	replyChain(ctx, message.Text(
 		"== 🦌管插件帮助 ==\n"+
-			"[🦌] 🦌管1次\n"+
+			"[🦌] 🦌管1次（连发N个🦌一次🦌管N次）\n"+
 			"[🦌 @xxx] 帮xxx🦌管1次（仅群组）\n"+
 			"[补🦌 x] 补🦌本月x日\n"+
 			"[🦌历] 看本月🦌日历\n"+

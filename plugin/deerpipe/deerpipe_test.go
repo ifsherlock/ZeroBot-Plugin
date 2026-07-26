@@ -3,6 +3,7 @@ package deerpipe
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -28,24 +29,65 @@ func useTempStore(t *testing.T) {
 func TestCheckInTodayRepeats(t *testing.T) {
 	useTempStore(t)
 	now := time.Now()
-	ok, records := checkIn(100, 200, "tester", now, 0)
+	ok, records := checkIn(100, 200, "tester", now, 0, 1)
 	if !ok || records[now.Day()] != 1 {
 		t.Fatalf("first check-in: ok=%v records=%v", ok, records)
 	}
-	ok, records = checkIn(100, 200, "tester", now, 0)
+	ok, records = checkIn(100, 200, "tester", now, 0, 1)
 	if !ok || records[now.Day()] != 2 {
 		t.Fatalf("repeat check-in should increment: ok=%v records=%v", ok, records)
+	}
+}
+
+func TestCheckInMultiTimes(t *testing.T) {
+	useTempStore(t)
+	now := time.Now()
+	ok, records := checkIn(100, 200, "tester", now, 0, 6)
+	if !ok || records[now.Day()] != 6 {
+		t.Fatalf("multi check-in: ok=%v records=%v", ok, records)
+	}
+	ok, records = checkIn(100, 200, "tester", now, 0, 0)
+	if !ok || records[now.Day()] != 7 {
+		t.Fatalf("times<1 should fall back to 1: ok=%v records=%v", ok, records)
+	}
+}
+
+func TestDeerCmdPattern(t *testing.T) {
+	re := regexp.MustCompile(deerCmdPattern)
+	good := map[string]int{
+		"🦌":                   1,
+		"鹿":                   1,
+		"🦌🦌🦌🦌🦌🦌":              6,
+		"🦌 🦌 鹿":               3,
+		"鹿鹿🦌":                 3,
+		" 🦌 ":                 1,
+		"🦌 [CQ:at,qq=123]":    1,
+		"🦌🦌🦌 [CQ:at,qq=123] ": 3,
+	}
+	for input, want := range good {
+		m := re.FindStringSubmatch(input)
+		if m == nil {
+			t.Fatalf("%q should match", input)
+		}
+		if got := countDeer(m[1]); got != want {
+			t.Fatalf("countDeer(%q) = %d, want %d", input, got, want)
+		}
+	}
+	for _, bad := range []string{"", "🦌历", "鹿榜", "补🦌 3", "小🦌", "🦌x", "🦌帮助"} {
+		if re.MatchString(bad) {
+			t.Fatalf("%q should not match", bad)
+		}
 	}
 }
 
 func TestCheckInMakeup(t *testing.T) {
 	useTempStore(t)
 	now := time.Date(time.Now().Year(), time.Now().Month(), 15, 12, 0, 0, 0, time.Local)
-	ok, records := checkIn(0, 300, "p", now, 3)
+	ok, records := checkIn(0, 300, "p", now, 3, 1)
 	if !ok || records[3] != 1 {
 		t.Fatalf("makeup day 3 should succeed: ok=%v records=%v", ok, records)
 	}
-	ok, _ = checkIn(0, 300, "p", now, 3)
+	ok, _ = checkIn(0, 300, "p", now, 3, 1)
 	if ok {
 		t.Fatal("makeup already-checked day should fail")
 	}
@@ -54,7 +96,7 @@ func TestCheckInMakeup(t *testing.T) {
 func TestCheckInScopedPerGroup(t *testing.T) {
 	useTempStore(t)
 	now := time.Now()
-	_, _ = checkIn(100, 200, "a", now, 0)
+	_, _ = checkIn(100, 200, "a", now, 0, 1)
 	records := getRecords(101, 200, now)
 	if len(records) != 0 {
 		t.Fatalf("records should be scoped per group, got %v", records)
@@ -66,10 +108,10 @@ func TestTopRank(t *testing.T) {
 	now := time.Date(time.Now().Year(), time.Now().Month(), 20, 12, 0, 0, 0, time.Local)
 	for uid := int64(1); uid <= 7; uid++ {
 		for i := int64(0); i < uid; i++ {
-			_, _ = checkIn(500, uid, "u", now, 0)
+			_, _ = checkIn(500, uid, "u", now, 0, 1)
 		}
 	}
-	_, _ = checkIn(501, 99, "other", now, 0)
+	_, _ = checkIn(501, 99, "other", now, 0, 1)
 	rank := topRank(500, now, 5)
 	if len(rank) != 5 {
 		t.Fatalf("rank size = %d, want 5", len(rank))
@@ -277,9 +319,9 @@ func TestParseAtTargets(t *testing.T) {
 func TestStatsSnapshot(t *testing.T) {
 	useTempStore(t)
 	now := time.Now()
-	_, _ = checkIn(1, 2, "a", now, 0)
-	_, _ = checkIn(1, 2, "a", now, 0)
-	_, _ = checkIn(1, 3, "b", now, 0)
+	_, _ = checkIn(1, 2, "a", now, 0, 1)
+	_, _ = checkIn(1, 2, "a", now, 0, 1)
+	_, _ = checkIn(1, 3, "b", now, 0, 1)
 	setNoDeerUntil(1, 4, now.Add(time.Hour).Unix())
 	setCanBeHelped(1, 5, false)
 	stats := statsSnapshot(now)
