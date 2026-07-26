@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/FloatTech/ZeroBot-Plugin/plugin/dailynews"
+	"github.com/FloatTech/ZeroBot-Plugin/plugin/deerpipe"
 	"github.com/disintegration/imaging"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
@@ -290,6 +291,7 @@ func StartWebUI(addr string, extra WebStatusProvider) {
 		writeJSON(w, map[string]any{"ok": true, "result": result, "config": configForWeb()})
 	})
 	mux.HandleFunc("/api/dailynews/config", serveDailyNewsConfigAPI)
+	mux.HandleFunc("/api/deerpipe/config", serveDeerPipeConfigAPI)
 	mux.HandleFunc("/api/mediaparser/logos", serveLogoAPI)
 	mux.HandleFunc("/api/mediaparser/logos/image", serveLogoImageAPI)
 	mux.HandleFunc("/api/onebot/groups", serveGroupListAPI)
@@ -828,6 +830,27 @@ func serveDailyNewsConfigAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "config": saved, "restart_required": false})
+	default:
+		writeMethodNotAllowed(w)
+	}
+}
+
+func serveDeerPipeConfigAPI(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"ok": true, "config": deerpipe.WebConfig(), "stats": deerpipe.WebStats()})
+	case http.MethodPost:
+		var next deerpipe.WebDeerConfig
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&next); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		saved, err := deerpipe.SaveWebConfig(next)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "config": saved, "stats": deerpipe.WebStats(), "restart_required": false})
 	default:
 		writeMethodNotAllowed(w)
 	}
@@ -2017,7 +2040,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 <div class="panel span4 page" data-page="plugins" id="plugins">
 <div class="sectionTitle"><b>插件中心</b><span class="muted">插件入口集中管理。</span></div>
-<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>Telegram Bot</b><div class="muted">Telegram Channel</div></td><td><span id="tgbotPluginStatus" class="muted">检测中</span></td><td id="tgbotPluginDesc">Telegram 长轮询通道，可接入全部插件消息</td><td><button id="tgbotPluginButton" onclick="showPage('tgbot')">进入配置</button></td></tr><tr><td><b>60s 技能中心</b><div class="muted">60s Skills</div></td><td><span class="ok">已启用</span></td><td>新闻、热榜、天气、查询和工具接口</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody><tr><td><b>聚合解析</b><div class="muted">Media Parser</div></td><td><span class="ok">已启用</span></td><td>短视频、图文、动态、商品链接解析</td><td><button onclick="showPage('mediaparser:basic')">进入配置</button></td></tr><tr><td><b>MediaShield</b><div class="muted">X Media Shield</div></td><td><span id="mediaShieldPluginStatus" class="muted">未启用</span></td><td>X 平台媒体打码预览与加密打包</td><td><button onclick="showPage('mediashield')">进入配置</button></td></tr><tr><td><b>官方 QQBot</b><div class="muted">Official QQBot</div></td><td><span id="qqbotPluginStatus" class="muted">检测中</span></td><td id="qqbotPluginDesc">QQ 官方机器人通道，第一阶段接入媒体解析</td><td><button id="qqbotPluginButton" onclick="showPage('qqbot')">进入配置</button></td></tr><tr><td><b>Telegram Bot</b><div class="muted">Telegram Channel</div></td><td><span id="tgbotPluginStatus" class="muted">检测中</span></td><td id="tgbotPluginDesc">Telegram 长轮询通道，可接入全部插件消息</td><td><button id="tgbotPluginButton" onclick="showPage('tgbot')">进入配置</button></td></tr><tr><td><b>60s 技能中心</b><div class="muted">60s Skills</div></td><td><span class="ok">已启用</span></td><td>新闻、热榜、天气、查询和工具接口</td><td><button onclick="showPage('dailynews')">查看配置</button></td></tr><tr><td><b>🦌管签到</b><div class="muted">Deer Pipe</div></td><td><span id="deerPipePluginStatus" class="ok">已启用</span></td><td>每月🦌管签到、帮🦌、补🦌、🦌历与群🦌榜</td><td><button onclick="showPage('deerpipe')">进入配置</button></td></tr><tr><td><b>控制功能</b><div class="muted">Manager</div></td><td><span class="ok">已启用</span></td><td>基础群管理和机器人控制能力</td><td><button onclick="showPage('manager')">查看功能</button></td></tr></tbody></table>
 </div>
 <div class="panel span4 page" data-page="manager" id="manager">
 <div class="pluginHead"><div><div class="crumb">插件中心 / 控制功能</div><div class="sectionTitle"><b>控制功能</b><span class="muted">群管理和提醒。</span></div></div><button onclick="showPage('plugins')">返回插件中心</button></div>
@@ -2092,6 +2115,51 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 <label class="field">兼容命令 <textarea id="dailyCommands" placeholder="每行一个，例如：今日早报"></textarea></label>
 <div class="dailySaveActions"><button class="primary" onclick="saveDailyNews()">保存全部配置</button><button onclick="testDailyNews()">怎么测试</button></div>
 <div class="dailyHint">任务卡片可单独保存；其它开关、名单和命令在这里统一保存。</div>
+</div>
+</div>
+</div>
+<div class="panel span4 page" data-page="deerpipe" id="deerpipe">
+<div class="pluginHead"><div><div class="crumb">插件中心 / 🦌管签到</div><div class="sectionTitle"><b>🦌管签到</b><span class="muted">每月🦌管签到，移植自 nonebot-plugin-deer-pipe。</span></div></div><div class="row"><button class="primary" onclick="saveDeerPipe()">保存配置</button><button onclick="loadDeerPipeConfig(true)">刷新本页</button><button onclick="showPage('plugins')">返回插件中心</button></div></div>
+<div class="dailyGrid three">
+<div class="settingsCard dailyAccessCard">
+<div class="sectionTitle"><b>访问控制</b><span class="muted" id="deerPipeMsg"></span></div>
+<div class="controlPills"><label class="row">总开关 <span id="deerEnabledSwitch"></span></label><label class="row">私聊响应 <span id="deerPrivateSwitch"></span></label></div>
+<div class="settingsFields">
+<label class="field">个人模式 <select id="deerPrivateMode" onchange="onDeerAccessModeChange()"><option value="none">所有人开启</option><option value="whitelist">只开白名单</option><option value="blacklist">关闭黑名单</option></select></label>
+<label class="field">群模式 <select id="deerGroupMode" onchange="onDeerAccessModeChange()"><option value="none">所有群开启</option><option value="whitelist">只开白名单群</option><option value="blacklist">关闭黑名单群</option></select></label>
+<label class="field span2">群成员模式 <select id="deerGroupUserMode" onchange="onDeerAccessModeChange()"><option value="none">不限制</option><option value="whitelist">只允许白名单成员</option><option value="blacklist">屏蔽黑名单成员</option></select></label>
+</div>
+<div class="row"><button onclick="loadGroups(true)">刷新群列表</button><span class="muted">勾选后保存生效</span></div>
+<div class="dailyAccessLists">
+<div class="groupBox deerAccessField" data-mode="deerGroupMode" data-kind="whitelist" id="deerGroupWhiteBox"><div class="row"><b>群白名单</b><input id="deerGroupWhiteSearch" placeholder="搜索群" oninput="renderDeerGroupPickers()"></div><div class="groupList" id="deerGroupWhitePicker"></div></div>
+<div class="groupBox deerAccessField" data-mode="deerGroupMode" data-kind="blacklist" id="deerGroupBlackBox"><div class="row"><b>群黑名单</b><input id="deerGroupBlackSearch" placeholder="搜索群" oninput="renderDeerGroupPickers()"></div><div class="groupList" id="deerGroupBlackPicker"></div></div>
+<div class="groupBox deerAccessField" data-mode="deerPrivateMode" data-kind="whitelist"><div class="row"><b>个人白名单</b><span class="muted">每行一个 QQ</span></div><textarea id="deerPrivateWhitelist" placeholder="123456&#10;234567" oninput="markDeerChanged()"></textarea></div>
+<div class="groupBox deerAccessField" data-mode="deerPrivateMode" data-kind="blacklist"><div class="row"><b>个人黑名单</b><span class="muted">每行一个 QQ</span></div><textarea id="deerPrivateBlacklist" placeholder="123456&#10;234567" oninput="markDeerChanged()"></textarea></div>
+<div class="groupBox deerAccessField" data-mode="deerGroupUserMode" data-kind="whitelist"><div class="row"><b>群成员白名单</b><span class="muted">只在群聊里检查发言人 QQ</span></div><textarea id="deerGroupUserWhitelist" placeholder="123456&#10;234567" oninput="markDeerChanged()"></textarea></div>
+<div class="groupBox deerAccessField" data-mode="deerGroupUserMode" data-kind="blacklist"><div class="row"><b>群成员黑名单</b><span class="muted">想屏蔽某人就填这里</span></div><textarea id="deerGroupUserBlacklist" placeholder="123456&#10;234567" oninput="markDeerChanged()"></textarea></div>
+</div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>功能开关</b><span class="muted">立即生效，无需重启。</span></div>
+<div class="controlPills"><label class="row">帮别人🦌 <span id="deerHelpSwitch"></span></label><label class="row">补🦌 <span id="deerMakeupSwitch"></span></label><label class="row">🦌榜 <span id="deerRankSwitch"></span></label></div>
+<div class="settingsFields">
+<label class="field">禁🦌最长天数 <input id="deerBanMaxDays" type="number" min="1" max="365" value="30" oninput="markDeerChanged()"></label>
+</div>
+<div class="sectionTitle" style="margin-top:10px"><b>运行统计</b><span class="muted">本月数据。</span></div>
+<div class="proxySummary" id="deerStats"><div class="proxyBadge"><b>-</b><span>加载中</span></div></div>
+</div>
+<div class="settingsCard">
+<div class="sectionTitle"><b>指令说明</b><span class="muted">“🦌”均可换成“鹿”字。</span></div>
+<div class="commandGrid">
+<div class="commandItem"><b>签到</b><code>🦌</code><code>🦌 @xxx（帮xxx🦌，仅群聊）</code></div>
+<div class="commandItem"><b>补签</b><code>补🦌 x（补本月x日）</code></div>
+<div class="commandItem"><b>日历</b><code>🦌历</code><code>🦌历 @xxx（仅群聊）</code></div>
+<div class="commandItem"><b>排行</b><code>🦌榜（本月本群 Top5，仅群聊）</code></div>
+<div class="commandItem"><b>帮🦌开关</b><code>帮🦌 on|off</code><code>帮🦌 on|off @xxx（仅群管理）</code></div>
+<div class="commandItem"><b>禁🦌</b><code>禁🦌 @xxx 30m|2h|1天</code><code>禁🦌 @xxx（解禁，仅群管理）</code></div>
+<div class="commandItem"><b>帮助</b><code>🦌帮助</code></div>
+</div>
+<div class="dailyHint">签到数据按群独立统计，每月自动清理上月记录。</div>
 </div>
 </div>
 </div>
@@ -2409,7 +2477,7 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </main>
 </div>
 <script>
-let cfg=null, sys=null, dailyNewsCfg=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic', safetyBuiltins=[], selectedSafetyCategory='adult';
+let cfg=null, sys=null, dailyNewsCfg=null, deerPipeCfg=null, deerPipeStats=null, platforms=[], logos={}, groups=[], cacheInfo=null, dirty=false, currentPluginSection='basic', safetyBuiltins=[], selectedSafetyCategory='adult';
 const safetyCategories=[
  ['adult','色情'],
  ['ad','广告'],
@@ -2420,7 +2488,7 @@ const $=id=>document.getElementById(id);
 function showPage(name){
  const parts=String(name||'overview').split(':'); const page=parts[0]||'overview'; const section=parts[1]||currentPluginSection||'basic';
  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
- const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='tgbot'||page==='mediashield'||page==='dailynews')?'plugins':page;
+ const sidePage=(page==='mediaparser'||page==='manager'||page==='qqbot'||page==='tgbot'||page==='mediashield'||page==='dailynews'||page==='deerpipe')?'plugins':page;
  document.querySelectorAll('[data-page-link]').forEach(el=>el.classList.toggle('active', el.dataset.pageLink===sidePage));
  if(page==='mediaparser') showPluginSection(section,false);
  updateHeaderSave(page);
@@ -2770,6 +2838,116 @@ async function loadDailyNewsConfig(showMsg, doneText){
 async function testDailyNews(){
  $('dailyNewsMsg').textContent='测试：聊天里发监听命令；定时任务按 Cron 自动发送。';
 }
+function deerAccess(){
+ deerPipeCfg=deerPipeCfg||{};
+ deerPipeCfg.access=deerPipeCfg.access||{private_mode:'none',group_mode:'none',group_user_mode:'none'};
+ return deerPipeCfg.access;
+}
+function markDeerChanged(){if($('deerPipeMsg'))$('deerPipeMsg').textContent='有未保存修改，记得保存'}
+function setDeerEnabled(v){deerPipeCfg.enabled=v;renderDeerPipeSettings();markDeerChanged()}
+function setDeerPrivateEnabled(v){deerPipeCfg.private_enabled=v;markDeerChanged()}
+function setDeerHelp(v){deerPipeCfg.help_enabled=v;markDeerChanged()}
+function setDeerMakeup(v){deerPipeCfg.makeup_enabled=v;markDeerChanged()}
+function setDeerRank(v){deerPipeCfg.rank_enabled=v;markDeerChanged()}
+function onDeerAccessModeChange(){
+ const a=deerAccess();
+ a.private_mode=$('deerPrivateMode').value||'none';
+ a.group_mode=$('deerGroupMode').value||'none';
+ a.group_user_mode=$('deerGroupUserMode').value||'none';
+ updateDeerAccessVisibility();renderDeerGroupPickers();markDeerChanged();
+}
+function updateDeerAccessVisibility(){
+ document.querySelectorAll('.deerAccessField').forEach(el=>{
+  const modeEl=$(el.dataset.mode); const mode=modeEl?modeEl.value:'none';
+  el.classList.toggle('hidden', mode!==el.dataset.kind);
+ });
+}
+function renderDeerGroupPickers(){
+ if(!deerPipeCfg) return;
+ const a=deerAccess();
+ const white=new Set((a.group_whitelist||[]).map(String));
+ const black=new Set((a.group_blacklist||[]).map(String));
+ renderDeerGroupPicker('deerGroupWhitePicker','deerGroupWhiteSearch',white,'white');
+ renderDeerGroupPicker('deerGroupBlackPicker','deerGroupBlackSearch',black,'black');
+}
+function renderDeerGroupPicker(target,searchID,set,kind){
+ if(!$(target)) return;
+ const q=String(($(searchID)&&$(searchID).value)||'').trim();
+ const list=(groups||[]).filter(g=>!q||String(g.id).includes(q)||String(g.name||'').includes(q));
+ $(target).innerHTML=list.map(g=>'<label class="groupItem"><input type="checkbox" data-kind="'+kind+'" data-id="'+escapeHTML(g.id)+'" '+checked(set.has(String(g.id)))+' onchange="toggleDeerGroup(this.dataset.kind,this.dataset.id,this.checked)"><span><b>'+escapeHTML(g.name||g.id)+'</b><small>'+escapeHTML(g.id)+'</small></span></label>').join('')||'<div class="muted">暂无群列表，点击“刷新群列表”</div>';
+}
+function toggleDeerGroup(kind,id,on){
+ const a=deerAccess();
+ const key=kind==='white'?'group_whitelist':'group_blacklist';
+ const set=new Set((a[key]||[]).map(String));
+ if(on) set.add(String(id)); else set.delete(String(id));
+ a[key]=Array.from(set).map(Number).filter(Boolean);
+ renderDeerGroupPickers(); markDeerChanged();
+}
+function renderDeerStats(){
+ if(!$('deerStats')) return;
+ const s=deerPipeStats||{};
+ const badge=(v,label)=>'<div class="proxyBadge"><b>'+escapeHTML(String(v==null?'-':v))+'</b><span>'+escapeHTML(label)+'</span></div>';
+ $('deerStats').innerHTML=badge(s.active_users||0,'本月🦌过的人')+badge(s.month_checks||0,'本月🦌次数')+badge(s.today_checks||0,'今日🦌次数')+badge(s.banned_users||0,'被禁🦌')+badge(s.help_disabled||0,'谢绝帮🦌')+badge((deerPipeCfg&&deerPipeCfg.ban_max_days)||30,'禁🦌上限(天)');
+}
+function renderDeerPipeSettings(){
+ if(!deerPipeCfg||!$('deerEnabledSwitch')) return;
+ const a=deerAccess();
+ $('deerEnabledSwitch').innerHTML=actionSwitchHTML('setDeerEnabled',!!deerPipeCfg.enabled);
+ $('deerPrivateSwitch').innerHTML=actionSwitchHTML('setDeerPrivateEnabled',!!deerPipeCfg.private_enabled);
+ $('deerHelpSwitch').innerHTML=actionSwitchHTML('setDeerHelp',!!deerPipeCfg.help_enabled);
+ $('deerMakeupSwitch').innerHTML=actionSwitchHTML('setDeerMakeup',!!deerPipeCfg.makeup_enabled);
+ $('deerRankSwitch').innerHTML=actionSwitchHTML('setDeerRank',!!deerPipeCfg.rank_enabled);
+ $('deerBanMaxDays').value=deerPipeCfg.ban_max_days||30;
+ $('deerPrivateMode').value=a.private_mode||'none';
+ $('deerGroupMode').value=a.group_mode||'none';
+ $('deerGroupUserMode').value=a.group_user_mode||'none';
+ $('deerPrivateWhitelist').value=idListText(a.private_whitelist);
+ $('deerPrivateBlacklist').value=idListText(a.private_blacklist);
+ $('deerGroupUserWhitelist').value=idListText(a.group_user_whitelist);
+ $('deerGroupUserBlacklist').value=idListText(a.group_user_blacklist);
+ if($('deerPipePluginStatus')){
+  $('deerPipePluginStatus').textContent=deerPipeCfg.enabled?'已启用':'已关闭';
+  $('deerPipePluginStatus').className=deerPipeCfg.enabled?'ok':'muted';
+ }
+ updateDeerAccessVisibility();
+ renderDeerGroupPickers();
+ renderDeerStats();
+}
+function collectDeerPipe(){
+ if(!deerPipeCfg) return;
+ const a=deerAccess();
+ a.private_mode=$('deerPrivateMode').value||'none';
+ a.group_mode=$('deerGroupMode').value||'none';
+ a.group_user_mode=$('deerGroupUserMode').value||'none';
+ a.private_whitelist=parseIDArray($('deerPrivateWhitelist').value);
+ a.private_blacklist=parseIDArray($('deerPrivateBlacklist').value);
+ a.group_user_whitelist=parseIDArray($('deerGroupUserWhitelist').value);
+ a.group_user_blacklist=parseIDArray($('deerGroupUserBlacklist').value);
+ deerPipeCfg.ban_max_days=Math.max(1,Math.min(365,Number($('deerBanMaxDays').value)||30));
+}
+async function saveDeerPipe(doneText){
+ if(!deerPipeCfg) return;
+ collectDeerPipe();
+ $('deerPipeMsg').textContent='保存中...';
+ const r=await apiFetch('/api/deerpipe/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(deerPipeCfg)});
+ if(!r.ok){$('deerPipeMsg').textContent='保存失败：'+await r.text(); return}
+ const data=await r.json();
+ deerPipeCfg=data.config||deerPipeCfg;
+ deerPipeStats=data.stats||deerPipeStats;
+ renderDeerPipeSettings();
+ $('deerPipeMsg').textContent=doneText||'已保存，已立即生效';
+}
+async function loadDeerPipeConfig(showMsg){
+ if(showMsg&&$('deerPipeMsg')) $('deerPipeMsg').textContent='刷新中...';
+ try{
+  const data=await (await apiFetch('/api/deerpipe/config')).json();
+  deerPipeCfg=(data&&data.config)||deerPipeCfg||{};
+  deerPipeStats=(data&&data.stats)||deerPipeStats;
+ }catch(e){if($('deerPipeMsg'))$('deerPipeMsg').textContent='读取失败';return}
+ renderDeerPipeSettings();
+ if(showMsg){showPage('deerpipe');$('deerPipeMsg').textContent='已刷新'}
+}
 function collectCookieCloudSettings(){
  if(!$('cookieCloudServer')) return;
  cfg.cookiecloud_server=String($('cookieCloudServer').value||'').trim();
@@ -2925,12 +3103,15 @@ async function load(){
  const data=await (await apiFetch('/api/mediaparser/config')).json();
  const sysData=await (await apiFetch('/api/system/settings')).json();
  const dailyData=await (await apiFetch('/api/dailynews/config')).json();
+ const deerData=await (await apiFetch('/api/deerpipe/config')).json().catch(()=>null);
  const logoData=await (await apiFetch('/api/mediaparser/logos')).json();
  const authData=await (await apiFetch('/api/system/auth')).json();
  await loadCacheStats(false);
  cfg=data.config; platforms=data.platforms; safetyBuiltins=data.safety_builtins||[];
  sys=sysData.settings||{};
  dailyNewsCfg=(dailyData&&dailyData.config)||{};
+ deerPipeCfg=(deerData&&deerData.config)||{};
+ deerPipeStats=(deerData&&deerData.stats)||null;
  logos=logoData.logos||{};
  if($('webAuthUser')) $('webAuthUser').value=(authData&&authData.user)||'admin';
  await refreshStatus();
@@ -2969,6 +3150,7 @@ function render(){
  $('keylolASFForwardSwitch').innerHTML=switchHTML('cfg.keylol_asf_forward', cfg.keylol_asf_forward!==false);
  renderSystemSettings();
  renderDailyNewsSettings();
+ renderDeerPipeSettings();
  updateAccessVisibility();
  renderPlatformGroupBlock();
  renderSafetySettings();
@@ -3116,6 +3298,7 @@ function renderGroupPickers(){
  renderMediaShieldGroups();
  renderDailyGroupPickers();
  renderDailyTaskGroupOptions();
+ renderDeerGroupPickers();
 }
 function renderGroupPicker(container,searchID,textarea){
  const q=String($(searchID).value||'').toLowerCase().trim();

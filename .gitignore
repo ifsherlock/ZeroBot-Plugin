@@ -15,4 +15,6 @@ ZeroBot-Plugin*
 /plugin/mediaparser/data/Font/
 /plugin/mediaparser/data/control/
 /plugin/mediaparser/data/mediaparser/config.json
+/plugin/mediaparser/data/deerpipe/
 /plugin/dailynews/data/
+/plugin/deerpipe/data/
