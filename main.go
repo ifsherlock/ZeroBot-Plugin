@@ -22,6 +22,7 @@ import (
 	"github.com/FloatTech/ZeroBot-Plugin/plugin/mediaparser"
 	"github.com/FloatTech/floatbox/file"
 	"github.com/FloatTech/floatbox/process"
+	"github.com/FloatTech/zbputils/control"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/driver"
@@ -223,6 +224,16 @@ func main() {
 		rand.Seed(time.Now().UnixNano()) //nolint: staticcheck
 	}
 	message.SetForceBase64File(config.ForceBase64File)
+
+	// 本运行时依赖 WebUI 与各插件自带的黑白名单管控，默认打开全局响应；
+	// 否则 control 引擎注册的插件（deerpipe 等）在从未发过“全局响应”的部署上永远静默。
+	if !control.CanResponse(0) {
+		if err := control.Response(0); err != nil {
+			logrus.Warnln("[main] enable global response failed:", err)
+		} else {
+			logrus.Infoln("[main] global response enabled by default")
+		}
+	}
 
 	zero.OnFullMatchGroup([]string{"help", "/help", ".help", "菜单"}, zero.OnlyToMe).SetBlock(true).
 		Handle(func(ctx *zero.Ctx) {
