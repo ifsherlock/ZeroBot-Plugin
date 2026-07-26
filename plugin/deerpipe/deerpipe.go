@@ -53,8 +53,13 @@ var (
 	unitRE   = regexp.MustCompile(`(\d+(?:\.\d+)?)\s*(天|日|小时|时|分钟|分|秒|d|h|m|s)`)
 )
 
-// deerCmdPattern 签到命令：一串🦌/鹿（连发 N 个一次签 N 次），后接可选 @。
-const deerCmdPattern = `^\s*((?:(?:🦌|鹿)\s*)+)((?:\[CQ:at,[^\]]*\]\s*)*)$`
+// replyPrefix 可选的引用回复段：引用别人消息再发🦌命令时消息以 [CQ:reply,...] 开头。
+const replyPrefix = `(?:\[CQ:reply,[^\]]*\]\s*)?`
+
+// deerCmdPattern 签到命令：一串🦌/鹿（连发 N 个一次签 N 次），@ 可在🦌前后
+// （部分客户端引用回复会在开头自动插入 @原发送者）。
+const deerCmdPattern = `^\s*` + replyPrefix +
+	`((?:\[CQ:at,[^\]]*\]\s*)*)((?:(?:🦌|鹿)\s*)+)((?:\[CQ:at,[^\]]*\]\s*)*)$`
 
 type deerAccess struct {
 	PrivateMode        string  `json:"private_mode"`
@@ -87,15 +92,15 @@ func init() {
 	// 🦌 / 鹿 [@xxx] 签到，连发 N 个🦌一次签 N 次
 	engine.OnRegex(deerCmdPattern).SetBlock(true).Handle(handleDeer)
 	// 补🦌 x
-	engine.OnRegex(`^\s*补\s*(?:🦌|鹿)\s*(\d+)\s*$`).SetBlock(true).Handle(handleDeerPast)
+	engine.OnRegex(`^\s*` + replyPrefix + `补\s*(?:🦌|鹿)\s*(\d+)\s*$`).SetBlock(true).Handle(handleDeerPast)
 	// 🦌历 [@xxx]
-	engine.OnRegex(`^\s*(?:🦌|鹿)历\s*((?:\[CQ:at,[^\]]*\]\s*)*)$`).SetBlock(true).Handle(handleDeerCalendar)
+	engine.OnRegex(`^\s*` + replyPrefix + `(?:🦌|鹿)历\s*((?:\[CQ:at,[^\]]*\]\s*)*)$`).SetBlock(true).Handle(handleDeerCalendar)
 	// 🦌榜
-	engine.OnRegex(`^\s*(?:🦌|鹿)榜\s*$`, zero.OnlyGroup).SetBlock(true).Handle(handleDeerRank)
+	engine.OnRegex(`^\s*`+replyPrefix+`(?:🦌|鹿)榜\s*$`, zero.OnlyGroup).SetBlock(true).Handle(handleDeerRank)
 	// 帮🦌 on|off [@xxx]
-	engine.OnRegex(`^\s*帮\s*(?:🦌|鹿)\s*(on|off|开启|关闭|开|关)\s*((?:\[CQ:at,[^\]]*\]\s*)*)$`, zero.OnlyGroup).SetBlock(true).Handle(handleSetCanBeHelped)
+	engine.OnRegex(`^\s*`+replyPrefix+`帮\s*(?:🦌|鹿)\s*(on|off|开启|关闭|开|关)\s*((?:\[CQ:at,[^\]]*\]\s*)*)$`, zero.OnlyGroup).SetBlock(true).Handle(handleSetCanBeHelped)
 	// 禁🦌 @xxx [时长]
-	engine.OnRegex(`^\s*禁\s*(?:🦌|鹿)\s*(\[CQ:at,[^\]]*\])\s*(\S*)\s*$`, zero.OnlyGroup).SetBlock(true).Handle(handleNoDeer)
+	engine.OnRegex(`^\s*`+replyPrefix+`禁\s*(?:🦌|鹿)\s*(\[CQ:at,[^\]]*\])\s*(\S*)\s*$`, zero.OnlyGroup).SetBlock(true).Handle(handleNoDeer)
 	// 🦌帮助
 	engine.OnFullMatchGroup([]string{"🦌帮助", "鹿帮助"}).SetBlock(true).Handle(handleDeerHelp)
 
@@ -303,14 +308,14 @@ func handleDeer(ctx *zero.Ctx) {
 	c := snapshotConfig()
 	now := time.Now()
 	matched := regexMatched(ctx)
-	if len(matched) < 3 {
+	if len(matched) < 4 {
 		return
 	}
-	times := countDeer(matched[1])
+	times := countDeer(matched[2])
 	if times < 1 {
 		return
 	}
-	targets := parseAtTargets(matched[2])
+	targets := parseAtTargets(matched[1] + matched[3])
 	gid := ctx.Event.GroupID
 	uid := ctx.Event.UserID
 	// 帮别人🦌仅限群聊；私聊出现 @ 直接忽略

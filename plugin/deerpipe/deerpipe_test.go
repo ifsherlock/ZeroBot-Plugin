@@ -54,26 +54,43 @@ func TestCheckInMultiTimes(t *testing.T) {
 
 func TestDeerCmdPattern(t *testing.T) {
 	re := regexp.MustCompile(deerCmdPattern)
-	good := map[string]int{
-		"🦌":                   1,
-		"鹿":                   1,
-		"🦌🦌🦌🦌🦌🦌":              6,
-		"🦌 🦌 鹿":               3,
-		"鹿鹿🦌":                 3,
-		" 🦌 ":                 1,
-		"🦌 [CQ:at,qq=123]":    1,
-		"🦌🦌🦌 [CQ:at,qq=123] ": 3,
+	type want struct {
+		times   int
+		targets []int64
 	}
-	for input, want := range good {
+	good := map[string]want{
+		"🦌":                   {1, nil},
+		"鹿":                   {1, nil},
+		"🦌🦌🦌🦌🦌🦌":              {6, nil},
+		"🦌 🦌 鹿":               {3, nil},
+		"鹿鹿🦌":                 {3, nil},
+		" 🦌 ":                 {1, nil},
+		"🦌 [CQ:at,qq=123]":    {1, []int64{123}},
+		"🦌🦌🦌 [CQ:at,qq=123] ": {3, []int64{123}},
+		// 引用回复别人后帮🦌（线上真实消息）
+		"[CQ:reply,id=1480071415]🦌 🦌🦌🦌🦌 [CQ:at,qq=1090616253,name=chanpin] ": {5, []int64{1090616253}},
+		// 引用回复时客户端自动在开头插入 @原发送者
+		"[CQ:reply,id=1][CQ:at,qq=123] 🦌🦌": {2, []int64{123}},
+	}
+	for input, w := range good {
 		m := re.FindStringSubmatch(input)
 		if m == nil {
 			t.Fatalf("%q should match", input)
 		}
-		if got := countDeer(m[1]); got != want {
-			t.Fatalf("countDeer(%q) = %d, want %d", input, got, want)
+		if got := countDeer(m[2]); got != w.times {
+			t.Fatalf("countDeer(%q) = %d, want %d", input, got, w.times)
+		}
+		targets := parseAtTargets(m[1] + m[3])
+		if len(targets) != len(w.targets) {
+			t.Fatalf("targets(%q) = %v, want %v", input, targets, w.targets)
+		}
+		for i := range targets {
+			if targets[i] != w.targets[i] {
+				t.Fatalf("targets(%q) = %v, want %v", input, targets, w.targets)
+			}
 		}
 	}
-	for _, bad := range []string{"", "🦌历", "鹿榜", "补🦌 3", "小🦌", "🦌x", "🦌帮助"} {
+	for _, bad := range []string{"", "🦌历", "鹿榜", "补🦌 3", "小🦌", "🦌x", "🦌帮助", "[CQ:reply,id=1]谢谢"} {
 		if re.MatchString(bad) {
 			t.Fatalf("%q should not match", bad)
 		}
