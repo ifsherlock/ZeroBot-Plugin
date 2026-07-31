@@ -46,6 +46,89 @@ func linuxdoBuildContentBlocks(cooked, base string) []linuxdoContentBlock {
 	return parser.blocks
 }
 
+func linuxdoHTMLAuthor(body string) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+	doc, err := xhtml.Parse(strings.NewReader(body))
+	if err != nil {
+		return ""
+	}
+	root := linuxdoFindHTMLNode(doc, "body")
+	if root == nil {
+		root = doc
+	}
+	post := linuxdoFindFirstPostNode(root)
+	if post == nil {
+		return ""
+	}
+	var author string
+	var walk func(*xhtml.Node)
+	walk = func(node *xhtml.Node) {
+		if node == nil || author != "" {
+			return
+		}
+		if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, "a") {
+			href := linuxdoNodeAttr(node, "href")
+			if linuxdoUserProfileURL(href) {
+				author = linuxdoCleanBlockText(linuxdoNodeText(node))
+				if author == "" {
+					author = linuxdoUserProfileName(href)
+				}
+				return
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(post)
+	return author
+}
+
+func linuxdoFindFirstPostNode(node *xhtml.Node) *xhtml.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, "article") {
+		if linuxdoNodeAttr(node, "data-post-id") != "" || strings.HasPrefix(strings.ToLower(linuxdoNodeAttr(node, "id")), "post_") || linuxdoNodeHasClass(node, "onscreen-post") || linuxdoNodeHasClass(node, "topic-post") {
+			return node
+		}
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if post := linuxdoFindFirstPostNode(child); post != nil {
+			return post
+		}
+	}
+	return nil
+}
+
+func linuxdoUserProfileURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	return len(parts) == 2 && strings.EqualFold(parts[0], "u") && parts[1] != ""
+}
+
+func linuxdoUserProfileName(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "u") {
+		return ""
+	}
+	name, err := url.PathUnescape(parts[1])
+	if err != nil {
+		return parts[1]
+	}
+	return strings.TrimSpace(name)
+}
+
 func linuxdoFindHTMLNode(node *xhtml.Node, name string) *xhtml.Node {
 	if node == nil {
 		return nil

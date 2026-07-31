@@ -128,6 +128,7 @@ func linuxdoParseWithFlaresolverr(cfg config, sourceURL, topicID, postNumber str
 		SourceURL:   sourceURL,
 		Platform:    "linuxdo",
 		Title:       firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
+		Author:      linuxdoHTMLAuthor(htmlBody),
 		Desc:        desc,
 		Cover:       firstImageURL(images),
 		ImageURLs:   images,
@@ -260,6 +261,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 			SourceURL:  sourceURL,
 			Platform:   "linuxdo",
 			Title:      firstNonEmpty(title, "Linux.do Topic "+topicID),
+			Author:     linuxdoHTMLAuthor(htmlBody),
 			Desc:       desc,
 			Cover:      firstImageURL(images),
 			ImageURLs:  images,
@@ -293,6 +295,7 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		SourceURL:   sourceURL,
 		Platform:    "linuxdo",
 		Title:       firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
+		Author:      linuxdoHTMLAuthor(htmlBody),
 		Desc:        desc,
 		Cover:       firstImageURL(images),
 		ImageURLs:   images,
@@ -516,6 +519,9 @@ func linuxdoHTMLBodyText(body string) string {
 func linuxdoMergeRenderedHTML(meta *mediaMeta, htmlBody, finalURL string) {
 	if meta == nil || strings.TrimSpace(htmlBody) == "" {
 		return
+	}
+	if strings.TrimSpace(meta.Author) == "" {
+		meta.Author = linuxdoHTMLAuthor(htmlBody)
 	}
 	renderedDesc := linuxdoHTMLBodyText(htmlBody)
 	preferRendered := linuxdoPreferRenderedDesc(meta.Desc, renderedDesc)

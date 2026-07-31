@@ -712,6 +712,28 @@ func TestParseLinuxdoTopicJSON(t *testing.T) {
 	}
 }
 
+func TestLinuxdoHTMLAuthor(t *testing.T) {
+	body := `<html><body><main>
+<article id="post_1" class="boxed onscreen-post" data-post-id="21050998">
+  <div class="topic-avatar"><a class="main-avatar" href="/u/jaysherlock"><img class="avatar"></a></div>
+  <div class="names"><a class="username" href="/u/jaysherlock">jaysherlock</a></div>
+  <div class="cooked"><p>主楼正文</p></div>
+</article>
+</main></body></html>`
+	if got, want := linuxdoHTMLAuthor(body), "jaysherlock"; got != want {
+		t.Fatalf("linuxdoHTMLAuthor()=%q, want %q", got, want)
+	}
+}
+
+func TestLinuxdoMergeRenderedHTMLFillsAuthor(t *testing.T) {
+	meta := mediaMeta{Platform: "linuxdo"}
+	body := `<article id="post_1" data-post-id="21050998"><a href="/u/neo"><img class="avatar"></a><div class="cooked"><p>正文</p></div></article>`
+	linuxdoMergeRenderedHTML(&meta, body, "https://linux.do/t/topic/12345")
+	if meta.Author != "neo" {
+		t.Fatalf("author=%q, want neo", meta.Author)
+	}
+}
+
 func TestLinuxdoExtractDiscoursePreloadedTopic(t *testing.T) {
 	html := `<html><head><title>Linux.do</title></head><body>
 <script type="application/json" data-discourse-preloaded="topic_12345">{
