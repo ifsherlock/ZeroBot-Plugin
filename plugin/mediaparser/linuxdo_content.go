@@ -308,23 +308,30 @@ func linuxdoBlocksForRender(meta mediaMeta) []linuxdoContentBlock {
 			blocks = append(blocks, linuxdoContentBlock{Kind: "text", Text: text})
 		}
 	}
+	hasHTMLImage := false
 	seen := map[string]bool{}
 	for _, block := range blocks {
 		if block.Kind == "image" {
+			hasHTMLImage = true
 			seen[linuxdoImageDedupeKey(block.URL)] = true
 		}
 	}
-	for _, group := range meta.ImageURLs {
-		if len(group) == 0 {
-			continue
+	// Linux.do 的 cooked HTML 保留了图片在正文中的准确位置。一旦内容树已经
+	// 解析出图片，就不能再把媒体列表追加到末尾，否则不同 CDN/尺寸 URL 会让
+	// 同一批图片整组重复；媒体列表只用于正文 HTML 无图时的降级展示。
+	if !hasHTMLImage {
+		for _, group := range meta.ImageURLs {
+			if len(group) == 0 {
+				continue
+			}
+			raw := strings.TrimSpace(group[0])
+			key := linuxdoImageDedupeKey(raw)
+			if raw == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			blocks = append(blocks, linuxdoContentBlock{Kind: "image", URL: raw})
 		}
-		raw := strings.TrimSpace(group[0])
-		key := linuxdoImageDedupeKey(raw)
-		if raw == "" || seen[key] {
-			continue
-		}
-		seen[key] = true
-		blocks = append(blocks, linuxdoContentBlock{Kind: "image", URL: raw})
 	}
 	if len(blocks) == 0 {
 		return []linuxdoContentBlock{{Kind: "text", Text: "暂无正文摘要"}}

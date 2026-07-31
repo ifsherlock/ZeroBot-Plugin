@@ -1279,6 +1279,58 @@ func TestLinuxdoTopic2681277ContentBlocks(t *testing.T) {
 	}
 }
 
+func TestLinuxdoBlocksForRenderDoesNotAppendImagesAfterHTMLImages(t *testing.T) {
+	meta := mediaMeta{
+		URL: "https://linux.do/t/topic/2685032",
+		LinuxdoHTML: `<p><img src="https://cdn3.ldstatic.com/optimized/4X/first_2_690x387.jpeg"></p>
+<p>图片之间的正文</p>
+<p><img src="https://cdn3.ldstatic.com/optimized/4X/second_2_690x388.jpeg"></p>
+<p><img src="https://cdn3.ldstatic.com/optimized/4X/third_2_355x286.png"></p>`,
+		ImageURLs: [][]string{
+			{"https://linux.do/uploads/default/original/4X/first.jpeg"},
+			{"https://cdn3.ldstatic.com/original/4X/second.jpeg"},
+			{"https://cdn3.ldstatic.com/original/4X/third.png"},
+			{"https://cdn3.ldstatic.com/original/4X/not-in-content.png"},
+		},
+	}
+
+	blocks := linuxdoBlocksForRender(meta)
+	imageURLs := []string{}
+	for _, block := range blocks {
+		if block.Kind == "image" {
+			imageURLs = append(imageURLs, block.URL)
+		}
+	}
+	want := []string{
+		"https://cdn3.ldstatic.com/optimized/4X/first_2_690x387.jpeg",
+		"https://cdn3.ldstatic.com/optimized/4X/second_2_690x388.jpeg",
+		"https://cdn3.ldstatic.com/optimized/4X/third_2_355x286.png",
+	}
+	if strings.Join(imageURLs, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("HTML images must remain the only ordered image source: got=%v want=%v blocks=%+v", imageURLs, want, blocks)
+	}
+}
+
+func TestLinuxdoBlocksForRenderUsesImageURLsWhenHTMLHasNoImages(t *testing.T) {
+	meta := mediaMeta{
+		URL:         "https://linux.do/t/topic/2685032",
+		LinuxdoHTML: `<p>只有正文，HTML 中没有图片。</p>`,
+		ImageURLs: [][]string{
+			{"https://cdn3.ldstatic.com/original/4X/first.jpeg"},
+			{"https://cdn3.ldstatic.com/original/4X/second.jpeg"},
+		},
+	}
+
+	blocks := linuxdoBlocksForRender(meta)
+	kinds := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		kinds = append(kinds, block.Kind)
+	}
+	if got, want := strings.Join(kinds, ","), "text,image,image"; got != want {
+		t.Fatalf("image URL fallback order mismatch: got=%s want=%s blocks=%+v", got, want, blocks)
+	}
+}
+
 func TestRenderLinuxdoShareCard(t *testing.T) {
 	oldCacheDir := cacheDir
 	cacheDir = t.TempDir()
