@@ -3,6 +3,7 @@ package mediaparser
 import (
 	stdhtml "html"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -10,10 +11,13 @@ import (
 )
 
 type linuxdoContentBlock struct {
-	Kind string
-	Text string
-	URL  string
+	Kind  string
+	Text  string
+	URL   string
+	Level int
 }
+
+var linuxdoAttachmentSizePrefixPattern = regexp.MustCompile(`(?i)^(?:\(|（)\s*\d+(?:\.\d+)?\s*(?:B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)\s*(?:\)|）)`)
 
 type linuxdoContentParser struct {
 	base       string
@@ -74,22 +78,23 @@ func (parser *linuxdoContentParser) walkBlock(node *xhtml.Node) {
 	if node.Type != xhtml.ElementNode {
 		return
 	}
+	if linuxdoNodeShouldSkip(node) {
+		return
+	}
 	tag := strings.ToLower(node.Data)
 	switch tag {
-	case "script", "style", "noscript", "svg", "hr":
+	case "script", "style", "noscript", "svg":
 		return
+	case "hr":
+		parser.addDivider()
 	case "img":
 		parser.addImage(node)
 	case "p":
-		if attachment := linuxdoFindAttachmentNode(node); attachment != nil {
-			parser.addText("attachment", linuxdoNodeText(node), linuxdoNodeURL(attachment, parser.base))
-			return
-		}
-		parser.walkRich(node, "text")
+		parser.walkRich(node, "text", 0)
 	case "h1", "h2", "h3", "h4", "h5", "h6", "summary":
-		parser.walkRich(node, "heading")
+		parser.walkRich(node, "heading", linuxdoHeadingLevel(tag))
 	case "blockquote":
-		parser.walkRich(node, "quote")
+		parser.walkRich(node, "quote", 0)
 	case "pre":
 		parser.addText("code", linuxdoNodeText(node), "")
 	case "ul", "ol":
@@ -106,22 +111,33 @@ func (parser *linuxdoContentParser) walkBlock(node *xhtml.Node) {
 			}
 		}
 		if tag == "aside" && (linuxdoNodeHasClass(node, "quote") || linuxdoNodeHasClass(node, "onebox")) {
-			parser.walkRich(node, "quote")
+			parser.walkRich(node, "quote", 0)
 			return
 		}
 		if linuxdoHasBlockChild(node) {
 			parser.walkChildren(node)
 			return
 		}
-		parser.walkRich(node, "text")
+		parser.walkRich(node, "text", 0)
 	}
 }
 
-func (parser *linuxdoContentParser) walkRich(root *xhtml.Node, kind string) {
+func (parser *linuxdoContentParser) walkRich(root *xhtml.Node, kind string, level int) {
 	var text strings.Builder
+	attachmentPending := false
 	flush := func() {
-		parser.addText(kind, text.String(), "")
+		raw := text.String()
 		text.Reset()
+		if attachmentPending {
+			suffix, remaining := linuxdoSplitAttachmentSuffix(raw)
+			if suffix != "" {
+				parser.appendAttachmentSuffix(suffix)
+			}
+			parser.addTextWithLevel(kind, remaining, "", level)
+			attachmentPending = false
+			return
+		}
+		parser.addTextWithLevel(kind, raw, "", level)
 	}
 	var walk func(*xhtml.Node)
 	walk = func(node *xhtml.Node) {
@@ -132,6 +148,9 @@ func (parser *linuxdoContentParser) walkRich(root *xhtml.Node, kind string) {
 		case xhtml.TextNode:
 			text.WriteString(node.Data)
 		case xhtml.ElementNode:
+			if linuxdoNodeShouldSkip(node) {
+				return
+			}
 			tag := strings.ToLower(node.Data)
 			switch tag {
 			case "script", "style", "noscript", "svg":
@@ -153,7 +172,7 @@ func (parser *linuxdoContentParser) walkRich(root *xhtml.Node, kind string) {
 				return
 			case "blockquote":
 				flush()
-				parser.walkRich(node, "quote")
+				parser.walkRich(node, "quote", 0)
 				return
 			case "ul", "ol":
 				flush()
@@ -163,15 +182,12 @@ func (parser *linuxdoContentParser) walkRich(root *xhtml.Node, kind string) {
 				if linuxdoNodeHasClass(node, "attachment") {
 					flush()
 					parser.addText("attachment", linuxdoNodeText(node), linuxdoNodeURL(node, parser.base))
+					attachmentPending = true
 					return
 				}
 			}
-			before := text.Len()
 			for child := node.FirstChild; child != nil; child = child.NextSibling {
 				walk(child)
-			}
-			if tag == "a" && text.Len() == before && node.FirstChild == nil {
-				text.WriteString(linuxdoNodeURL(node, parser.base))
 			}
 		}
 	}
@@ -210,15 +226,50 @@ func linuxdoOrdinal(index int) string {
 }
 
 func (parser *linuxdoContentParser) addText(kind, raw, rawURL string) {
+	parser.addTextWithLevel(kind, raw, rawURL, 0)
+}
+
+func (parser *linuxdoContentParser) addTextWithLevel(kind, raw, rawURL string, level int) {
 	text := linuxdoCleanBlockText(raw)
 	if text == "" {
 		return
 	}
-	block := linuxdoContentBlock{Kind: kind, Text: text, URL: strings.TrimSpace(rawURL)}
+	block := linuxdoContentBlock{Kind: kind, Text: text, URL: strings.TrimSpace(rawURL), Level: level}
 	if len(parser.blocks) > 0 && parser.blocks[len(parser.blocks)-1] == block {
 		return
 	}
 	parser.blocks = append(parser.blocks, block)
+}
+
+func (parser *linuxdoContentParser) addDivider() {
+	if len(parser.blocks) == 0 || parser.blocks[len(parser.blocks)-1].Kind == "divider" {
+		return
+	}
+	parser.blocks = append(parser.blocks, linuxdoContentBlock{Kind: "divider"})
+}
+
+func (parser *linuxdoContentParser) appendAttachmentSuffix(raw string) {
+	text := linuxdoCleanBlockText(raw)
+	if text == "" || len(parser.blocks) == 0 {
+		return
+	}
+	last := &parser.blocks[len(parser.blocks)-1]
+	if last.Kind != "attachment" {
+		return
+	}
+	last.Text = strings.TrimSpace(last.Text + " " + text)
+}
+
+func linuxdoSplitAttachmentSuffix(raw string) (string, string) {
+	text := linuxdoCleanBlockText(raw)
+	if text == "" {
+		return "", ""
+	}
+	prefix := linuxdoAttachmentSizePrefixPattern.FindString(text)
+	if prefix == "" {
+		return "", text
+	}
+	return strings.TrimSpace(prefix), strings.TrimSpace(text[len(prefix):])
 }
 
 func (parser *linuxdoContentParser) addImage(node *xhtml.Node) {
@@ -335,6 +386,9 @@ func linuxdoNodeText(node *xhtml.Node) string {
 			}
 			return
 		}
+		if linuxdoNodeShouldSkip(current) {
+			return
+		}
 		tag := strings.ToLower(current.Data)
 		if tag == "script" || tag == "style" || tag == "noscript" || tag == "svg" {
 			return
@@ -384,28 +438,38 @@ func linuxdoTableText(node *xhtml.Node) string {
 	return strings.Join(rows, "\n")
 }
 
-func linuxdoFindAttachmentNode(node *xhtml.Node) *xhtml.Node {
-	if node == nil {
-		return nil
-	}
-	if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, "a") && linuxdoNodeHasClass(node, "attachment") {
-		return node
-	}
-	for child := node.FirstChild; child != nil; child = child.NextSibling {
-		if found := linuxdoFindAttachmentNode(child); found != nil {
-			return found
-		}
-	}
-	return nil
-}
-
 func linuxdoHasBlockChild(node *xhtml.Node) bool {
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
 		if child.Type != xhtml.ElementNode {
 			continue
 		}
+		if linuxdoNodeShouldSkip(child) {
+			continue
+		}
 		switch strings.ToLower(child.Data) {
-		case "p", "div", "section", "article", "aside", "figure", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "ul", "ol", "table":
+		case "p", "div", "section", "article", "aside", "figure", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "ul", "ol", "table", "hr":
+			return true
+		}
+	}
+	return false
+}
+
+func linuxdoHeadingLevel(tag string) int {
+	if len(tag) != 2 || tag[0] != 'h' || tag[1] < '1' || tag[1] > '6' {
+		return 4
+	}
+	return int(tag[1] - '0')
+}
+
+func linuxdoNodeShouldSkip(node *xhtml.Node) bool {
+	if node == nil || node.Type != xhtml.ElementNode {
+		return false
+	}
+	if strings.EqualFold(node.Data, "a") && linuxdoNodeHasClass(node, "anchor") {
+		return true
+	}
+	for _, className := range []string{"meta", "d-icon", "lb-spacer", "cooked-selection-barrier"} {
+		if linuxdoNodeHasClass(node, className) {
 			return true
 		}
 	}

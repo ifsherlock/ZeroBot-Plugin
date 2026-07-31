@@ -24,6 +24,7 @@ type linuxdoRenderBlock struct {
 	kind   string
 	text   string
 	url    string
+	level  int
 	lines  []string
 	img    image.Image
 	width  int
@@ -139,6 +140,10 @@ func linuxdoPrepareRenderBlocks(meta mediaMeta, fontBytes []byte, contentW int) 
 	measure := gg.NewContext(linuxdoCardWidth, 100)
 	renderBlocks := make([]linuxdoRenderBlock, 0, len(blocks))
 	for i, block := range blocks {
+		if block.Kind == "divider" {
+			renderBlocks = append(renderBlocks, linuxdoRenderBlock{kind: "divider", width: contentW, height: 1})
+			continue
+		}
 		if block.Kind == "image" {
 			width, height := linuxdoImageDisplaySize(images[i], contentW, linuxdoCardMaxImageHeight)
 			renderBlocks = append(renderBlocks, linuxdoRenderBlock{
@@ -146,13 +151,13 @@ func linuxdoPrepareRenderBlocks(meta mediaMeta, fontBytes []byte, contentW int) 
 			})
 			continue
 		}
-		size, lineH, innerW, extraH := linuxdoTextBlockMetrics(block.Kind, contentW)
+		size, lineH, innerW, extraH := linuxdoTextBlockMetrics(block.Kind, block.Level, contentW)
 		lines := wrapTextByPixels(measure, fontBytes, size, block.Text, float64(innerW))
 		if len(lines) == 0 {
 			continue
 		}
 		renderBlocks = append(renderBlocks, linuxdoRenderBlock{
-			kind: block.Kind, text: block.Text, url: block.URL, lines: lines, width: contentW, height: len(lines)*lineH + extraH,
+			kind: block.Kind, text: block.Text, url: block.URL, level: block.Level, lines: lines, width: contentW, height: len(lines)*lineH + extraH,
 		})
 	}
 	if len(renderBlocks) == 0 {
@@ -162,11 +167,18 @@ func linuxdoPrepareRenderBlocks(meta mediaMeta, fontBytes []byte, contentW int) 
 	return renderBlocks
 }
 
-func linuxdoTextBlockMetrics(kind string, contentW int) (size float64, lineH, innerW, extraH int) {
+func linuxdoTextBlockMetrics(kind string, level, contentW int) (size float64, lineH, innerW, extraH int) {
 	size, lineH, innerW = 24, 34, contentW
 	switch kind {
 	case "heading":
-		return 28, 40, contentW, 4
+		switch level {
+		case 1, 2:
+			return 28, 40, contentW, 3
+		case 3:
+			return 26, 37, contentW, 3
+		default:
+			return 24, 35, contentW, 2
+		}
 	case "quote", "poll":
 		return 22, 32, maxInt(1, contentW-44), 28
 	case "code":
@@ -275,12 +287,24 @@ func linuxdoRenderBlocksHeight(blocks []linuxdoRenderBlock) int {
 }
 
 func linuxdoRenderBlockGap(previous, current linuxdoRenderBlock) int {
-	gap := 16
+	gap := 14
+	if previous.kind == "divider" || current.kind == "divider" {
+		return 18
+	}
 	if previous.kind == "image" || current.kind == "image" {
-		gap = 22
+		gap = 20
 	}
 	if current.kind == "heading" {
-		gap = 26
+		gap = 24
+	}
+	if previous.kind == "heading" {
+		gap = 10
+	}
+	if current.kind == "attachment" && previous.kind == "text" {
+		gap = 8
+	}
+	if previous.kind == "attachment" && current.kind == "text" {
+		gap = 10
 	}
 	return gap
 }
@@ -289,11 +313,16 @@ func linuxdoDrawRenderBlock(dc *gg.Context, fontBytes, headingFontBytes []byte, 
 	switch block.kind {
 	case "image":
 		linuxdoDrawContentImage(dc, fontBytes, block, x, y, contentW, theme)
+	case "divider":
+		setRGB(dc, theme.Line)
+		dc.DrawRectangle(float64(x), float64(y), float64(contentW), 1)
+		dc.Fill()
 	case "heading":
-		yy := y + 30
+		size, lineH, _, _ := linuxdoTextBlockMetrics("heading", block.level, contentW)
+		yy := y + lineH - 9
 		for _, line := range block.lines {
-			drawInlineEmoji(dc, headingFontBytes, 28, theme.Title, line, float64(x), float64(yy))
-			yy += 40
+			drawInlineEmoji(dc, headingFontBytes, size, theme.Title, line, float64(x), float64(yy))
+			yy += lineH
 		}
 	case "quote", "poll":
 		linuxdoDrawInsetTextBlock(dc, fontBytes, block, x, y, contentW, theme)
@@ -302,10 +331,16 @@ func linuxdoDrawRenderBlock(dc *gg.Context, fontBytes, headingFontBytes []byte, 
 	case "attachment", "link":
 		linuxdoDrawAttachmentBlock(dc, fontBytes, block, x, y, contentW, theme)
 	default:
-		yy := y + 26
+		size := 24.0
+		lineH := 34
+		if block.kind == "list" || block.kind == "table" {
+			size = 23
+			lineH = 33
+		}
+		yy := y + lineH - 8
 		for _, line := range block.lines {
-			drawInlineEmoji(dc, fontBytes, 24, theme.Body, line, float64(x), float64(yy))
-			yy += 34
+			drawInlineEmoji(dc, fontBytes, size, theme.Body, line, float64(x), float64(yy))
+			yy += lineH
 		}
 	}
 }

@@ -1213,6 +1213,44 @@ func TestLinuxdoBuildContentBlocksPreservesOrder(t *testing.T) {
 	}
 }
 
+func TestLinuxdoTopic1545003ContentBlocks(t *testing.T) {
+	cooked := `<p>论坛主题美化</p>
+<p>废话少说，直接上图。<br></p>
+<div class="lightbox-wrapper"><a class="lightbox" href="https://cdn3.ldstatic.com/original/4X/topic.jpeg" title="PixPin_2026-01-30_17-34-05"><img src="https://cdn3.ldstatic.com/optimized/4X/topic_2_690x377.jpeg" alt="PixPin_2026-01-30_17-34-05"><div class="meta"><span class="filename">PixPin_2026-01-30_17-34-05</span><span class="informations">3024×1654 718 KB</span></div></a></div>
+<p></p>
+<h4><a name="p-13283598-stylish-1" class="anchor" href="#p-13283598-stylish-1" aria-label="标题链接"></a>插件介绍：Stylish</h4>
+<ul><li>官网直达：<a href="https://userstyles.org/">userstyles.org</a></li></ul>
+<hr>
+<h3>L站适配：</h3>
+<p>文件：<br><a class="attachment" href="/uploads/short-url/Doc1.txt">Doc1.txt</a> (2.9 KB)</p>
+<h4><a name="p-13283598-tips-3" class="anchor" href="#p-13283598-tips-3" aria-label="标题链接"></a>小贴士：</h4>
+<ul><li>换图：直接改第 3 行那串长地址就行。</li><li>清晰度：可以把 color 改成顺眼的颜色。</li></ul>
+<div class="cooked-selection-barrier" aria-hidden="true"><br></div>`
+
+	blocks := linuxdoBuildContentBlocks(cooked, "https://linux.do/t/topic/1545003")
+	kinds := make([]string, 0, len(blocks))
+	var renderedText strings.Builder
+	for _, block := range blocks {
+		kinds = append(kinds, block.Kind)
+		renderedText.WriteString(block.Text)
+		renderedText.WriteByte('\n')
+	}
+	want := []string{"text", "text", "image", "heading", "list", "divider", "heading", "text", "attachment", "heading", "list"}
+	if strings.Join(kinds, ",") != strings.Join(want, ",") {
+		t.Fatalf("topic 1545003 content order mismatch: got=%v want=%v blocks=%+v", kinds, want, blocks)
+	}
+	if blocks[3].Text != "插件介绍：Stylish" || blocks[3].Level != 4 || blocks[6].Text != "L站适配：" || blocks[6].Level != 3 || blocks[9].Text != "小贴士：" || blocks[9].Level != 4 {
+		t.Fatalf("topic headings mismatch: %+v", blocks)
+	}
+	if blocks[7].Text != "文件：" || blocks[8].Text != "Doc1.txt (2.9 KB)" || blocks[8].URL != "https://linux.do/uploads/short-url/Doc1.txt" {
+		t.Fatalf("topic attachment layout mismatch: %+v", blocks)
+	}
+	text := renderedText.String()
+	if strings.Contains(text, "p-13283598") || strings.Contains(text, "3024×1654") || strings.Contains(text, "718 KB") {
+		t.Fatalf("topic presentation-only HTML leaked into content: %q", text)
+	}
+}
+
 func TestLinuxdoTopic2681277ContentBlocks(t *testing.T) {
 	cooked := `<p>服了，昨天电脑蓝屏，不想花钱，只能把C盘清了重装</p>
 <p>可惜了我的74亿的token会话（总共），算了算了，反正电脑已经陪我4年了</p>
@@ -1233,10 +1271,10 @@ func TestLinuxdoTopic2681277ContentBlocks(t *testing.T) {
 			attachmentCount++
 		}
 	}
-	if len(blocks) != 7 || textCount != 5 || attachmentCount != 2 {
+	if len(blocks) != 8 || textCount != 6 || attachmentCount != 2 {
 		t.Fatalf("sample topic blocks mismatch: total=%d text=%d attachments=%d blocks=%+v", len(blocks), textCount, attachmentCount, blocks)
 	}
-	if blocks[4].URL != "https://linux.do/uploads/short-url/one.txt" || !strings.Contains(blocks[5].Text, "这个可能有重复") {
+	if blocks[4].URL != "https://linux.do/uploads/short-url/one.txt" || !strings.Contains(blocks[5].Text, "27.4 KB") || !strings.Contains(blocks[6].Text, "这个可能有重复") {
 		t.Fatalf("sample attachments mismatch: %+v", blocks)
 	}
 }
