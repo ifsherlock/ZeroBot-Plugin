@@ -196,6 +196,7 @@ type mediaMeta struct {
 	Error            string
 	KeylolBlocks     []keylolBlock
 	KeylolCategory   string
+	LinuxdoHTML      string
 	ArticleCard      bool
 	LongArticleCard  bool
 	LongArticlePart  int

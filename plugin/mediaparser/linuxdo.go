@@ -124,15 +124,16 @@ func linuxdoParseWithFlaresolverr(cfg config, sourceURL, topicID, postNumber str
 		return mediaMeta{}, fmt.Errorf("linux.do flaresolverr got no body: final=%s body_len=%d markers=%s", finalURL, len(htmlBody), linuxdoHTMLMarkerSummary(htmlBody))
 	}
 	meta := mediaMeta{
-		URL:        pageURL,
-		SourceURL:  sourceURL,
-		Platform:   "linuxdo",
-		Title:      firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
-		Desc:       desc,
-		Cover:      firstImageURL(images),
-		ImageURLs:  images,
-		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
-		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
+		URL:         pageURL,
+		SourceURL:   sourceURL,
+		Platform:    "linuxdo",
+		Title:       firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
+		Desc:        desc,
+		Cover:       firstImageURL(images),
+		ImageURLs:   images,
+		LinuxdoHTML: linuxdoPrimaryContentHTML(htmlBody),
+		ImageHeads:  buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
+		VideoHeads:  buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
 	}
 	linuxdoApplyMetaHeaders(cfg, &meta)
 	return meta, nil
@@ -288,15 +289,16 @@ func linuxdoParseHTMLFallback(cfg config, sourceURL, topicID, postNumber string)
 		return mediaMeta{}, fmt.Errorf("linux.do fallback got title only: final=%s body_len=%d markers=%s raw_error=%v request=%s", finalURL, len(htmlBody), linuxdoHTMLMarkerSummary(htmlBody), rawErr, linuxdoRequestSummary(cfg))
 	}
 	meta := mediaMeta{
-		URL:        pageURL,
-		SourceURL:  sourceURL,
-		Platform:   "linuxdo",
-		Title:      firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
-		Desc:       desc,
-		Cover:      firstImageURL(images),
-		ImageURLs:  images,
-		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
-		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
+		URL:         pageURL,
+		SourceURL:   sourceURL,
+		Platform:    "linuxdo",
+		Title:       firstNonEmpty(linuxdoHTMLTitle(htmlBody), "Linux.do Topic "+topicID),
+		Desc:        desc,
+		Cover:       firstImageURL(images),
+		ImageURLs:   images,
+		LinuxdoHTML: linuxdoPrimaryContentHTML(htmlBody),
+		ImageHeads:  buildHeaders(false, linuxdoReferer, linuxdoUserAgent(cfg)),
+		VideoHeads:  buildHeaders(true, linuxdoReferer, linuxdoUserAgent(cfg)),
 	}
 	linuxdoApplyMetaHeaders(cfg, &meta)
 	return meta, nil
@@ -516,8 +518,12 @@ func linuxdoMergeRenderedHTML(meta *mediaMeta, htmlBody, finalURL string) {
 		return
 	}
 	renderedDesc := linuxdoHTMLBodyText(htmlBody)
-	if linuxdoPreferRenderedDesc(meta.Desc, renderedDesc) {
+	preferRendered := linuxdoPreferRenderedDesc(meta.Desc, renderedDesc)
+	if preferRendered {
 		meta.Desc = renderedDesc
+	}
+	if renderedHTML := linuxdoPrimaryContentHTML(htmlBody); renderedHTML != "" && (strings.TrimSpace(meta.LinuxdoHTML) == "" || preferRendered) {
+		meta.LinuxdoHTML = renderedHTML
 	}
 	images := linuxdoExtractImages(htmlBody, finalURL)
 	if len(images) > 0 {
@@ -805,18 +811,19 @@ func parseLinuxdoTopicJSON(sourceURL, finalURL, body string) (mediaMeta, error) 
 	}
 	avatar := linuxdoAvatarURL(getString(post, "avatar_template"), 120)
 	return mediaMeta{
-		URL:        link,
-		SourceURL:  firstNonEmpty(sourceURL, link),
-		Platform:   "linuxdo",
-		Title:      title,
-		Author:     author,
-		Avatar:     avatar,
-		Timestamp:  linuxdoTime(getString(post, "created_at")),
-		Desc:       desc,
-		Cover:      cover,
-		ImageURLs:  images,
-		ImageHeads: buildHeaders(false, linuxdoReferer, linuxdoUA),
-		VideoHeads: buildHeaders(true, linuxdoReferer, linuxdoUA),
+		URL:         link,
+		SourceURL:   firstNonEmpty(sourceURL, link),
+		Platform:    "linuxdo",
+		Title:       title,
+		Author:      author,
+		Avatar:      avatar,
+		Timestamp:   linuxdoTime(getString(post, "created_at")),
+		Desc:        desc,
+		Cover:       cover,
+		ImageURLs:   images,
+		LinuxdoHTML: cooked,
+		ImageHeads:  buildHeaders(false, linuxdoReferer, linuxdoUA),
+		VideoHeads:  buildHeaders(true, linuxdoReferer, linuxdoUA),
 	}, nil
 }
 

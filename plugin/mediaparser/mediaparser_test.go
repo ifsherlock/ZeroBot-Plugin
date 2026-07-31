@@ -698,6 +698,9 @@ func TestParseLinuxdoTopicJSON(t *testing.T) {
 	if !strings.Contains(meta.Desc, "这是主帖内容") {
 		t.Fatalf("desc=%q", meta.Desc)
 	}
+	if !strings.Contains(meta.LinuxdoHTML, `<img src="/uploads/default/original/1X/test.png">`) {
+		t.Fatalf("linuxdo cooked HTML was not preserved: %q", meta.LinuxdoHTML)
+	}
 	if meta.URL != "https://linux.do/t/topic-title/12345/1" {
 		t.Fatalf("url=%q", meta.URL)
 	}
@@ -1183,30 +1186,105 @@ func TestLinuxdoErrorSummaryDetectsCloudflare(t *testing.T) {
 	}
 }
 
+func TestLinuxdoBuildContentBlocksPreservesOrder(t *testing.T) {
+	cooked := `<p>第一段正文</p>
+<p><a href="https://cdn.ldstatic.com/original/one.png"><img data-large-file="true" src="https://cdn.ldstatic.com/optimized/one.png"></a></p>
+<blockquote><p>引用内容</p></blockquote>
+<pre><code>go test ./...</code></pre>
+<ol><li>第一项</li><li>第二项</li></ol>
+<p><a class="attachment" href="/uploads/report.txt">report.txt</a> (12 KB)</p>
+<p>图片之间的正文</p>
+<p><img src="https://cdn.ldstatic.com/original/two.jpg"></p>`
+
+	blocks := linuxdoBuildContentBlocks(cooked, "https://linux.do/t/topic/2681277")
+	kinds := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		kinds = append(kinds, block.Kind)
+	}
+	want := []string{"text", "image", "quote", "code", "list", "attachment", "text", "image"}
+	if strings.Join(kinds, ",") != strings.Join(want, ",") {
+		t.Fatalf("content order mismatch: got=%v want=%v blocks=%+v", kinds, want, blocks)
+	}
+	if blocks[1].URL != "https://cdn.ldstatic.com/optimized/one.png" {
+		t.Fatalf("first image URL mismatch: %+v", blocks[1])
+	}
+	if blocks[5].URL != "https://linux.do/uploads/report.txt" || !strings.Contains(blocks[5].Text, "12 KB") {
+		t.Fatalf("attachment block mismatch: %+v", blocks[5])
+	}
+}
+
+func TestLinuxdoTopic2681277ContentBlocks(t *testing.T) {
+	cooked := `<p>服了，昨天电脑蓝屏，不想花钱，只能把C盘清了重装</p>
+<p>可惜了我的74亿的token会话（总共），算了算了，反正电脑已经陪我4年了</p>
+<p>现在发个1600节点一共16个账号每个账号 100 个节点 10GB，也就是一共 1600 个节点 160GB，七天有效期</p>
+<p>节点仅支持 http 协议，需要在境外网络环境下使用，国内无法直接连接，可以试试跑注册机</p>
+<p><a class="attachment" href="/uploads/short-url/one.txt">node.txt</a> (118.5 KB)</p>
+<p><a class="attachment" href="/uploads/short-url/two.txt">nodes.txt</a> (27.4 KB)<br>这个可能有重复</p>
+<p>7天有效期，现在不知道还剩几天</p>`
+
+	blocks := linuxdoBuildContentBlocks(cooked, "https://linux.do/t/topic/2681277")
+	textCount := 0
+	attachmentCount := 0
+	for _, block := range blocks {
+		switch block.Kind {
+		case "text":
+			textCount++
+		case "attachment":
+			attachmentCount++
+		}
+	}
+	if len(blocks) != 7 || textCount != 5 || attachmentCount != 2 {
+		t.Fatalf("sample topic blocks mismatch: total=%d text=%d attachments=%d blocks=%+v", len(blocks), textCount, attachmentCount, blocks)
+	}
+	if blocks[4].URL != "https://linux.do/uploads/short-url/one.txt" || !strings.Contains(blocks[5].Text, "这个可能有重复") {
+		t.Fatalf("sample attachments mismatch: %+v", blocks)
+	}
+}
+
 func TestRenderLinuxdoShareCard(t *testing.T) {
 	oldCacheDir := cacheDir
 	cacheDir = t.TempDir()
 	defer func() { cacheDir = oldCacheDir }()
 
-	img := image.NewRGBA(image.Rect(0, 0, 360, 180))
-	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 75, G: 122, B: 255, A: 255}}, image.Point{}, draw.Src)
+	colors := []color.RGBA{
+		{R: 210, G: 33, B: 61, A: 255},
+		{R: 33, G: 180, B: 92, A: 255},
+		{R: 45, G: 90, B: 210, A: 255},
+		{R: 230, G: 180, B: 40, A: 255},
+		{R: 160, G: 60, B: 190, A: 255},
+	}
 	imgSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		index, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/post-"), ".png"))
+		if err != nil || index < 0 || index >= len(colors) {
+			http.NotFound(w, r)
+			return
+		}
+		img := image.NewRGBA(image.Rect(0, 0, 360, 180))
+		draw.Draw(img, img.Bounds(), &image.Uniform{C: colors[index]}, image.Point{}, draw.Src)
 		w.Header().Set("Content-Type", "image/png")
 		if err := png.Encode(w, img); err != nil {
 			t.Errorf("encode image: %v", err)
 		}
 	}))
 	defer imgSrv.Close()
+	imageURLs := make([][]string, 0, len(colors))
+	imageHTML := make([]string, 0, len(colors))
+	for i := range colors {
+		raw := fmt.Sprintf("%s/post-%d.png", imgSrv.URL, i)
+		imageURLs = append(imageURLs, []string{raw})
+		imageHTML = append(imageHTML, fmt.Sprintf(`<p>第 %d 张图片前的正文</p><p><img src="%s"></p>`, i+1, raw))
+	}
 
 	meta := mediaMeta{
-		URL:       "https://linux.do/t/topic-title/12345/1",
-		SourceURL: "https://linux.do/t/topic-title/12345",
-		Platform:  "linuxdo",
-		Title:     "Linux.do 分享图片功能",
-		Author:    "Neo",
-		Timestamp: "2026-06-03 12:34:56",
-		Desc:      "这是主帖内容。\n第二行摘要。",
-		ImageURLs: [][]string{{imgSrv.URL + "/post.png"}},
+		URL:         "https://linux.do/t/topic/2681277/1",
+		SourceURL:   "https://linux.do/t/topic/2681277",
+		Platform:    "linuxdo",
+		Title:       "1600 HTTP节点[早起的鸟儿有虫吃]",
+		Author:      "Neo",
+		Timestamp:   "2026-07-31 07:00:00",
+		Desc:        "这是主帖内容。\n第二行摘要。",
+		LinuxdoHTML: strings.Join(imageHTML, "") + `<p><a class="attachment" href="/uploads/node.txt">node.txt</a> (118.5 KB)</p>`,
+		ImageURLs:   imageURLs,
 	}
 	out, err := renderInfoCard(meta)
 	if err != nil {
@@ -1214,6 +1292,51 @@ func TestRenderLinuxdoShareCard(t *testing.T) {
 	}
 	if _, err := os.Stat(out); err != nil {
 		t.Fatalf("card not saved: %v", err)
+	}
+	file, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	rendered, err := png.Decode(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rendered.Bounds().Dy() < 1400 {
+		t.Fatalf("multi-image card is unexpectedly short: %v", rendered.Bounds())
+	}
+	delta := func(a, b uint8) int {
+		value := int(a) - int(b)
+		if value < 0 {
+			return -value
+		}
+		return value
+	}
+	findColorY := func(target color.RGBA) (int, int) {
+		bestY := -1
+		bestDistance := 1000
+		for y := rendered.Bounds().Min.Y; y < rendered.Bounds().Max.Y; y++ {
+			for x := rendered.Bounds().Min.X; x < rendered.Bounds().Max.X; x++ {
+				got := color.RGBAModel.Convert(rendered.At(x, y)).(color.RGBA)
+				distance := delta(got.R, target.R) + delta(got.G, target.G) + delta(got.B, target.B)
+				if distance < bestDistance {
+					bestDistance = distance
+					bestY = y
+				}
+				if distance <= 6 {
+					return y, distance
+				}
+			}
+		}
+		return bestY, bestDistance
+	}
+	previousY := -1
+	for i, target := range colors {
+		y, distance := findColorY(target)
+		if distance > 6 || y <= previousY {
+			t.Fatalf("image %d missing or out of order: y=%d previous=%d closest_color_distance=%d", i+1, y, previousY, distance)
+		}
+		previousY = y
 	}
 }
 
