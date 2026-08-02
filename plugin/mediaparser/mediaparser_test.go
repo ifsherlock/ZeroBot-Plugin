@@ -272,6 +272,13 @@ func TestTelegramBotDriverCreationAndMediaAttachment(t *testing.T) {
 	if item.kind != tgBotMediaPhoto || filepath.Clean(item.target) != filepath.Clean(imagePath) {
 		t.Fatalf("unexpected item: %#v", item)
 	}
+	documentItem, ok := driver.mediaAttachment("file://"+filepath.ToSlash(imagePath), tgBotMediaDocument)
+	if !ok {
+		t.Fatal("telegram should accept an explicit document backed by a PNG")
+	}
+	if documentItem.kind != tgBotMediaDocument {
+		t.Fatalf("explicit document kind=%q, want %q", documentItem.kind, tgBotMediaDocument)
+	}
 
 	blockedDir, err := os.MkdirTemp(".", ".tgbot-media-test-*")
 	if err != nil {
@@ -305,14 +312,22 @@ func TestTelegramAllowsParserCardsWhenMediaDisabled(t *testing.T) {
 
 	disabled := &tgBotDriver{mediaEnabled: false}
 	cardItem := tgBotMediaAttachment{kind: tgBotMediaPhoto, target: card, name: filepath.Base(card)}
+	cardDocumentItem := tgBotMediaAttachment{kind: tgBotMediaDocument, target: card, name: filepath.Base(card)}
 	ordinaryItem := tgBotMediaAttachment{kind: tgBotMediaPhoto, target: ordinary, name: filepath.Base(ordinary)}
+	ordinaryDocumentItem := tgBotMediaAttachment{kind: tgBotMediaDocument, target: ordinary, name: filepath.Base(ordinary)}
 	videoItem := tgBotMediaAttachment{kind: tgBotMediaVideo, target: filepath.Join(cacheDir, "card_video.mp4"), name: "card_video.mp4"}
 
 	if !disabled.shouldSendMediaAttachment(cardItem) {
 		t.Fatal("telegram should send parser card images even when media upload is disabled")
 	}
+	if !disabled.shouldSendMediaAttachment(cardDocumentItem) {
+		t.Fatal("telegram should send parser card documents even when media upload is disabled")
+	}
 	if disabled.shouldSendMediaAttachment(ordinaryItem) {
 		t.Fatal("telegram should not send ordinary images when media upload is disabled")
+	}
+	if disabled.shouldSendMediaAttachment(ordinaryDocumentItem) {
+		t.Fatal("telegram should not send ordinary documents when media upload is disabled")
 	}
 	if disabled.shouldSendMediaAttachment(videoItem) {
 		t.Fatal("telegram should not send videos when media upload is disabled")
@@ -321,6 +336,30 @@ func TestTelegramAllowsParserCardsWhenMediaDisabled(t *testing.T) {
 	enabled := &tgBotDriver{mediaEnabled: true}
 	if !enabled.shouldSendMediaAttachment(ordinaryItem) {
 		t.Fatal("telegram should send ordinary media when media upload is enabled")
+	}
+}
+
+func TestTelegramLinuxdoCardDocumentDecision(t *testing.T) {
+	tests := []struct {
+		name          string
+		telegramEvent bool
+		platform      string
+		height        int
+		want          bool
+	}{
+		{name: "long linuxdo card", telegramEvent: true, platform: "linuxdo", height: 4174, want: true},
+		{name: "threshold linuxdo card", telegramEvent: true, platform: "Linux.do", height: telegramLinuxdoDocumentMinHeight, want: true},
+		{name: "short linuxdo card", telegramEvent: true, platform: "linuxdo", height: telegramLinuxdoDocumentMinHeight - 1},
+		{name: "other platform long card", telegramEvent: true, platform: "weibo", height: 4174},
+		{name: "other channel long card", platform: "linuxdo", height: 4174},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldSendTelegramLinuxdoCardAsDocument(test.telegramEvent, test.platform, test.height); got != test.want {
+				t.Fatalf("document decision=%v, want %v", got, test.want)
+			}
+		})
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"image/png"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,9 +33,10 @@ import (
 )
 
 const (
-	defaultMaxVideoMB = 1000
-	defaultTTLMinutes = 60
-	defaultTimeoutSec = 180
+	defaultMaxVideoMB                = 1000
+	defaultTTLMinutes                = 60
+	defaultTimeoutSec                = 180
+	telegramLinuxdoDocumentMinHeight = 2400
 
 	accessNone      = "none"
 	accessBlacklist = "blacklist"
@@ -1431,23 +1433,57 @@ func sendInfoCard(ctx *zero.Ctx, cfg config, meta mediaMeta) bool {
 		ctx.SendChain(message.Text(buildText(meta)))
 		return false
 	}
+	tgbotEvent := isTelegramBotEvent(ctx)
 	target := fileURI(card)
-	if !isOfficialQQBotEvent(ctx) && !isTelegramBotEvent(ctx) {
+	if !isOfficialQQBotEvent(ctx) && !tgbotEvent {
 		target = oneBotLocalMediaTarget(card)
 	}
-	res := ctx.SendChain(message.Image(target))
-	if isTelegramBotEvent(ctx) && res.ID() == 0 {
+	cardSegment := message.Image(target)
+	mode := tgBotMediaPhoto
+	width, height := 0, 0
+	if isTelegramLinuxdoCard(tgbotEvent, meta.Platform) {
+		width, height, err = pngImageDimensions(card)
+		if err != nil {
+			logrus.Warnf("[mediaparser] inspect_info_card_failed channel=tgbot platform=%s path=%s error=%v", meta.Platform, card, err)
+		} else if shouldSendTelegramLinuxdoCardAsDocument(tgbotEvent, meta.Platform, height) {
+			cardSegment = message.File(target, filepath.Base(card))
+			mode = tgBotMediaDocument
+		}
+	}
+	res := ctx.SendChain(cardSegment)
+	if tgbotEvent && res.ID() == 0 {
 		text := strings.TrimSpace(buildText(meta))
 		if text != "" {
 			ctx.SendChain(message.Text(text))
 		}
-		logrus.Warnf("[mediaparser] sent_info_card_fallback_text channel=tgbot platform=%s title=%q path=%s target=%s fallback_text=%t", meta.Platform, meta.Title, card, target, text != "")
+		logrus.Warnf("[mediaparser] sent_info_card_fallback_text channel=tgbot platform=%s title=%q path=%s target=%s mode=%s width=%d height=%d fallback_text=%t", meta.Platform, meta.Title, card, target, mode, width, height, text != "")
 		scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 		return false
 	}
-	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s target=%s", meta.Platform, meta.Title, card, target)
+	logrus.Infof("[mediaparser] sent_info_card platform=%s title=%q path=%s target=%s mode=%s width=%d height=%d", meta.Platform, meta.Title, card, target, mode, width, height)
 	scheduleDelete(card, time.Duration(cfg.CacheTTLMinutes)*time.Minute)
 	return true
+}
+
+func pngImageDimensions(path string) (width, height int, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+	config, err := png.DecodeConfig(file)
+	if err != nil {
+		return 0, 0, err
+	}
+	return config.Width, config.Height, nil
+}
+
+func shouldSendTelegramLinuxdoCardAsDocument(telegramEvent bool, platform string, height int) bool {
+	return isTelegramLinuxdoCard(telegramEvent, platform) && height >= telegramLinuxdoDocumentMinHeight
+}
+
+func isTelegramLinuxdoCard(telegramEvent bool, platform string) bool {
+	return telegramEvent && normalizePlatformName(platform) == "linuxdo"
 }
 
 func shouldSendLongArticleCards(cfg config, meta mediaMeta) bool {

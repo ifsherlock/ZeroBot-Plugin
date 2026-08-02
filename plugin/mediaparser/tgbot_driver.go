@@ -385,7 +385,7 @@ func (d *tgBotDriver) shouldSendMediaAttachment(item tgBotMediaAttachment) bool 
 }
 
 func tgBotAlwaysAllowedMedia(item tgBotMediaAttachment) bool {
-	if item.kind != tgBotMediaPhoto || item.target == "" {
+	if (item.kind != tgBotMediaPhoto && item.kind != tgBotMediaDocument) || item.target == "" {
 		return false
 	}
 	target := stripMediaPrefix(item.target)
@@ -803,6 +803,9 @@ func tgBotAllowedLocalMediaPath(path string) bool {
 }
 
 func tgBotMediaKindByName(name, fallback string) string {
+	if fallback == tgBotMediaDocument {
+		return tgBotMediaDocument
+	}
 	ext := strings.ToLower(filepath.Ext(strings.Split(name, "?")[0]))
 	switch ext {
 	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
