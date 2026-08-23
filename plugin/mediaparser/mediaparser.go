@@ -36,8 +36,6 @@ const (
 	defaultMaxVideoMB                = 1000
 	defaultTTLMinutes                = 60
 	defaultTimeoutSec                = 180
-	oneBotImageBatchMaxCount         = 4
-	oneBotImageBatchMaxBytes         = 8 * 1024 * 1024
 	telegramLinuxdoDocumentMinHeight = 2400
 
 	accessNone      = "none"
@@ -1754,7 +1752,7 @@ func sendMediaNodes(ctx *zero.Ctx, cfg config, meta *mediaMeta) error {
 		return sendCombinedMediaForward(ctx, meta)
 	}
 	if len(meta.VideoURLs) == 0 && len(meta.ImageURLs) > 0 {
-		return sendImageGalleryDirect(ctx, meta)
+		return sendImageGalleryForward(ctx, meta)
 	}
 	for i := range meta.VideoURLs {
 		target := mediaVideoTarget(meta, i)
@@ -2044,101 +2042,36 @@ func sendCombinedMediaForward(ctx *zero.Ctx, meta *mediaMeta) error {
 	return nil
 }
 
-type oneBotImagePayload struct {
-	segment message.Segment
-	bytes   int64
-}
-
-func sendImageGalleryDirect(ctx *zero.Ctx, meta *mediaMeta) error {
-	images := make([]oneBotImagePayload, 0, len(meta.ImageURLs))
+func sendImageGalleryForward(ctx *zero.Ctx, meta *mediaMeta) error {
+	nodes := message.Message{}
+	botName := "视频解析bot"
+	botID := ctx.Event.SelfID
+	imageNode := message.Message{}
 	for i := range meta.ImageURLs {
 		target := mediaImageTarget(meta, i)
 		if target == "" {
 			continue
 		}
-		images = append(images, oneBotImagePayload{
-			segment: message.Image(target),
-			bytes:   mediaImageLocalBytes(meta, i),
-		})
-		logrus.Infof("[mediaparser] prepared_direct_image platform=%s title=%q target=%s", meta.Platform, meta.Title, target)
+		imageNode = append(imageNode, message.Image(target))
+		logrus.Infof("[mediaparser] prepared_forward_image platform=%s title=%q target=%s", meta.Platform, meta.Title, target)
 	}
-	batches := buildOneBotImageBatches(images, galleryForwardText(meta))
-	for i, batch := range batches {
-		started := time.Now()
-		messageID := ctx.Send(batch).ID()
-		imageCount := countMessageSegments(batch, "image")
-		if messageID == 0 {
-			logrus.Warnf("[mediaparser] sent_image_gallery_direct_failed platform=%s title=%q batch=%d/%d images=%d elapsed=%s", meta.Platform, meta.Title, i+1, len(batches), imageCount, time.Since(started).Round(time.Millisecond))
-			return fmt.Errorf("QQ 直接发送图片批次失败: batch=%d/%d images=%d", i+1, len(batches), imageCount)
-		}
-		logrus.Infof("[mediaparser] sent_image_gallery_direct platform=%s title=%q batch=%d/%d images=%d message_id=%d elapsed=%s", meta.Platform, meta.Title, i+1, len(batches), imageCount, messageID, time.Since(started).Round(time.Millisecond))
+	if len(imageNode) > 0 {
+		nodes = append(nodes, message.CustomNode(botName, botID, imageNode))
 	}
+	if text := galleryForwardText(meta); text != "" {
+		nodes = append(nodes, message.CustomNode(botName, botID, message.Message{message.Text(text)}))
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+	var resID int64
+	if ctx.Event.GroupID != 0 {
+		resID = ctx.SendGroupForwardMessage(ctx.Event.GroupID, nodes).Get("message_id").Int()
+	} else {
+		resID = ctx.SendPrivateForwardMessage(ctx.Event.UserID, nodes).Get("message_id").Int()
+	}
+	logrus.Infof("[mediaparser] sent_image_gallery_forward platform=%s title=%q nodes=%d images=%d sender=%s(%d) message_id=%d", meta.Platform, meta.Title, len(nodes), len(imageNode), botName, botID, resID)
 	return nil
-}
-
-func buildOneBotImageBatches(images []oneBotImagePayload, caption string) []message.Message {
-	batches := make([]message.Message, 0, (len(images)+oneBotImageBatchMaxCount-1)/oneBotImageBatchMaxCount)
-	current := make(message.Message, 0, oneBotImageBatchMaxCount+1)
-	var currentBytes int64
-	flush := func() {
-		if len(current) == 0 {
-			return
-		}
-		batches = append(batches, current)
-		current = make(message.Message, 0, oneBotImageBatchMaxCount+1)
-		currentBytes = 0
-	}
-
-	for _, image := range images {
-		if image.segment.Type != "image" {
-			continue
-		}
-		exceedsCount := len(current) >= oneBotImageBatchMaxCount
-		exceedsBytes := len(current) > 0 && image.bytes > 0 && currentBytes+image.bytes > oneBotImageBatchMaxBytes
-		if exceedsCount || exceedsBytes {
-			flush()
-		}
-		current = append(current, image.segment)
-		if image.bytes > 0 {
-			currentBytes += image.bytes
-		}
-	}
-	flush()
-
-	caption = strings.TrimSpace(caption)
-	if caption == "" {
-		return batches
-	}
-	if len(batches) == 0 {
-		return []message.Message{{message.Text(caption)}}
-	}
-	batches[len(batches)-1] = append(batches[len(batches)-1], message.Text(caption))
-	return batches
-}
-
-func mediaImageLocalBytes(meta *mediaMeta, i int) int64 {
-	if meta == nil || i < 0 || i >= len(meta.ImageURLs) {
-		return 0
-	}
-	pathIndex := len(meta.VideoURLs) + i
-	if pathIndex >= len(meta.FilePaths) || strings.TrimSpace(meta.FilePaths[pathIndex]) == "" {
-		return 0
-	}
-	info, err := os.Stat(meta.FilePaths[pathIndex])
-	if err != nil || info.IsDir() {
-		return 0
-	}
-	return info.Size()
-}
-
-func countMessageSegments(msg message.Message, segmentType string) int {
-	count := 0
-	for _, segment := range msg {
-		if segment.Type == segmentType {
-			count++
-		}
-	}
-	return count
 }
 
 func galleryForwardText(meta *mediaMeta) string {

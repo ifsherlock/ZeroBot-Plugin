@@ -23,7 +23,6 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/tidwall/gjson"
 	zero "github.com/wdvxdr1123/ZeroBot"
-	"github.com/wdvxdr1123/ZeroBot/message"
 )
 
 func TestPermissionOKSeparatesPrivateAndGroupAccess(t *testing.T) {
@@ -2725,49 +2724,6 @@ func TestCombinedMediaPlatformsNeedMixedItems(t *testing.T) {
 		if !shouldForwardCombinedMedia(&meta) || !shouldRenderAsGalleryCard(meta) || shouldDrawPlayOverlay(meta) {
 			t.Fatalf("%s mixed media rules not applied", platform)
 		}
-	}
-}
-
-func TestBuildOneBotImageBatchesLimitsCountAndKeepsCaption(t *testing.T) {
-	images := make([]oneBotImagePayload, 0, 9)
-	for i := 0; i < 9; i++ {
-		images = append(images, oneBotImagePayload{
-			segment: message.Image(fmt.Sprintf("https://example.com/%d.jpg", i)),
-			bytes:   512 * 1024,
-		})
-	}
-
-	batches := buildOneBotImageBatches(images, "标题\n正文")
-	if len(batches) != 3 {
-		t.Fatalf("batches=%d, want 3", len(batches))
-	}
-	for i, batch := range batches {
-		if got := countMessageSegments(batch, "image"); got > oneBotImageBatchMaxCount {
-			t.Fatalf("batch %d images=%d, max=%d", i, got, oneBotImageBatchMaxCount)
-		}
-	}
-	last := batches[len(batches)-1]
-	if len(last) != 2 || last[0].Type != "image" || last[1].Type != "text" || last[1].Data["text"] != "标题\n正文" {
-		t.Fatalf("last batch=%#v", last)
-	}
-}
-
-func TestBuildOneBotImageBatchesLimitsKnownBytes(t *testing.T) {
-	images := []oneBotImagePayload{
-		{segment: message.Image("https://example.com/1.jpg"), bytes: 5 * 1024 * 1024},
-		{segment: message.Image("https://example.com/2.jpg"), bytes: 4 * 1024 * 1024},
-		{segment: message.Image("https://example.com/3.jpg"), bytes: 1 * 1024 * 1024},
-	}
-
-	batches := buildOneBotImageBatches(images, "")
-	if len(batches) != 2 {
-		t.Fatalf("batches=%d, want 2", len(batches))
-	}
-	if got := countMessageSegments(batches[0], "image"); got != 1 {
-		t.Fatalf("first batch images=%d, want 1", got)
-	}
-	if got := countMessageSegments(batches[1], "image"); got != 2 {
-		t.Fatalf("second batch images=%d, want 2", got)
 	}
 }
 
