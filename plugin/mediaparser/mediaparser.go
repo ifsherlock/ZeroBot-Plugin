@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"image"
 	"image/png"
 	"io"
 	"net/http"
@@ -2166,7 +2167,7 @@ func processDownloads(cfg config, meta *mediaMeta) error {
 				return
 			}
 			imageSem <- struct{}{}
-			path, _, err := downloadHTTPFile(cfg, meta.Platform, group[0], meta.ImageHeads, cacheFile(meta, "image", i, ".jpg"))
+			path, _, err := downloadHTTPImageFile(cfg, meta.Platform, group[0], meta.ImageHeads, cacheFile(meta, "image", i, ".jpg"))
 			<-imageSem
 			if err != nil {
 				meta.ImageModes[i] = "skip"
@@ -2287,6 +2288,70 @@ func downloadHTTPFile(cfg config, platform, raw string, headers map[string]strin
 	if err != nil {
 		_ = os.Remove(out)
 		return "", 0, err
+	}
+	return out, float64(n) / 1024 / 1024, nil
+}
+
+func downloadHTTPImageFile(cfg config, platform, raw string, headers map[string]string, out string) (string, float64, error) {
+	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
+	if cfg.TimeoutSeconds <= 0 {
+		timeout = 45 * time.Second
+	}
+	client := httpClientForPlatform(cfg, platform, timeout, true)
+	var lastErr error
+	for _, mode := range imageHeaderAttempts(raw, headers) {
+		path, sizeMB, err := downloadHTTPImageFileAttempt(client, raw, headers, out, mode)
+		if err == nil {
+			return path, sizeMB, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = errors.New("图片请求无可用尝试")
+	}
+	return "", 0, lastErr
+}
+
+func downloadHTTPImageFileAttempt(client *http.Client, raw string, headers map[string]string, out string, mode imageHeaderMode) (string, float64, error) {
+	resp, err := doImageRequest(client, raw, headers, mode)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", 0, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
+		return "", 0, err
+	}
+	f, err := os.Create(out)
+	if err != nil {
+		return "", 0, err
+	}
+	n, copyErr := io.Copy(f, resp.Body)
+	closeErr := f.Close()
+	if copyErr != nil {
+		_ = os.Remove(out)
+		return "", 0, copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(out)
+		return "", 0, closeErr
+	}
+	check, err := os.Open(out)
+	if err != nil {
+		_ = os.Remove(out)
+		return "", 0, err
+	}
+	_, _, decodeErr := image.DecodeConfig(check)
+	closeErr = check.Close()
+	if decodeErr != nil {
+		_ = os.Remove(out)
+		return "", 0, fmt.Errorf("响应不是有效图片: %w", decodeErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(out)
+		return "", 0, closeErr
 	}
 	return out, float64(n) / 1024 / 1024, nil
 }

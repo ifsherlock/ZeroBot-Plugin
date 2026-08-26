@@ -15,6 +15,16 @@ import (
 	xproxy "golang.org/x/net/proxy"
 )
 
+const cardImageAccept = "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+
+type imageHeaderMode uint8
+
+const (
+	imageHeadersOriginal imageHeaderMode = iota
+	imageHeadersNoReferrer
+	imageHeadersSourceOrigin
+)
+
 func fetchText(raw string, headers map[string]string, redirects bool) (string, string, int, error) {
 	return fetchTextWithClient(raw, headers, redirects, nil)
 }
@@ -124,6 +134,141 @@ func httpClientForPlatform(cfg config, platform string, timeout time.Duration, r
 	}
 	c.Transport = transport
 	return c
+}
+
+func imageHeaderAttempts(raw string, headers map[string]string) []imageHeaderMode {
+	source := trustedImageSource(headers)
+	target, err := url.Parse(raw)
+	if err == nil && sameHTTPOrigin(target, source) {
+		return []imageHeaderMode{imageHeadersOriginal, imageHeadersNoReferrer, imageHeadersSourceOrigin}
+	}
+	if source != nil {
+		return []imageHeaderMode{imageHeadersNoReferrer, imageHeadersSourceOrigin}
+	}
+	return []imageHeaderMode{imageHeadersNoReferrer}
+}
+
+func doImageRequest(baseClient *http.Client, raw string, headers map[string]string, mode imageHeaderMode) (*http.Response, error) {
+	if baseClient == nil {
+		baseClient = &http.Client{Timeout: 18 * time.Second}
+	}
+	client := *baseClient
+	previousRedirect := client.CheckRedirect
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		req.Header = imageRequestHeaders(req.URL, headers, mode)
+		if previousRedirect != nil {
+			return previousRedirect(req, via)
+		}
+		return nil
+	}
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = imageRequestHeaders(req.URL, headers, mode)
+	return client.Do(req)
+}
+
+func imageRequestHeaders(target *url.URL, headers map[string]string, mode imageHeaderMode) http.Header {
+	base := make(http.Header, len(headers))
+	for key, value := range headers {
+		base.Set(key, value)
+	}
+	source := trustedImageSource(headers)
+	sameOrigin := sameHTTPOrigin(target, source)
+	out := make(http.Header)
+
+	if sameOrigin && (mode == imageHeadersOriginal || mode == imageHeadersNoReferrer) {
+		for key, values := range base {
+			if imageHopByHopHeader(key) {
+				continue
+			}
+			out[key] = append([]string(nil), values...)
+		}
+		if mode == imageHeadersNoReferrer {
+			out.Del("Referer")
+			out.Del("Origin")
+		}
+	} else {
+		for _, key := range []string{"User-Agent", "Accept-Language", "Cache-Control"} {
+			if value := base.Get(key); value != "" {
+				out.Set(key, value)
+			}
+		}
+		if mode == imageHeadersSourceOrigin && source != nil {
+			out.Set("Referer", httpOrigin(source)+"/")
+			if origin, err := url.Parse(base.Get("Origin")); err == nil && sameHTTPOrigin(origin, source) {
+				out.Set("Origin", httpOrigin(source))
+			}
+		}
+	}
+
+	if out.Get("User-Agent") == "" {
+		out.Set("User-Agent", defaultUA)
+	}
+	out.Set("Accept", cardImageAccept)
+	return out
+}
+
+func trustedImageSource(headers map[string]string) *url.URL {
+	base := make(http.Header, len(headers))
+	for key, value := range headers {
+		base.Set(key, value)
+	}
+	for _, raw := range []string{base.Get("Referer"), base.Get("Origin")} {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err == nil && u.Host != "" && (strings.EqualFold(u.Scheme, "http") || strings.EqualFold(u.Scheme, "https")) {
+			return u
+		}
+	}
+	return nil
+}
+
+func sameHTTPOrigin(a, b *url.URL) bool {
+	if a == nil || b == nil || a.Host == "" || b.Host == "" {
+		return false
+	}
+	if !strings.EqualFold(a.Scheme, b.Scheme) || !strings.EqualFold(a.Hostname(), b.Hostname()) {
+		return false
+	}
+	return httpOriginPort(a) == httpOriginPort(b)
+}
+
+func httpOriginPort(u *url.URL) string {
+	if port := u.Port(); port != "" {
+		return port
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return "443"
+	}
+	if strings.EqualFold(u.Scheme, "http") {
+		return "80"
+	}
+	return ""
+}
+
+func httpOrigin(u *url.URL) string {
+	host := strings.ToLower(u.Hostname())
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	port := u.Port()
+	if port != "" && !((strings.EqualFold(u.Scheme, "https") && port == "443") || (strings.EqualFold(u.Scheme, "http") && port == "80")) {
+		host += ":" + port
+	}
+	return strings.ToLower(u.Scheme) + "://" + host
+}
+
+func imageHopByHopHeader(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade", "host":
+		return true
+	default:
+		return false
+	}
 }
 
 func transportForProxy(rawProxy string) (*http.Transport, error) {

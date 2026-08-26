@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2811,6 +2812,193 @@ func TestFetchCardImageGroupFallsBackFromBlankCandidate(t *testing.T) {
 	img := fetchCardImageGroup([]string{server.URL + "/blank.png", server.URL + "/good.png"}, nil)
 	if isBlankCardImage(img) {
 		t.Fatal("expected fallback image to be non-blank")
+	}
+}
+
+func TestFetchCardImageUsesAnonymousHeadersAcrossOrigins(t *testing.T) {
+	good := testGradientImage(32, 32, color.RGBA{R: 16, G: 32, B: 48, A: 255}, color.RGBA{R: 180, G: 80, B: 40, A: 255})
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		for _, key := range []string{"Cookie", "Authorization", "Proxy-Authorization", "Origin", "Referer", "X-API-Key"} {
+			if value := r.Header.Get(key); value != "" {
+				t.Errorf("cross-origin request leaked %s=%q", key, value)
+			}
+		}
+		if !strings.Contains(r.Header.Get("Accept"), "image/") {
+			t.Errorf("unexpected image Accept=%q", r.Header.Get("Accept"))
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, good)
+	}))
+	defer server.Close()
+
+	headers := map[string]string{
+		"User-Agent":          "test-image-agent",
+		"Referer":             "https://forum.example/thread?id=secret",
+		"Origin":              "https://forum.example",
+		"Cookie":              "session=secret",
+		"Authorization":       "Bearer secret",
+		"Proxy-Authorization": "Basic secret",
+		"X-API-Key":           "secret",
+	}
+	img := fetchCardImage(server.URL+"/image.png", headers)
+	if isBlankCardImage(img) {
+		t.Fatal("cross-origin anonymous request should return the image")
+	}
+	if requests.Load() != 1 {
+		t.Fatalf("anonymous cross-origin success should need one request, got %d", requests.Load())
+	}
+	if headers["Cookie"] != "session=secret" || headers["Referer"] != "https://forum.example/thread?id=secret" {
+		t.Fatalf("caller headers were mutated: %#v", headers)
+	}
+}
+
+func TestFetchCardImageFallsBackToSanitizedSourceOrigin(t *testing.T) {
+	good := testGradientImage(32, 32, color.RGBA{R: 20, G: 50, B: 80, A: 255}, color.RGBA{R: 200, G: 90, B: 30, A: 255})
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := requests.Add(1)
+		if r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "" || r.Header.Get("X-API-Key") != "" {
+			t.Errorf("cross-origin retry leaked credentials: %#v", r.Header)
+		}
+		if request == 1 {
+			if r.Header.Get("Referer") != "" || r.Header.Get("Origin") != "" {
+				t.Errorf("first cross-origin attempt should be anonymous: %#v", r.Header)
+			}
+			http.Error(w, "referrer required", http.StatusForbidden)
+			return
+		}
+		if got := r.Header.Get("Referer"); got != "https://forum.example/" {
+			t.Errorf("retry Referer=%q", got)
+		}
+		if got := r.Header.Get("Origin"); got != "https://forum.example" {
+			t.Errorf("retry Origin=%q", got)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, good)
+	}))
+	defer server.Close()
+
+	img := fetchCardImage(server.URL+"/image.png", map[string]string{
+		"Referer":       "https://forum.example/private/thread?token=value",
+		"Origin":        "https://forum.example",
+		"Cookie":        "session=secret",
+		"Authorization": "Bearer secret",
+		"X-API-Key":     "secret",
+	})
+	if isBlankCardImage(img) {
+		t.Fatal("sanitized source-origin retry should return the image")
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("expected anonymous request and one compatibility retry, got %d", requests.Load())
+	}
+}
+
+func TestFetchCardImageKeepsCredentialsOnSameOrigin(t *testing.T) {
+	good := testGradientImage(32, 32, color.RGBA{R: 30, G: 60, B: 90, A: 255}, color.RGBA{R: 210, G: 100, B: 40, A: 255})
+	var server *httptest.Server
+	var requests atomic.Int32
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if got := r.Header.Get("Cookie"); got != "session=same-origin" {
+			t.Errorf("same-origin Cookie=%q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer same-origin" {
+			t.Errorf("same-origin Authorization=%q", got)
+		}
+		if got := r.Header.Get("Referer"); got != server.URL+"/thread" {
+			t.Errorf("same-origin Referer=%q", got)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, good)
+	}))
+	defer server.Close()
+
+	img := fetchCardImage(server.URL+"/image.png", map[string]string{
+		"Referer":       server.URL + "/thread",
+		"Cookie":        "session=same-origin",
+		"Authorization": "Bearer same-origin",
+	})
+	if isBlankCardImage(img) || requests.Load() != 1 {
+		t.Fatalf("same-origin request failed, requests=%d", requests.Load())
+	}
+}
+
+func TestFetchCardImageStripsCredentialsAfterCrossOriginRedirect(t *testing.T) {
+	good := testGradientImage(32, 32, color.RGBA{R: 40, G: 70, B: 100, A: 255}, color.RGBA{R: 220, G: 110, B: 50, A: 255})
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, key := range []string{"Cookie", "Authorization", "Origin", "Referer", "X-API-Key"} {
+			if value := r.Header.Get(key); value != "" {
+				t.Errorf("redirect target leaked %s=%q", key, value)
+			}
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, good)
+	}))
+	defer target.Close()
+
+	var source *httptest.Server
+	source = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "session=source" || r.Header.Get("Authorization") != "Bearer source" {
+			t.Errorf("source request lost same-origin credentials: %#v", r.Header)
+		}
+		http.Redirect(w, r, target.URL+"/image.png", http.StatusFound)
+	}))
+	defer source.Close()
+
+	img := fetchCardImage(source.URL+"/redirect", map[string]string{
+		"Referer":       source.URL + "/thread",
+		"Origin":        source.URL,
+		"Cookie":        "session=source",
+		"Authorization": "Bearer source",
+		"X-API-Key":     "secret",
+	})
+	if isBlankCardImage(img) {
+		t.Fatal("cross-origin redirect should still return the image")
+	}
+}
+
+func TestDownloadHTTPImageFileRetriesInvalidAnonymousResponse(t *testing.T) {
+	good := testGradientImage(32, 32, color.RGBA{R: 50, G: 80, B: 110, A: 255}, color.RGBA{R: 230, G: 120, B: 60, A: 255})
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := requests.Add(1)
+		if r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "" {
+			t.Errorf("download request leaked credentials: %#v", r.Header)
+		}
+		if request == 1 {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = io.WriteString(w, "not an image")
+			return
+		}
+		if got := r.Header.Get("Referer"); got != "https://forum.example/" {
+			t.Errorf("download retry Referer=%q", got)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, good)
+	}))
+	defer server.Close()
+
+	out := filepath.Join(t.TempDir(), "image.bin")
+	path, _, err := downloadHTTPImageFile(config{TimeoutSeconds: 5}, "keylol", server.URL+"/image", map[string]string{
+		"Referer":       "https://forum.example/private/thread",
+		"Cookie":        "session=secret",
+		"Authorization": "Bearer secret",
+	}, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != out || requests.Load() != 2 {
+		t.Fatalf("unexpected download result path=%q requests=%d", path, requests.Load())
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, _, err := image.DecodeConfig(f); err != nil {
+		t.Fatalf("downloaded file is not an image: %v", err)
 	}
 }
 

@@ -1339,10 +1339,16 @@ func renderKeylolThreadCard(meta mediaMeta, fontBytes []byte) (string, error) {
 		switch block.Kind {
 		case "image":
 			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
+			if img == nil {
+				continue
+			}
 			iw, ih := keylolImageDrawSize(img, contentW)
 			renderBlocks = append(renderBlocks, keylolRenderBlock{kind: "image", url: block.URL, img: img, width: iw, height: ih})
 		case "inline_image":
 			img := keylolPrepareImage(fetchCardImage(block.URL, meta.ImageHeads))
+			if img == nil {
+				continue
+			}
 			iw, ih := keylolInlineImageDrawSize(img)
 			if i+1 < len(blocks) && (blocks[i+1].Kind == "text" || blocks[i+1].Kind == "heading2") {
 				next := blocks[i+1]
@@ -2614,29 +2620,23 @@ func fetchCardImage(raw string, headers map[string]string) image.Image {
 	if raw == "" {
 		return nil
 	}
-	req, err := http.NewRequest(http.MethodGet, raw, nil)
-	if err != nil {
-		return nil
+	client := &http.Client{Timeout: 18 * time.Second}
+	for _, mode := range imageHeaderAttempts(raw, headers) {
+		img := fetchCardImageAttempt(client, raw, headers, mode)
+		if img != nil {
+			return img
+		}
 	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	if strings.Contains(req.Header.Get("Accept"), "image/avif") {
-		req.Header.Set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-	}
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", defaultUA)
-	}
-	if req.Header.Get("Accept") == "" {
-		req.Header.Set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-	}
-	c := &http.Client{Timeout: 18 * time.Second}
-	resp, err := c.Do(req)
+	return nil
+}
+
+func fetchCardImageAttempt(client *http.Client, raw string, headers map[string]string, mode imageHeaderMode) image.Image {
+	resp, err := doImageRequest(client, raw, headers, mode)
 	if err != nil {
 		return nil
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 18<<20))
