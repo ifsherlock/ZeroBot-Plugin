@@ -3521,6 +3521,38 @@ func TestRenderXiaoheiheLivePreview(t *testing.T) {
 	t.Logf("blocks=%d images=%d card=%s", len(meta.XiaoheiheBlocks), len(meta.ImageURLs), out)
 }
 
+func TestRenderXiaoheiheRemoteBrowserPreview(t *testing.T) {
+	endpoint := strings.TrimSpace(os.Getenv("MEDIAPARSER_XIAOHEIHE_BROWSER_CDP_URL"))
+	if endpoint == "" {
+		t.Skip("set MEDIAPARSER_XIAOHEIHE_BROWSER_CDP_URL to render through a remote browser")
+	}
+
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join("..", "..", "build", "mediaparser-live-preview")
+	defer func() { cacheDir = oldCacheDir }()
+	stateMu.Lock()
+	oldConfig := currentConf
+	currentConf.BrowserCDPURL = endpoint
+	stateMu.Unlock()
+	defer func() {
+		stateMu.Lock()
+		currentConf = oldConfig
+		stateMu.Unlock()
+	}()
+
+	meta := mediaMeta{
+		Platform:             "xiaoheihe",
+		URL:                  "https://www.xiaoheihe.cn/app/bbs/link/47fe725e04cC",
+		SourceURL:            "https://www.xiaoheihe.cn/app/bbs/link/47fe725e04cC",
+		XiaoheiheBrowserShot: true,
+	}
+	out, err := renderInfoCard(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("remote card=%s", out)
+}
+
 func testGradientImage(w, h int, a, b color.RGBA) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {

@@ -25,8 +25,8 @@ func TestXiaoheiheMobileScreenshotEnabled(t *testing.T) {
 }
 
 func TestXiaoheiheMobileScreenshotViewport(t *testing.T) {
-	if xiaoheiheMobileWidth != 430 || xiaoheiheMobileCaptureHeight != 10000 || xiaoheiheMobileDeviceScale != 2 {
-		t.Fatalf("unexpected mobile viewport: %dx%d@%d", xiaoheiheMobileWidth, xiaoheiheMobileCaptureHeight, xiaoheiheMobileDeviceScale)
+	if xiaoheiheMobileWidth != 430 || xiaoheiheMobileViewportHeight != 932 || xiaoheiheMobileMaxCaptureHeight != 10000 || xiaoheiheMobileDeviceScale != 2 {
+		t.Fatalf("unexpected mobile viewport: %dx%d max=%d@%d", xiaoheiheMobileWidth, xiaoheiheMobileViewportHeight, xiaoheiheMobileMaxCaptureHeight, xiaoheiheMobileDeviceScale)
 	}
 }
 

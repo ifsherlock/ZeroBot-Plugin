@@ -24,7 +24,8 @@ const (
 	xiaoheiheBrowserEnv              = "XIAOHEIHE_MOBILE_SCREENSHOT"
 	xiaoheiheBrowserPathEnv          = "XIAOHEIHE_BROWSER_PATH"
 	xiaoheiheMobileWidth             = 430
-	xiaoheiheMobileCaptureHeight     = 10000
+	xiaoheiheMobileViewportHeight    = 932
+	xiaoheiheMobileMaxCaptureHeight  = 10000
 	xiaoheiheMobileDeviceScale       = 2
 	xiaoheiheMobileScreenshotWait    = 7 * time.Second
 	xiaoheiheMobileScreenshotTimeout = 30 * time.Second
@@ -65,15 +66,28 @@ func renderXiaoheiheMobileScreenshot(meta mediaMeta) (string, error) {
 		emulation.SetUserAgentOverride(xiaoheiheMobileUserAgent).
 			WithAcceptLanguage("zh-CN,zh;q=0.9").
 			WithPlatform("Android"),
-		emulation.SetDeviceMetricsOverride(xiaoheiheMobileWidth, xiaoheiheMobileCaptureHeight, xiaoheiheMobileDeviceScale, true).
+		emulation.SetDeviceMetricsOverride(xiaoheiheMobileWidth, xiaoheiheMobileViewportHeight, xiaoheiheMobileDeviceScale, true).
 			WithScreenWidth(xiaoheiheMobileWidth).
-			WithScreenHeight(xiaoheiheMobileCaptureHeight),
+			WithScreenHeight(xiaoheiheMobileViewportHeight),
 		chromedp.Navigate(pageURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Sleep(xiaoheiheMobileScreenshotWait),
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			_, _, _, _, _, contentSize, metricsErr := page.GetLayoutMetrics().Do(ctx)
+			if metricsErr != nil {
+				return metricsErr
+			}
+			if contentSize == nil || contentSize.Width <= 0 || contentSize.Height <= 0 {
+				return fmt.Errorf("browser returned an invalid page size")
+			}
+			height := min(contentSize.Height, float64(xiaoheiheMobileMaxCaptureHeight))
 			var captureErr error
-			screenshot, captureErr = page.CaptureScreenshot().WithFormat(page.CaptureScreenshotFormatPng).Do(ctx)
+			screenshot, captureErr = page.CaptureScreenshot().
+				WithFormat(page.CaptureScreenshotFormatPng).
+				WithCaptureBeyondViewport(true).
+				WithFromSurface(true).
+				WithClip(&page.Viewport{X: 0, Y: 0, Width: contentSize.Width, Height: height, Scale: 1}).
+				Do(ctx)
 			return captureErr
 		}),
 	)
@@ -123,7 +137,7 @@ func newBrowserScreenshotContext(ctx context.Context, endpoint string) (context.
 	allocatorOptions = append(allocatorOptions,
 		chromedp.ExecPath(browser),
 		chromedp.UserDataDir(profile),
-		chromedp.WindowSize(xiaoheiheMobileWidth, xiaoheiheMobileCaptureHeight),
+		chromedp.WindowSize(xiaoheiheMobileWidth, xiaoheiheMobileViewportHeight),
 		chromedp.Flag("headless", "new"),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("hide-scrollbars", true),
