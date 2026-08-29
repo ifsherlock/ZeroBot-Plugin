@@ -72,6 +72,9 @@ func renderXiaoheiheMobileScreenshot(meta mediaMeta) (string, error) {
 		chromedp.Navigate(pageURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Sleep(xiaoheiheMobileScreenshotWait),
+		chromedp.Evaluate(`Array.from(document.querySelectorAll('a, button')).forEach((element) => {
+			if (element.textContent.trim() === '打开看看') element.style.display = 'none';
+		})`, nil),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			_, _, _, _, _, contentSize, metricsErr := page.GetLayoutMetrics().Do(ctx)
 			if metricsErr != nil {
