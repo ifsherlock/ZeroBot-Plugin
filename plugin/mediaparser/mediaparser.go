@@ -164,6 +164,7 @@ type config struct {
 	KeylolDarkTheme              string `json:"keylol_dark_theme"`
 	KeylolASFForward             bool   `json:"keylol_asf_forward"`
 	AvoidAV1                     bool   `json:"avoid_av1"`
+	BrowserCDPURL                string `json:"browser_cdp_url"`
 
 	CookieCloudEnabled         bool            `json:"cookiecloud_enabled"`
 	CookieCloudServer          string          `json:"cookiecloud_server"`
@@ -181,29 +182,31 @@ type config struct {
 }
 
 type mediaMeta struct {
-	URL              string
-	SourceURL        string
-	Platform         string
-	Title            string
-	Author           string
-	Avatar           string
-	Timestamp        string
-	Desc             string
-	Cover            string
-	VideoURLs        [][]string
-	ImageURLs        [][]string
-	VideoHeads       map[string]string
-	ImageHeads       map[string]string
-	ForceLocal       bool
-	AccessText       string
-	Error            string
-	KeylolBlocks     []keylolBlock
-	KeylolCategory   string
-	LinuxdoHTML      string
-	ArticleCard      bool
-	LongArticleCard  bool
-	LongArticlePart  int
-	LongArticleTotal int
+	URL                  string
+	SourceURL            string
+	Platform             string
+	Title                string
+	Author               string
+	Avatar               string
+	Timestamp            string
+	Desc                 string
+	Cover                string
+	VideoURLs            [][]string
+	ImageURLs            [][]string
+	VideoHeads           map[string]string
+	ImageHeads           map[string]string
+	ForceLocal           bool
+	AccessText           string
+	Error                string
+	KeylolBlocks         []keylolBlock
+	KeylolCategory       string
+	LinuxdoHTML          string
+	XiaoheiheBlocks      []xiaoheiheBlock
+	XiaoheiheBrowserShot bool
+	ArticleCard          bool
+	LongArticleCard      bool
+	LongArticlePart      int
+	LongArticleTotal     int
 
 	FilePaths        []string
 	VideoSizes       []float64
@@ -560,6 +563,7 @@ func normalizeConfig(cfg *config) bool {
 	cfg.LinuxdoCookie = strings.TrimSpace(cfg.LinuxdoCookie)
 	cfg.LinuxdoUA = strings.TrimSpace(cfg.LinuxdoUA)
 	cfg.LinuxdoFlaresolverrURL = strings.TrimSpace(cfg.LinuxdoFlaresolverrURL)
+	cfg.BrowserCDPURL = strings.TrimSpace(cfg.BrowserCDPURL)
 	if cfg.LinuxdoFlaresolverrTimeoutMS <= 0 {
 		cfg.LinuxdoFlaresolverrTimeoutMS = 60000
 		changed = true

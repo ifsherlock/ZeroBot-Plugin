@@ -54,6 +54,16 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 	if meta.Platform == "linuxdo" {
 		return renderLinuxdoShareCard(meta, fontBytes)
 	}
+	if meta.Platform == "xiaoheihe" && meta.XiaoheiheBrowserShot {
+		if card, err := renderXiaoheiheMobileScreenshot(meta); err == nil {
+			return card, nil
+		} else {
+			logrus.Warnf("[mediaparser] xiaoheihe_mobile_screenshot_failed url=%s error=%v; falling back to native card", meta.URL, err)
+		}
+	}
+	if meta.Platform == "xiaoheihe" && len(meta.XiaoheiheBlocks) > 0 {
+		return renderXiaoheiheThreadCard(meta, fontBytes)
+	}
 	if meta.Platform == "twitter" && meta.ArticleCard {
 		return renderTwitterArticleCard(meta, fontBytes)
 	}

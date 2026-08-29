@@ -624,6 +624,26 @@ func TestLiveUserLinks(t *testing.T) {
 	}
 }
 
+func TestExtractXiaoheiheBBSBlocksKeepsOrder(t *testing.T) {
+	raw := `[{"type":"text","text":"开头"},{"type":"img","url":"//img.example/one.jpg"},{"type":"html","text":"<p>中间<br>正文</p>"},{"type":"video","video_url":"https://video.example/two.m3u8"}]`
+	blocks := extractXiaoheiheBBSBlocks(raw)
+	if len(blocks) != 4 {
+		t.Fatalf("blocks=%+v", blocks)
+	}
+	if blocks[0].Kind != "text" || blocks[0].Text != "开头" {
+		t.Fatalf("first=%+v", blocks[0])
+	}
+	if blocks[1].Kind != "image" || blocks[1].URL != "https://img.example/one.jpg" {
+		t.Fatalf("second=%+v", blocks[1])
+	}
+	if blocks[2].Kind != "text" || !strings.Contains(blocks[2].Text, "中间") || !strings.Contains(blocks[2].Text, "正文") {
+		t.Fatalf("third=%+v", blocks[2])
+	}
+	if blocks[3].Kind != "video" || blocks[3].URL != "m3u8:https://video.example/two.m3u8" {
+		t.Fatalf("fourth=%+v", blocks[3])
+	}
+}
+
 func TestPermissionOKUsesGroupListsOnlyInGroups(t *testing.T) {
 	cfg := config{
 		PrivateAccessMode: accessBlacklist,
@@ -3479,6 +3499,26 @@ func TestRenderLiveUserCardPreview(t *testing.T) {
 		}
 		t.Logf("author=%q images=%d card=%s", meta.Author, len(meta.ImageURLs), out)
 	}
+}
+
+func TestRenderXiaoheiheLivePreview(t *testing.T) {
+	if os.Getenv("MEDIAPARSER_XIAOHEIHE_PREVIEW") == "" {
+		t.Skip("set MEDIAPARSER_XIAOHEIHE_PREVIEW=1 to render a Xiaoheihe preview")
+	}
+
+	oldCacheDir := cacheDir
+	cacheDir = filepath.Join("..", "..", "build", "mediaparser-live-preview")
+	defer func() { cacheDir = oldCacheDir }()
+
+	meta, err := parseXiaoheihe(defaultConfig(), "https://www.xiaoheihe.cn/app/bbs/link/47fe725e04cC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := renderInfoCard(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("blocks=%d images=%d card=%s", len(meta.XiaoheiheBlocks), len(meta.ImageURLs), out)
 }
 
 func testGradientImage(w, h int, a, b color.RGBA) image.Image {

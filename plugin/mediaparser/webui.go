@@ -2366,6 +2366,12 @@ button,select,input,textarea{border:1px solid var(--line);border-radius:8px;back
 </div>
 </div>
 <div class="settingsCard">
+<div class="sectionTitle"><b>浏览器截图</b><span class="muted">小黑盒当前使用，其他平台可复用。</span></div>
+<div class="settingsFields single">
+<label class="field">CDP 地址 <input id="browserCDPURL" placeholder="http://browser-host:9222"><span class="muted">填写 Chrome DevTools HTTP 地址；会自动读取动态调试 WebSocket。</span></label>
+</div>
+</div>
+<div class="settingsCard">
 <div class="sectionTitle"><b>缓存管理</b><span class="muted">查看或清理媒体缓存。</span></div>
 <div class="cacheCard">
 <div class="cacheStat"><span>缓存文件</span><b id="cacheFiles">-</b></div>
@@ -3131,6 +3137,7 @@ function render(){
  $('res').value=String(cfg.video_max_resolution||0); $('maxmb').value=cfg.max_video_mb||1000; $('ttl').value=cfg.cache_ttl_minutes||60; $('reactionEmoji').value=cfg.parse_reaction_emoji||'🍉'; $('failReactionEmoji').value=cfg.fail_reaction_emoji||'❌';
  $('youtubeExtractorArgs').value=cfg.youtube_extractor_args||'youtube:player_client=default,android;formats=missing_pot';
  $('proxy').value=cfg.proxy||'';
+ $('browserCDPURL').value=cfg.browser_cdp_url||'';
  if($('proxySummaryText')) $('proxySummaryText').textContent=cfg.proxy||'未配置';
  setSecretInput('bilibiliCookie', cfg.bilibili_cookie_set, 'SESSDATA=...; bili_jct=...');
  setSecretInput('xiaohongshuCookie', cfg.xiaohongshu_cookie_set, 'a1=...; web_session=...');
@@ -3523,7 +3530,7 @@ async function save(){
  if($('mediaShieldUserEnabled')) cfg.media_shield_user_enabled=parseList($('mediaShieldUserEnabled').value);
  if($('safetyNoticeText')) cfg.safety_filter_notice_text=String($('safetyNoticeText').value||'').trim();
  cfg.video_max_resolution=Number($('res').value); cfg.max_video_mb=Number($('maxmb').value); cfg.cache_ttl_minutes=Number($('ttl').value); cfg.parse_reaction_emoji=String($('reactionEmoji').value||'🍉').trim()||'🍉'; cfg.fail_reaction_emoji=String($('failReactionEmoji').value||'❌').trim()||'❌';
- cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim();
+ cfg.yt_dlp_cookie_file=''; cfg.youtube_cookie_file=''; cfg.instagram_cookie_file=''; cfg.youtube_extractor_args=String($('youtubeExtractorArgs').value||'').trim(); cfg.proxy=String($('proxy').value||'').trim(); cfg.browser_cdp_url=String($('browserCDPURL').value||'').trim();
 	cfg.bilibili_cookie=String($('bilibiliCookie').value||'').trim(); cfg.bilibili_use_cookie=!!cfg.bilibili_cookie; cfg.xiaohongshu_cookie=String($('xiaohongshuCookie').value||'').trim(); cfg.youtube_cookie=String($('youtubeCookie').value||'').trim(); cfg.instagram_cookie=String($('instagramCookie').value||'').trim(); cfg.keylol_cookie=String($('keylolCookie').value||'').trim(); cfg.linuxdo_cookie=String($('linuxdoCookie').value||'').trim(); cfg.linuxdo_ua=String($('linuxdoUA').value||'').trim(); cfg.linuxdo_flaresolverr_url=String($('linuxdoFlaresolverrURL').value||'').trim(); cfg.linuxdo_flaresolverr_wait_seconds=Number($('linuxdoFlaresolverrWait').value||2); cfg.linuxdo_flaresolverr_timeout_ms=Number($('linuxdoFlaresolverrTimeout').value||60000); cfg.linuxdo_flaresolverr_use_proxy=!!cfg.linuxdo_flaresolverr_use_proxy;
  cfg.keylol_footer=String($('keylolFooter').value||'').trim();
  cfg.keylol_theme=String(cfg.keylol_theme||'auto').trim()||'auto';

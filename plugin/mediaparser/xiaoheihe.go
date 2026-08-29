@@ -19,12 +19,27 @@ import (
 
 const xiaoheiheUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+type xiaoheiheBlock struct {
+	Kind string
+	Text string
+	URL  string
+}
+
 func parseXiaoheihe(cfg config, raw string) (mediaMeta, error) {
 	ctx, err := resolveXiaoheiheContext(raw)
 	if err != nil {
 		return mediaMeta{}, err
 	}
 	if ctx.LinkID != "" {
+		if xiaoheiheMobileScreenshotEnabled() {
+			meta, err := parseXiaoheiheBBS(ctx)
+			if err != nil {
+				logrusWarnXiaoheiheBBSAPI(ctx.LinkID, err)
+				meta = xiaoheiheBrowserScreenshotMeta(ctx)
+			}
+			meta.XiaoheiheBrowserShot = true
+			return meta, nil
+		}
 		return parseXiaoheiheBBS(ctx)
 	}
 	headers := map[string]string{
@@ -44,6 +59,16 @@ func parseXiaoheihe(cfg config, raw string) (mediaMeta, error) {
 		ctx.PageURL = finalURL
 	}
 	return buildXiaoheiheGameMeta(ctx, html)
+}
+
+func xiaoheiheBrowserScreenshotMeta(ctx xiaoheiheContext) mediaMeta {
+	return mediaMeta{
+		URL:         fmt.Sprintf("https://www.xiaoheihe.cn/app/bbs/link/%s", ctx.LinkID),
+		SourceURL:   ctx.SourceURL,
+		Platform:    "xiaoheihe",
+		Title:       "小黑盒帖子",
+		ArticleCard: true,
+	}
 }
 
 type xiaoheiheContext struct {
@@ -149,14 +174,14 @@ func parseXiaoheiheBBSSignedAPI(ctx xiaoheiheContext) (mediaMeta, error) {
 	uid := firstNonEmpty(getString(user, "heybox_id"), getString(user, "userid"), getString(user, "uid"))
 	author := nickname
 	if nickname != "" && uid != "" {
-		author = nickname + "(uid:" + uid + ")"
+		author = nickname + " (uid:" + uid + ")"
 	}
 	avatar := firstNonEmpty(getString(user, "avatar"), getString(user, "avartar"))
 	timestamp := ""
 	if ts := getFloat(link, "create_at"); ts > 0 {
 		timestamp = time.Unix(int64(ts), 0).Format("2006-01-02")
 	}
-	desc, videos, images := extractXiaoheiheBBSTextAndMedia(link)
+	desc, videos, images, blocks := extractXiaoheiheBBSTextAndMedia(link)
 	if len(videos) == 0 && len(images) == 0 {
 		return mediaMeta{}, fmt.Errorf("xiaoheihe BBS post has no media")
 	}
@@ -168,27 +193,29 @@ func parseXiaoheiheBBSSignedAPI(ctx xiaoheiheContext) (mediaMeta, error) {
 		cover = firstNonEmpty(getString(link, "thumb"), getString(link, "cover"))
 	}
 	return mediaMeta{
-		URL:         fmt.Sprintf("https://www.xiaoheihe.cn/app/bbs/link/%s", ctx.LinkID),
-		SourceURL:   ctx.SourceURL,
-		Platform:    "xiaoheihe",
-		Title:       title,
-		Author:      author,
-		Avatar:      avatar,
-		Desc:        desc,
-		Timestamp:   timestamp,
-		Cover:       cover,
-		VideoURLs:   uniqueURLGroups(videos),
-		ImageURLs:   uniqueURLGroups(images),
-		VideoHeads:  buildHeaders(true, "https://www.xiaoheihe.cn/", xiaoheiheUA),
-		ImageHeads:  buildHeaders(false, "https://www.xiaoheihe.cn/", xiaoheiheUA),
-		ForceLocal:  len(videos) > 0,
-		ArticleCard: true,
+		URL:             fmt.Sprintf("https://www.xiaoheihe.cn/app/bbs/link/%s", ctx.LinkID),
+		SourceURL:       ctx.SourceURL,
+		Platform:        "xiaoheihe",
+		Title:           title,
+		Author:          author,
+		Avatar:          avatar,
+		Desc:            desc,
+		Timestamp:       timestamp,
+		Cover:           cover,
+		VideoURLs:       uniqueURLGroups(videos),
+		ImageURLs:       uniqueURLGroups(images),
+		VideoHeads:      buildHeaders(true, "https://www.xiaoheihe.cn/", xiaoheiheUA),
+		ImageHeads:      buildHeaders(false, "https://www.xiaoheihe.cn/", xiaoheiheUA),
+		ForceLocal:      len(videos) > 0,
+		ArticleCard:     true,
+		XiaoheiheBlocks: blocks,
 	}, nil
 }
 
-func extractXiaoheiheBBSTextAndMedia(link map[string]any) (string, [][]string, [][]string) {
+func extractXiaoheiheBBSTextAndMedia(link map[string]any) (string, [][]string, [][]string, []xiaoheiheBlock) {
 	text := getString(link, "text")
-	desc := text
+	blocks := extractXiaoheiheBBSBlocks(text)
+	descParts := []string{}
 	videos := [][]string{}
 	images := [][]string{}
 	if getFloat(link, "has_video") > 0 {
@@ -197,43 +224,98 @@ func extractXiaoheiheBBSTextAndMedia(link map[string]any) (string, [][]string, [
 				videoURL = "m3u8:" + videoURL
 			}
 			videos = append(videos, []string{videoURL})
+			blocks = append([]xiaoheiheBlock{{Kind: "video", URL: videoURL}}, blocks...)
 		}
 	}
-	var items []map[string]any
-	if text != "" && json.Unmarshal([]byte(text), &items) == nil && len(items) > 0 {
-		parts := []string{}
-		for _, item := range items {
-			switch getString(item, "type") {
-			case "html":
-				if part := cleanHTMLText(getString(item, "text")); part != "" {
-					parts = append(parts, part)
-				}
-			case "text":
-				if part := strings.TrimSpace(getString(item, "text")); part != "" {
-					parts = append(parts, part)
-				}
-			case "img":
-				if imgURL := getString(item, "url"); imgURL != "" {
-					images = append(images, []string{ensureHTTPS(imgURL)})
-				}
-			case "video", "gif":
-				mediaURL := firstNonEmpty(getString(item, "url"), getString(item, "video_url"))
-				if mediaURL == "" {
-					continue
-				}
-				if strings.Contains(strings.ToLower(mediaURL), ".m3u8") && !strings.HasPrefix(mediaURL, "m3u8:") {
-					mediaURL = "m3u8:" + mediaURL
-				}
-				if strings.Contains(strings.ToLower(mediaURL), ".gif") {
-					images = append(images, []string{ensureHTTPS(mediaURL)})
-				} else {
-					videos = append(videos, []string{mediaURL})
-				}
+	for _, block := range blocks {
+		switch block.Kind {
+		case "text":
+			if part := strings.TrimSpace(block.Text); part != "" {
+				descParts = append(descParts, part)
+			}
+		case "image":
+			if block.URL != "" {
+				images = append(images, []string{ensureHTTPS(block.URL)})
+			}
+		case "video":
+			if block.URL != "" && !containsURLGroup(videos, block.URL) {
+				videos = append(videos, []string{block.URL})
 			}
 		}
-		desc = strings.TrimSpace(strings.Join(parts, "\n"))
 	}
-	return desc, videos, images
+	if len(blocks) == 0 && strings.TrimSpace(text) != "" {
+		descParts = append(descParts, strings.TrimSpace(text))
+	}
+	return strings.TrimSpace(strings.Join(descParts, "\n")), videos, images, blocks
+}
+
+func extractXiaoheiheBBSBlocks(raw string) []xiaoheiheBlock {
+	var items []map[string]any
+	if strings.TrimSpace(raw) == "" || json.Unmarshal([]byte(raw), &items) != nil {
+		if text := strings.TrimSpace(raw); text != "" {
+			return []xiaoheiheBlock{{Kind: "text", Text: cleanHTMLText(text)}}
+		}
+		return nil
+	}
+	blocks := []xiaoheiheBlock{}
+	for _, item := range items {
+		switch getString(item, "type") {
+		case "html":
+			if text := cleanHTMLText(getString(item, "text")); text != "" {
+				blocks = append(blocks, xiaoheiheBlock{Kind: "text", Text: text})
+			}
+		case "text":
+			if text := strings.TrimSpace(getString(item, "text")); text != "" {
+				blocks = append(blocks, xiaoheiheBlock{Kind: "text", Text: text})
+			}
+		case "img":
+			if rawURL := getString(item, "url"); rawURL != "" {
+				blocks = append(blocks, xiaoheiheBlock{Kind: "image", URL: ensureHTTPS(rawURL)})
+			}
+		case "video", "gif":
+			mediaURL := firstNonEmpty(getString(item, "url"), getString(item, "video_url"))
+			if mediaURL == "" {
+				continue
+			}
+			if strings.Contains(strings.ToLower(mediaURL), ".gif") {
+				blocks = append(blocks, xiaoheiheBlock{Kind: "image", URL: ensureHTTPS(mediaURL)})
+				continue
+			}
+			if strings.Contains(strings.ToLower(mediaURL), ".m3u8") && !strings.HasPrefix(mediaURL, "m3u8:") {
+				mediaURL = "m3u8:" + mediaURL
+			}
+			blocks = append(blocks, xiaoheiheBlock{Kind: "video", URL: mediaURL})
+		}
+	}
+	return compactXiaoheiheBlocks(blocks)
+}
+
+func compactXiaoheiheBlocks(blocks []xiaoheiheBlock) []xiaoheiheBlock {
+	out := make([]xiaoheiheBlock, 0, len(blocks))
+	for _, block := range blocks {
+		block.Text = strings.TrimSpace(block.Text)
+		block.URL = strings.TrimSpace(block.URL)
+		if (block.Kind == "text" && block.Text == "") || (block.Kind != "text" && block.URL == "") {
+			continue
+		}
+		if len(out) > 0 && block.Kind == "text" && out[len(out)-1].Kind == "text" {
+			out[len(out)-1].Text = strings.TrimSpace(out[len(out)-1].Text + "\n" + block.Text)
+			continue
+		}
+		out = append(out, block)
+	}
+	return out
+}
+
+func containsURLGroup(groups [][]string, target string) bool {
+	for _, group := range groups {
+		for _, raw := range group {
+			if raw == target {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func fetchXiaoheiheSignedAPI(path string, params map[string]string) (map[string]any, error) {

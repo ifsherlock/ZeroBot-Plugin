@@ -43,6 +43,9 @@ services:
       COMMAND_PREFIX: /
       # 超级用户 QQ 号，多个账号用空格分隔，例如 "12345 67890"。
       SUPER_USERS: ""
+      # 小黑盒帖子使用 Android 版 Chromium 截图，保留游戏卡、音乐和原帖排版。
+      # 设为 0 可回退到轻量原生卡片。
+      XIAOHEIHE_MOBILE_SCREENSHOT: "1"
       # 额外传给 zbp 的启动参数，例如 "-d" 开启 debug；不需要时留空。
       ZBP_ARGS: ""
     volumes:
