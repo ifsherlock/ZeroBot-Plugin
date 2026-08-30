@@ -58,7 +58,7 @@ func renderInfoCard(meta mediaMeta) (string, error) {
 		if card, err := renderXiaoheiheMobileScreenshot(meta); err == nil {
 			return card, nil
 		} else {
-			logrus.Warnf("[mediaparser] xiaoheihe_mobile_screenshot_failed url=%s error=%v; falling back to native card", meta.URL, err)
+			return "", fmt.Errorf("xiaoheihe mobile screenshot: %w", err)
 		}
 	}
 	if meta.Platform == "xiaoheihe" && len(meta.XiaoheiheBlocks) > 0 {

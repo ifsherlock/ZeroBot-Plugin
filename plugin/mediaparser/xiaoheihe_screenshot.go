@@ -28,7 +28,7 @@ const (
 	xiaoheiheMobileMaxCaptureHeight  = 10000
 	xiaoheiheMobileDeviceScale       = 2
 	xiaoheiheMobileScreenshotWait    = 7 * time.Second
-	xiaoheiheMobileScreenshotTimeout = 30 * time.Second
+	xiaoheiheMobileScreenshotTimeout = 60 * time.Second
 	xiaoheiheMobileScrollPause       = 180 * time.Millisecond
 	xiaoheiheMobileImageWait         = 5 * time.Second
 	xiaoheiheMobileUserAgent         = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
@@ -121,23 +121,6 @@ func prepareXiaoheiheMobileScreenshotPage(ctx context.Context, meta mediaMeta) e
 	}
 	if err := chromedp.Evaluate(imageScript, nil).Do(ctx); err != nil {
 		return fmt.Errorf("set mobile images: %w", err)
-	}
-	_, _, _, _, _, contentSize, err := page.GetLayoutMetrics().Do(ctx)
-	if err != nil {
-		return fmt.Errorf("read mobile page size: %w", err)
-	}
-	if contentSize == nil || contentSize.Height <= 0 {
-		return fmt.Errorf("mobile page has an invalid size")
-	}
-	captureHeight := min(contentSize.Height, float64(xiaoheiheMobileMaxCaptureHeight))
-	step := float64(xiaoheiheMobileViewportHeight) * 0.7
-	for y := 0.0; y < captureHeight; y += step {
-		if err := chromedp.Evaluate(fmt.Sprintf("window.scrollTo({top:%f,behavior:'instant'})", y), nil).Do(ctx); err != nil {
-			return fmt.Errorf("scroll mobile page: %w", err)
-		}
-		if err := waitForXiaoheiheScreenshot(ctx, xiaoheiheMobileScrollPause); err != nil {
-			return err
-		}
 	}
 	deadline := time.Now().Add(xiaoheiheMobileImageWait)
 	for {

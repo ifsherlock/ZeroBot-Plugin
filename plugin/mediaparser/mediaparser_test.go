@@ -3556,6 +3556,11 @@ func TestRenderXiaoheiheRemoteBrowserPreview(t *testing.T) {
 	if endpoint == "" {
 		t.Skip("set MEDIAPARSER_XIAOHEIHE_BROWSER_CDP_URL to render through a remote browser")
 	}
+	pageURL := strings.TrimSpace(os.Getenv("MEDIAPARSER_XIAOHEIHE_PREVIEW_URL"))
+	if pageURL == "" {
+		pageURL = "https://www.xiaoheihe.cn/app/bbs/link/e7b5725e9251"
+	}
+	t.Setenv(xiaoheiheBrowserEnv, "1")
 
 	oldCacheDir := cacheDir
 	cacheDir = filepath.Join("..", "..", "build", "mediaparser-live-preview")
@@ -3570,11 +3575,9 @@ func TestRenderXiaoheiheRemoteBrowserPreview(t *testing.T) {
 		stateMu.Unlock()
 	}()
 
-	meta := mediaMeta{
-		Platform:             "xiaoheihe",
-		URL:                  "https://www.xiaoheihe.cn/app/bbs/link/47fe725e04cC",
-		SourceURL:            "https://www.xiaoheihe.cn/app/bbs/link/47fe725e04cC",
-		XiaoheiheBrowserShot: true,
+	meta, err := parseXiaoheihe(defaultConfig(), pageURL)
+	if err != nil {
+		t.Fatal(err)
 	}
 	out, err := renderInfoCard(meta)
 	if err != nil {
