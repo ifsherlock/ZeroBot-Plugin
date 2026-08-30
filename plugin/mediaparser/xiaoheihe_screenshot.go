@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
@@ -25,11 +26,11 @@ const (
 	xiaoheiheBrowserPathEnv          = "XIAOHEIHE_BROWSER_PATH"
 	xiaoheiheMobileWidth             = 430
 	xiaoheiheMobileViewportHeight    = 932
-	xiaoheiheMobileMaxCaptureHeight  = 10000
+	xiaoheiheMobileMaxCaptureHeight  = 18000
 	xiaoheiheMobileDeviceScale       = 2
 	xiaoheiheMobileScreenshotWait    = 7 * time.Second
 	xiaoheiheMobileScreenshotTimeout = 60 * time.Second
-	xiaoheiheMobileScrollPause       = 180 * time.Millisecond
+	xiaoheiheMobileScrollPause       = 150 * time.Millisecond
 	xiaoheiheMobileImageWait         = 5 * time.Second
 	xiaoheiheMobileUserAgent         = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 )
@@ -63,8 +64,31 @@ func renderXiaoheiheMobileScreenshot(meta mediaMeta) (string, error) {
 		return "", err
 	}
 	defer stopBrowser()
+	var treeResponseMu sync.Mutex
+	var treeResponseID network.RequestID
+	var treeResponseFinished bool
+	chromedp.ListenTarget(browserCtx, func(value any) {
+		switch event := value.(type) {
+		case *network.EventResponseReceived:
+			if !strings.Contains(event.Response.URL, "/bbs/app/link/tree") {
+				return
+			}
+			treeResponseMu.Lock()
+			treeResponseID = event.RequestID
+			treeResponseFinished = false
+			treeResponseMu.Unlock()
+		case *network.EventLoadingFinished:
+			treeResponseMu.Lock()
+			if event.RequestID == treeResponseID {
+				treeResponseFinished = true
+			}
+			treeResponseMu.Unlock()
+		}
+	})
+	screenshotMeta := meta
 	var screenshot []byte
 	err = chromedp.Run(browserCtx,
+		network.Enable(),
 		emulation.SetUserAgentOverride(xiaoheiheMobileUserAgent).
 			WithAcceptLanguage("zh-CN,zh;q=0.9").
 			WithPlatform("Android"),
@@ -75,7 +99,20 @@ func renderXiaoheiheMobileScreenshot(meta mediaMeta) (string, error) {
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Sleep(xiaoheiheMobileScreenshotWait),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			return prepareXiaoheiheMobileScreenshotPage(ctx, meta)
+			treeResponseMu.Lock()
+			requestID := treeResponseID
+			finished := treeResponseFinished
+			treeResponseMu.Unlock()
+			if requestID != "" && finished {
+				body, err := network.GetResponseBody(requestID).Do(ctx)
+				if err != nil {
+					return fmt.Errorf("read xiaoheihe browser media: %w", err)
+				}
+				if browserImages := xiaoheiheBBSImageGroupsFromResponse(body); len(browserImages) > 0 {
+					screenshotMeta.ImageURLs = browserImages
+				}
+			}
+			return prepareXiaoheiheMobileScreenshotPage(ctx, screenshotMeta)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			_, _, _, _, _, contentSize, metricsErr := page.GetLayoutMetrics().Do(ctx)
@@ -122,14 +159,20 @@ func prepareXiaoheiheMobileScreenshotPage(ctx context.Context, meta mediaMeta) e
 	if err := chromedp.Evaluate(imageScript, nil).Do(ctx); err != nil {
 		return fmt.Errorf("set mobile images: %w", err)
 	}
+	if err := scrollThroughXiaoheiheMobileImages(ctx); err != nil {
+		return err
+	}
 	deadline := time.Now().Add(xiaoheiheMobileImageWait)
 	for {
 		var pending int
 		if err := chromedp.Evaluate(xiaoheiheMobileScreenshotPendingImagesScript, &pending).Do(ctx); err != nil {
 			return fmt.Errorf("inspect mobile images: %w", err)
 		}
-		if pending == 0 || !time.Now().Before(deadline) {
+		if pending == 0 {
 			break
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("xiaoheihe page has %d images that did not load", pending)
 		}
 		if err := waitForXiaoheiheScreenshot(ctx, xiaoheiheMobileScrollPause); err != nil {
 			return err
@@ -137,6 +180,23 @@ func prepareXiaoheiheMobileScreenshotPage(ctx context.Context, meta mediaMeta) e
 	}
 	if err := chromedp.Evaluate(xiaoheiheMobileScreenshotPrepareScript+";window.scrollTo({top:0,behavior:'instant'})", nil).Do(ctx); err != nil {
 		return fmt.Errorf("finalize mobile page: %w", err)
+	}
+	return nil
+}
+
+func scrollThroughXiaoheiheMobileImages(ctx context.Context) error {
+	var imageCount int
+	if err := chromedp.Evaluate(xiaoheiheMobileScreenshotImageCountScript, &imageCount).Do(ctx); err != nil {
+		return fmt.Errorf("count mobile images: %w", err)
+	}
+	for index := 0; index < imageCount; index++ {
+		script := fmt.Sprintf(xiaoheiheMobileScreenshotScrollImageScript, index)
+		if err := chromedp.Evaluate(script, nil).Do(ctx); err != nil {
+			return fmt.Errorf("scroll to mobile image %d: %w", index, err)
+		}
+		if err := waitForXiaoheiheScreenshot(ctx, xiaoheiheMobileScrollPause); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -156,13 +216,28 @@ const xiaoheiheMobileScreenshotPrepareScript = `(() => {
 	});
 })()`
 
-const xiaoheiheMobileScreenshotPendingImagesScript = `(() => {
-	const captureBottom = Math.min(document.documentElement.scrollHeight, 10000);
+var xiaoheiheMobileScreenshotPendingImagesScript = fmt.Sprintf(`(() => {
+	const captureBottom = Math.min(document.documentElement.scrollHeight, %d);
 	return Array.from(document.images).filter((image) => {
 		const rect = image.getBoundingClientRect();
 		const top = rect.top + window.scrollY;
-		return rect.height > 0 && top < captureBottom && image.currentSrc && (!image.complete || image.naturalWidth === 0);
+		return rect.height > 0 && top < captureBottom && (!image.complete || image.naturalWidth === 0);
 	}).length;
+})()`, xiaoheiheMobileMaxCaptureHeight)
+
+const xiaoheiheMobileScreenshotImageCountScript = `(() => {
+	const contentImages = document.querySelectorAll('.hb-article img.img-item, .post__content img.img-item');
+	return contentImages.length || document.querySelectorAll('img.img-item').length;
+})()`
+
+const xiaoheiheMobileScreenshotScrollImageScript = `(() => {
+	const contentImages = document.querySelectorAll('.hb-article img.img-item, .post__content img.img-item');
+	const images = contentImages.length ? contentImages : document.querySelectorAll('img.img-item');
+	const image = images[%d];
+	if (!image) return;
+	image.loading = 'eager';
+	image.fetchPriority = 'high';
+	image.scrollIntoView({block: 'center', behavior: 'instant'});
 })()`
 
 func xiaoheiheMobileScreenshotImageSourcesScript(groups [][]string) (string, error) {
@@ -182,13 +257,49 @@ func xiaoheiheMobileScreenshotImageSourcesScript(groups [][]string) (string, err
 	}
 	return fmt.Sprintf(`(() => {
 		const sources = %s;
-		const captureBottom = Math.min(document.documentElement.scrollHeight, 10000);
-		Array.from(document.querySelectorAll('.bbs-link-article-content img.img-item')).forEach((image, index) => {
-			const rect = image.getBoundingClientRect();
-			const top = rect.top + window.scrollY;
-			if (sources[index] && rect.height > 0 && top < captureBottom) image.src = sources[index];
+		const contentImages = Array.from(document.querySelectorAll('.hb-article img.img-item, .post__content img.img-item'));
+		const images = contentImages.length > 0 ? contentImages : Array.from(document.querySelectorAll('img.img-item'));
+		images.forEach((image, index) => {
+			if (!sources[index]) return;
+			image.loading = 'eager';
+			image.fetchPriority = 'high';
+			image.removeAttribute('srcset');
+			image.src = sources[index];
 		});
 	})()`, encoded), nil
+}
+
+func xiaoheiheBBSImageGroupsFromResponse(body []byte) [][]string {
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		return nil
+	}
+	var images [][]string
+	var walk func(any)
+	walk = func(current any) {
+		if len(images) > 0 {
+			return
+		}
+		switch node := current.(type) {
+		case map[string]any:
+			if link, ok := node["link"].(map[string]any); ok {
+				_, _, images, _ = extractXiaoheiheBBSTextAndMedia(link)
+				if len(images) > 0 {
+					images = uniqueURLGroups(images)
+					return
+				}
+			}
+			for _, child := range node {
+				walk(child)
+			}
+		case []any:
+			for _, child := range node {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	return images
 }
 
 func waitForXiaoheiheScreenshot(ctx context.Context, duration time.Duration) error {

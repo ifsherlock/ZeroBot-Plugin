@@ -26,7 +26,7 @@ func TestXiaoheiheMobileScreenshotEnabled(t *testing.T) {
 }
 
 func TestXiaoheiheMobileScreenshotViewport(t *testing.T) {
-	if xiaoheiheMobileWidth != 430 || xiaoheiheMobileViewportHeight != 932 || xiaoheiheMobileMaxCaptureHeight != 10000 || xiaoheiheMobileDeviceScale != 2 {
+	if xiaoheiheMobileWidth != 430 || xiaoheiheMobileViewportHeight != 932 || xiaoheiheMobileMaxCaptureHeight != 18000 || xiaoheiheMobileDeviceScale != 2 {
 		t.Fatalf("unexpected mobile viewport: %dx%d max=%d@%d", xiaoheiheMobileWidth, xiaoheiheMobileViewportHeight, xiaoheiheMobileMaxCaptureHeight, xiaoheiheMobileDeviceScale)
 	}
 	if xiaoheiheMobileScreenshotTimeout != 60*time.Second {
@@ -48,6 +48,29 @@ func TestXiaoheiheMobileScreenshotImageSourcesScript(t *testing.T) {
 	}
 	if strings.Contains(script, `"https://cdn.example/second.png"`) {
 		t.Fatalf("image source script should use only the first usable URL: %s", script)
+	}
+	if !strings.Contains(script, `.hb-article img.img-item`) || strings.Contains(script, `.bbs-link-article-content img.img-item`) {
+		t.Fatalf("image source script uses an outdated content selector: %s", script)
+	}
+	if !strings.Contains(script, `fetchPriority = 'high'`) {
+		t.Fatalf("image source script should prioritize browser image loading: %s", script)
+	}
+}
+
+func TestXiaoheiheMobileScreenshotScrollsImagesIntoView(t *testing.T) {
+	if !strings.Contains(xiaoheiheMobileScreenshotImageCountScript, `.hb-article img.img-item`) {
+		t.Fatalf("image count script does not target article images: %s", xiaoheiheMobileScreenshotImageCountScript)
+	}
+	if !strings.Contains(xiaoheiheMobileScreenshotScrollImageScript, `scrollIntoView`) || !strings.Contains(xiaoheiheMobileScreenshotScrollImageScript, `behavior: 'instant'`) {
+		t.Fatalf("image scroll script does not trigger lazy loading: %s", xiaoheiheMobileScreenshotScrollImageScript)
+	}
+}
+
+func TestXiaoheiheBBSImageGroupsFromResponse(t *testing.T) {
+	body := []byte(`{"result":{"link":{"text":"[{\"type\":\"img\",\"url\":\"https://img.example/one.png\"},{\"type\":\"text\",\"text\":\"caption\"},{\"type\":\"img\",\"url\":\"https://img.example/two.png\"}]"}}}`)
+	got := xiaoheiheBBSImageGroupsFromResponse(body)
+	if len(got) != 2 || got[0][0] != "https://img.example/one.png" || got[1][0] != "https://img.example/two.png" {
+		t.Fatalf("unexpected image groups: %#v", got)
 	}
 }
 
