@@ -30,6 +30,23 @@ func TestXiaoheiheMobileScreenshotViewport(t *testing.T) {
 	}
 }
 
+func TestXiaoheiheMobileScreenshotImageSourcesScript(t *testing.T) {
+	script, err := xiaoheiheMobileScreenshotImageSourcesScript([][]string{
+		{"", "https://img.example/first.png"},
+		{"https://img.example/second.png", "https://cdn.example/second.png"},
+		nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(script, `"https://img.example/first.png"`) || !strings.Contains(script, `"https://img.example/second.png"`) {
+		t.Fatalf("image source script does not contain primary URLs: %s", script)
+	}
+	if strings.Contains(script, `"https://cdn.example/second.png"`) {
+		t.Fatalf("image source script should use only the first usable URL: %s", script)
+	}
+}
+
 func TestXiaoheiheBrowserWebSocketURL(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/json/version" {

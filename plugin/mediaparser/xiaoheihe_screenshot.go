@@ -29,6 +29,8 @@ const (
 	xiaoheiheMobileDeviceScale       = 2
 	xiaoheiheMobileScreenshotWait    = 7 * time.Second
 	xiaoheiheMobileScreenshotTimeout = 30 * time.Second
+	xiaoheiheMobileScrollPause       = 180 * time.Millisecond
+	xiaoheiheMobileImageWait         = 5 * time.Second
 	xiaoheiheMobileUserAgent         = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 )
 
@@ -72,12 +74,9 @@ func renderXiaoheiheMobileScreenshot(meta mediaMeta) (string, error) {
 		chromedp.Navigate(pageURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Sleep(xiaoheiheMobileScreenshotWait),
-		chromedp.Evaluate(`(() => {
-			const style = document.createElement('style');
-			style.textContent = '.heybox-share-header .download-btn { display: none !important; }';
-			document.head.appendChild(style);
-			document.querySelectorAll('.heybox-share-header .download-btn').forEach((element) => element.remove());
-		})()`, nil),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return prepareXiaoheiheMobileScreenshotPage(ctx, meta)
+		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			_, _, _, _, _, contentSize, metricsErr := page.GetLayoutMetrics().Do(ctx)
 			if metricsErr != nil {
@@ -110,6 +109,114 @@ func renderXiaoheiheMobileScreenshot(meta mediaMeta) (string, error) {
 		return "", err
 	}
 	return out, nil
+}
+
+func prepareXiaoheiheMobileScreenshotPage(ctx context.Context, meta mediaMeta) error {
+	if err := chromedp.Evaluate(xiaoheiheMobileScreenshotPrepareScript, nil).Do(ctx); err != nil {
+		return fmt.Errorf("prepare mobile page: %w", err)
+	}
+	imageScript, err := xiaoheiheMobileScreenshotImageSourcesScript(meta.ImageURLs)
+	if err != nil {
+		return fmt.Errorf("encode mobile images: %w", err)
+	}
+	if err := chromedp.Evaluate(imageScript, nil).Do(ctx); err != nil {
+		return fmt.Errorf("set mobile images: %w", err)
+	}
+	_, _, _, _, _, contentSize, err := page.GetLayoutMetrics().Do(ctx)
+	if err != nil {
+		return fmt.Errorf("read mobile page size: %w", err)
+	}
+	if contentSize == nil || contentSize.Height <= 0 {
+		return fmt.Errorf("mobile page has an invalid size")
+	}
+	captureHeight := min(contentSize.Height, float64(xiaoheiheMobileMaxCaptureHeight))
+	step := float64(xiaoheiheMobileViewportHeight) * 0.7
+	for y := 0.0; y < captureHeight; y += step {
+		if err := chromedp.Evaluate(fmt.Sprintf("window.scrollTo({top:%f,behavior:'instant'})", y), nil).Do(ctx); err != nil {
+			return fmt.Errorf("scroll mobile page: %w", err)
+		}
+		if err := waitForXiaoheiheScreenshot(ctx, xiaoheiheMobileScrollPause); err != nil {
+			return err
+		}
+	}
+	deadline := time.Now().Add(xiaoheiheMobileImageWait)
+	for {
+		var pending int
+		if err := chromedp.Evaluate(xiaoheiheMobileScreenshotPendingImagesScript, &pending).Do(ctx); err != nil {
+			return fmt.Errorf("inspect mobile images: %w", err)
+		}
+		if pending == 0 || !time.Now().Before(deadline) {
+			break
+		}
+		if err := waitForXiaoheiheScreenshot(ctx, xiaoheiheMobileScrollPause); err != nil {
+			return err
+		}
+	}
+	if err := chromedp.Evaluate(xiaoheiheMobileScreenshotPrepareScript+";window.scrollTo({top:0,behavior:'instant'})", nil).Do(ctx); err != nil {
+		return fmt.Errorf("finalize mobile page: %w", err)
+	}
+	return nil
+}
+
+const xiaoheiheMobileScreenshotPrepareScript = `(() => {
+	const removableSelector = [
+		'.heybox-share-header .download-btn',
+		'.heybox-share-popover',
+		'.hb-qrc',
+		'.interactive-button-bar',
+	].join(',');
+	const removePromotions = () => document.querySelectorAll(removableSelector).forEach((element) => element.remove());
+	removePromotions();
+	document.querySelectorAll('img').forEach((image) => {
+		image.loading = 'eager';
+		image.decoding = 'sync';
+	});
+})()`
+
+const xiaoheiheMobileScreenshotPendingImagesScript = `(() => {
+	const captureBottom = Math.min(document.documentElement.scrollHeight, 10000);
+	return Array.from(document.images).filter((image) => {
+		const rect = image.getBoundingClientRect();
+		const top = rect.top + window.scrollY;
+		return rect.height > 0 && top < captureBottom && image.currentSrc && (!image.complete || image.naturalWidth === 0);
+	}).length;
+})()`
+
+func xiaoheiheMobileScreenshotImageSourcesScript(groups [][]string) (string, error) {
+	sources := make([]string, 0, len(groups))
+	for _, group := range groups {
+		for _, candidate := range group {
+			candidate = strings.TrimSpace(candidate)
+			if candidate != "" {
+				sources = append(sources, candidate)
+				break
+			}
+		}
+	}
+	encoded, err := json.Marshal(sources)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(`(() => {
+		const sources = %s;
+		const captureBottom = Math.min(document.documentElement.scrollHeight, 10000);
+		Array.from(document.querySelectorAll('.bbs-link-article-content img.img-item')).forEach((image, index) => {
+			const rect = image.getBoundingClientRect();
+			const top = rect.top + window.scrollY;
+			if (sources[index] && rect.height > 0 && top < captureBottom) image.src = sources[index];
+		});
+	})()`, encoded), nil
+}
+
+func waitForXiaoheiheScreenshot(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("prepare mobile page: %w", ctx.Err())
+	case <-timer.C:
+		return nil
+	}
 }
 
 // newBrowserScreenshotContext creates an isolated CDP target. Other platforms can
