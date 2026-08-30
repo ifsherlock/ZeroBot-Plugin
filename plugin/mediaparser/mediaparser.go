@@ -1492,6 +1492,11 @@ func isTelegramLinuxdoCard(telegramEvent bool, platform string) bool {
 }
 
 func shouldSendLongArticleCards(cfg config, meta mediaMeta) bool {
+	// Browser rendering is the canonical card for Xiaoheihe posts. Do not let
+	// the generic long-article path bypass it before the screenshot is created.
+	if meta.Platform == "xiaoheihe" && meta.XiaoheiheBrowserShot {
+		return false
+	}
 	if !cfg.LongArticleCards || strings.TrimSpace(meta.Desc) == "" {
 		return false
 	}

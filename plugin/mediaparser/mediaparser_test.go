@@ -644,6 +644,36 @@ func TestExtractXiaoheiheBBSBlocksKeepsOrder(t *testing.T) {
 	}
 }
 
+func TestResolveXiaoheiheShareAPILink(t *testing.T) {
+	const raw = "https://api.xiaoheihe.cn/v3/bbs/app/api/web/share?h_camp=link&link_id=e7b5725e9251&new_post_share_style=true"
+	ctx, err := resolveXiaoheiheContext(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.LinkID != "e7b5725e9251" {
+		t.Fatalf("link ID = %q", ctx.LinkID)
+	}
+}
+
+func TestLongArticleCardsDoNotBypassXiaoheiheBrowserShot(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.LongArticleCards = true
+	cfg.LongArticleThreshold = 1
+	meta := mediaMeta{
+		Platform:             "xiaoheihe",
+		Desc:                 "一段足够长的正文",
+		XiaoheiheBrowserShot: true,
+	}
+	if shouldSendLongArticleCards(cfg, meta) {
+		t.Fatal("Xiaoheihe browser screenshot should take priority over long article cards")
+	}
+
+	meta.XiaoheiheBrowserShot = false
+	if !shouldSendLongArticleCards(cfg, meta) {
+		t.Fatal("native Xiaoheihe cards should retain long article support")
+	}
+}
+
 func TestPermissionOKUsesGroupListsOnlyInGroups(t *testing.T) {
 	cfg := config{
 		PrivateAccessMode: accessBlacklist,
